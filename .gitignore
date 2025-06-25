@@ -1,0 +1,6 @@
+# OS/System Files
+.DS_Store
+
+# Python
+venv/
+__pycache__/

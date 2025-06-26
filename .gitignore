@@ -4,3 +4,7 @@
 # Python
 venv/
 __pycache__/
+
+# Dev Docs/Preferences
+project_docs
+

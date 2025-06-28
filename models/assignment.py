@@ -1,6 +1,7 @@
 # assignment.py
 
-def Assignment():
+
+class Assignment:
 
     def __init__(self):
         pass

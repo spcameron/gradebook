@@ -1,11 +1,10 @@
 # student.py
 
-def Student():
+
+class Student:
 
     def __init__(self):
         self.id = ""
         self.name = ""
         self.email = ""
-        self.status = "" # active / withdrawn
-
-
+        self.status = ""  # active / withdrawn

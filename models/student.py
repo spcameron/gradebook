@@ -3,8 +3,25 @@
 
 class Student:
 
-    def __init__(self):
-        self.id = ""
-        self.name = ""
-        self.email = ""
-        self.status = ""  # active / withdrawn
+    def __init__(self, id: str, name: str, email: str, status: str = "active"):
+        self.id = id
+        self.name = name
+        self.email = email
+        self.status = status
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Student":
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            email=data.get("email", ""),
+            status=data["status"],
+        )

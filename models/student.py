@@ -25,3 +25,9 @@ class Student:
             email=data.get("email", ""),
             status=data["status"],
         )
+
+    def __repr__(self) -> str:
+        return f"Student({self.id}, {self.name}, {self.email})"
+
+    def __str__(self) -> str:
+        return f"STUDENT: name: {self.name}, id: {self.id}, email: {self.email}"

@@ -46,3 +46,7 @@ class Gradebook:
         write_json("assignments.json", [a.to_dict() for a in self.assignments.values()])
         write_json("submissions.json", [s.to_dict() for s in self.submissions])
         write_json("metadata.json", self.metadata)
+
+    def add_student(self, student) -> None:
+        # add student object to self.students
+        self.students[student.id] = student

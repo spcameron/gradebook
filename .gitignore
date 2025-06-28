@@ -1,10 +1,25 @@
-# OS/System Files
-.DS_Store
-
-# Python
-venv/
+# Bytecode cache
 __pycache__/
+*.py[cod]
 
-# Dev Docs/Preferences
-project_docs
+# Virtual environment
+venv/
+.venv/
 
+# Editor/IDE config
+.vscode/
+.idea/
+*.swp
+
+# Test artifacts
+htmlcov/
+.coverage
+.cache/
+
+# Log/output/debug
+*.log
+
+# Python build artifacts (if you ever package)
+build/
+dist/
+*.egg-info/

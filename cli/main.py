@@ -1,9 +1,10 @@
 # cli/main.py
 
-import os, json
+import os
+import json
 from cli.menu_helpers import display_menu, confirm_action
 from models.gradebook import Gradebook
-from cli.path_utils import build_file_path, dir_is_empty
+from cli.path_utils import resolve_save_dir, dir_is_empty
 
 
 def run_cli():
@@ -19,30 +20,33 @@ def run_cli():
 
 def create_gradebook() -> Gradebook:
     while True:
-        name = input("Enter the course name (e.g. THTR 274A): ").strip()
-        term = input("Enter the course term (e.g. FALL 2025): ").strip()
-        dir_path = (
+        name = input("Enter the course name (e.g. THTR 274A): ")
+        term = input("Enter the course term (e.g. FALL 2025): ")
+        dir_input = (
             input(
                 "Enter directory to save the Gradebook (leave blank to use default): "
-            ).strip()
+            )
             or None
         )
 
-        file_path = build_file_path(name, term, dir_path)
+        dir_path = resolve_save_dir(name, term, dir_input)
 
-        if os.path.exists(file_path) and not dir_is_empty(file_path):
-            print("=== WARNING! ===")
-            print("The selected directory is not empty and may contain existing data.")
-            print("It is recommended to store new Gradebooks in an empty directory.")
-            print("Writing to this directory may result in the loss of existing data.")
+        if os.path.exists(dir_path) and not dir_is_empty(dir_path):
+            print(
+                """=== WARNING! ===
+            The selected directory is not empty and may contain existing data.
+            It is recommended to store new Gradebooks in an empty directory.
+            Writing to this directory may result in the loss of existing data."""
+            )
             if confirm_action("Do you wish to continue?"):
-                return Gradebook.create(name, term, file_path)
+                return Gradebook.create(name, term, dir_path)
             else:
                 continue
 
-        return Gradebook.create(name, term, file_path)
+        return Gradebook.create(name, term, dir_path)
 
 
+# TODO verify gradebook data (or at least metadata) exists before loading
 def load_gradebook() -> Gradebook | None:
     dir_path = input("Enter path to Gradebook directory: ").strip()
     dir_path = os.path.expanduser(dir_path)
@@ -60,4 +64,5 @@ def load_gradebook() -> Gradebook | None:
 
 
 def exit_program():
-    pass
+    print("Exiting program.")
+    raise SystemExit

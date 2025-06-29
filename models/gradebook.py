@@ -2,7 +2,7 @@
 
 import os, json
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 from models.student import Student
 from models.category import Category
 from models.assignment import Assignment
@@ -19,14 +19,8 @@ class Gradebook:
         self.metadata = {}
 
     @classmethod
-    def create(cls, name, term, path=None) -> "Gradebook":
+    def create(cls, name, term, save_dir) -> "Gradebook":
         gradebook = cls()
-
-        if not path:
-            path = os.path.join("Courses", f"{term}_{name}")
-
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
 
         gradebook.metadata = {
             "name": name,
@@ -34,7 +28,7 @@ class Gradebook:
             "created_at": datetime.now().isoformat(),
         }
 
-        gradebook.save(path)
+        gradebook.save(save_dir)
 
         return gradebook
 
@@ -44,33 +38,23 @@ class Gradebook:
             with open(os.path.join(path, filename), "r") as f:
                 return json.load(f)
 
+        def load_and_import(
+            filename: str, import_fn: Callable[[list[Any]], None]
+        ) -> None:
+            data = read_json(filename)
+            if not isinstance(data, list):
+                raise ValueError(f"Expected {filename} to contain a list.")
+            else:
+                import_fn(data)
+
         gradebook = Gradebook()
 
         gradebook.metadata = read_json("metadata.json")
 
-        student_data = read_json("students.json")
-        if not isinstance(student_data, list):
-            raise ValueError("Expected 'students.json' to contain a list.")
-        else:
-            gradebook.import_students(student_data)
-
-        category_data = read_json("categories.json")
-        if not isinstance(category_data, list):
-            raise ValueError("Expected 'categories.json' to contain a list.")
-        else:
-            gradebook.import_categories(category_data)
-
-        assignment_data = read_json("assignments.json")
-        if not isinstance(assignment_data, list):
-            raise ValueError("Expected 'assignments.json' to contain a list.")
-        else:
-            gradebook.import_assignments(assignment_data)
-
-        submission_data = read_json("submissions.json")
-        if not isinstance(submission_data, list):
-            raise ValueError("Expected 'submissions.json' to contain a list.")
-        else:
-            gradebook.import_submissions(submission_data)
+        load_and_import("students.json", gradebook.import_students)
+        load_and_import("categories.json", gradebook.import_categories)
+        load_and_import("assignments.json", gradebook.import_assignments)
+        load_and_import("submissions.json", gradebook.import_submissions)
 
         return gradebook
 
@@ -79,11 +63,11 @@ class Gradebook:
             with open(os.path.join(path, filename), "w") as f:
                 json.dump(data, f, indent=2, sort_keys=True)
 
+        write_json("metadata.json", self.metadata)
         write_json("students.json", [s.to_dict() for s in self.students.values()])
         write_json("categories.json", [c.to_dict() for c in self.categories.values()])
         write_json("assignments.json", [a.to_dict() for a in self.assignments.values()])
         write_json("submissions.json", [s.to_dict() for s in self.submissions.values()])
-        write_json("metadata.json", self.metadata)
 
     def import_students(self, student_data: list) -> None:
         for student_dict in student_data:

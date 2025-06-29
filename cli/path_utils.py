@@ -11,10 +11,11 @@ def get_save_dir(course_name: str, course_term: str, user_input: str | None) -> 
     if user_input:
         return os.path.expanduser(user_input.strip())
     else:
-        return os.path.join("Gradebooks", course_term, course_name)
+        documents = os.path.join(os.path.expanduser("~"), "Documents")
+        return os.path.join(documents, "Gradebooks", course_term, course_name)
 
 
-def build_file_path(course_name: str, course_term: str, dir_input: str | None) -> str:
+def resolve_save_dir(course_name: str, course_term: str, dir_input: str | None) -> str:
 
     course = sanitize_name(course_name)
     term = sanitize_name(course_term)

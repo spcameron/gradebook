@@ -1,11 +1,7 @@
 # main.py
 
-from models.student import Student
-
-
-def main():
-    print("Running main.py")
+from cli.main import run_cli
 
 
 if __name__ == "__main__":
-    main()
+    run_cli()

@@ -1,4 +1,4 @@
-# student.py
+# models/student.py
 
 
 class Student:

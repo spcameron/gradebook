@@ -1,4 +1,4 @@
-# test_student.py
+# tests/test_student.py
 
 from models.student import Student
 

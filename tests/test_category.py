@@ -1,0 +1,47 @@
+# tests/test_category.py
+
+from models.category import Category
+
+
+def test_weigheted_category_to_dict(sample_unweighted_category):
+    assert sample_unweighted_category.to_dict() == {
+        "id": "c001",
+        "name": "test_category",
+        "weight": None,
+    }
+
+
+def test_weighted_category_to_dict(sample_weighted_category):
+    assert sample_weighted_category.to_dict() == {
+        "id": "c002",
+        "name": "test_category",
+        "weight": 100.0,
+    }
+
+
+def test_unweighted_category_from_dict():
+    category = Category.from_dict(
+        {
+            "id": "c001",
+            "name": "test_category",
+            "weight": None,
+        }
+    )
+
+    assert category.id == "c001"
+    assert category.name == "test_category"
+    assert category.weight is None
+
+
+def test_weighted_category_from_dict():
+    category = Category.from_dict(
+        {
+            "id": "c002",
+            "name": "test_category",
+            "weight": 100.0,
+        }
+    )
+
+    assert category.id == "c002"
+    assert category.name == "test_category"
+    assert category.weight == 100.0

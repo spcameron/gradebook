@@ -14,25 +14,15 @@ def get_save_dir(course_name: str, course_term: str, user_input: str | None) -> 
         return os.path.join("Gradebooks", course_term, course_name)
 
 
-def get_save_file(course_name: str, course_term: str, user_input: str | None) -> str:
-    if user_input is None:
-        filename = f"{course_term}_{course_name}.json"
-    else:
-        filename = user_input.strip()
+def build_file_path(course_name: str, course_term: str, dir_input: str | None) -> str:
 
-    if not filename.endswith(".json"):
-        filename += ".json"
-
-    return filename
-
-
-def build_file_path(
-    course_name: str, course_term: str, dir_input: str | None, file_input: str | None
-) -> str:
     course = sanitize_name(course_name)
     term = sanitize_name(course_term)
     save_dir = get_save_dir(course, term, dir_input)
-    save_filename = get_save_file(course, term, file_input)
 
     os.makedirs(save_dir, exist_ok=True)
-    return os.path.join(save_dir, save_filename)
+    return save_dir
+
+
+def dir_is_empty(dir_path: str) -> bool:
+    return os.path.isdir(dir_path) and not os.listdir(dir_path)

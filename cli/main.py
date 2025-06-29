@@ -1,7 +1,9 @@
 # cli/main.py
 
-from cli.menu_helpers import display_menu
+import os, json
+from cli.menu_helpers import display_menu, confirm_action
 from models.gradebook import Gradebook
+from cli.path_utils import build_file_path, dir_is_empty
 
 
 def run_cli():
@@ -12,17 +14,49 @@ def run_cli():
         "Exit Program": lambda: exit_program(),
     }
 
-    display_menu(title, options)
+    gradebook = display_menu(title, options)
 
 
 def create_gradebook() -> Gradebook:
-    name = input("Enter the course name: ")
-    term = input("Enter the course term: ")
-    return Gradebook.create(name, term)
+    while True:
+        name = input("Enter the course name (e.g. THTR 274A): ").strip()
+        term = input("Enter the course term (e.g. FALL 2025): ").strip()
+        dir_path = (
+            input(
+                "Enter directory to save the Gradebook (leave blank to use default): "
+            ).strip()
+            or None
+        )
+
+        file_path = build_file_path(name, term, dir_path)
+
+        if os.path.exists(file_path) and not dir_is_empty(file_path):
+            print("=== WARNING! ===")
+            print("The selected directory is not empty and may contain existing data.")
+            print("It is recommended to store new Gradebooks in an empty directory.")
+            print("Writing to this directory may result in the loss of existing data.")
+            if confirm_action("Do you wish to continue?"):
+                return Gradebook.create(name, term, file_path)
+            else:
+                continue
+
+        return Gradebook.create(name, term, file_path)
 
 
-def load_gradebook() -> Gradebook:
-    pass
+def load_gradebook() -> Gradebook | None:
+    dir_path = input("Enter path to Gradebook directory: ").strip()
+    dir_path = os.path.expanduser(dir_path)
+    dir_path = os.path.abspath(dir_path)
+
+    if not os.path.isdir(dir_path):
+        print("Error: No directory found at that path.")
+        return None
+
+    try:
+        return Gradebook.load(dir_path)
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"Failed to load Gradebook: {e}")
+        return None
 
 
 def exit_program():

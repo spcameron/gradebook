@@ -1,6 +1,8 @@
 # tests/test_gradebook.py
 
-import os, json, tempfile
+import os
+import json
+import tempfile
 
 
 def test_add_student(sample_gradebook, sample_student):
@@ -59,3 +61,13 @@ def test_add_assignment_and_save(sample_gradebook, sample_assignment):
         assert len(data) == 1
         assert data[0]["id"] == "a001"
         assert data[0]["name"] == "test_assignment"
+
+
+def test_create_new_gradebook(create_new_gradebook):
+    assert create_new_gradebook.metadata["name"] == "THTR 274A"
+    assert create_new_gradebook.metadata["term"] == "FALL 2025"
+
+
+def test_load_gradebook_from_file(load_gradebook_from_file):
+    assert load_gradebook_from_file.metadata["name"] == "THTR 274B"
+    assert load_gradebook_from_file.metadata["term"] == "SPRING 2026"

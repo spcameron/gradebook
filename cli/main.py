@@ -3,7 +3,7 @@
 import os
 import json
 from cli import course_menu
-from cli.menu_helpers import display_menu, confirm_action
+from cli.menu_helpers import display_menu, confirm_action, MenuSignal
 from cli.path_utils import resolve_save_dir, dir_is_empty
 from models.gradebook import Gradebook
 
@@ -16,12 +16,14 @@ def run_cli() -> None:
     }
     zero_option = "Exit Program"
 
-    gradebook = display_menu(title, options, zero_option)
+    while True:
+        result = display_menu(title, options, zero_option)
 
-    if isinstance(gradebook, Gradebook):
-        course_menu.run(gradebook)
-    else:
-        exit_program()
+        if result == MenuSignal.EXIT:
+            exit_program()
+
+        if isinstance(result, Gradebook):
+            course_menu.run(result)
 
 
 def create_gradebook() -> Gradebook:

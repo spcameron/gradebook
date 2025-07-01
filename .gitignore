@@ -15,6 +15,7 @@ venv/
 htmlcov/
 .coverage
 .cache/
+tests/test_data/
 
 # Log/output/debug
 *.log

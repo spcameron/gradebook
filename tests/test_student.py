@@ -12,7 +12,7 @@ def test_student_to_dict(sample_student):
     }
 
 
-def test_student_from_dict(sample_student):
+def test_student_from_dict():
     student = Student.from_dict(
         {
             "id": "s001",

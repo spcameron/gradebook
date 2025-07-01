@@ -16,26 +16,31 @@ class Gradebook:
         self.categories = {}
         self.assignments = {}
         self.submissions = {}
-        self.metadata = {}
+        self.metadata = {}  # assumed to contain name, term, and created_at
+        self._dir_path: str | None = None
+
+    @property
+    def path(self):
+        return self._dir_path
 
     @classmethod
-    def create(cls, name, term, save_dir) -> "Gradebook":
+    def create(cls, name, term, save_dir_path) -> "Gradebook":
         gradebook = cls()
-
+        gradebook._dir_path = save_dir_path
         gradebook.metadata = {
             "name": name,
             "term": term,
             "created_at": datetime.now().isoformat(),
         }
 
-        gradebook.save(save_dir)
+        gradebook.save(save_dir_path)
 
         return gradebook
 
     @classmethod
-    def load(cls, path) -> "Gradebook":
+    def load(cls, save_dir_path) -> "Gradebook":
         def read_json(filename) -> list[Any] | dict[str, Any]:
-            with open(os.path.join(path, filename), "r") as f:
+            with open(os.path.join(save_dir_path, filename), "r") as f:
                 return json.load(f)
 
         def load_and_import(
@@ -47,8 +52,8 @@ class Gradebook:
             else:
                 import_fn(data)
 
-        gradebook = Gradebook()
-
+        gradebook = cls()
+        gradebook._dir_path = save_dir_path
         gradebook.metadata = read_json("metadata.json")
 
         load_and_import("students.json", gradebook.import_students)
@@ -58,9 +63,9 @@ class Gradebook:
 
         return gradebook
 
-    def save(self, path) -> None:
+    def save(self, save_dir_path) -> None:
         def write_json(filename, data) -> None:
-            with open(os.path.join(path, filename), "w") as f:
+            with open(os.path.join(save_dir_path, filename), "w") as f:
                 json.dump(data, f, indent=2, sort_keys=True)
 
         write_json("metadata.json", self.metadata)

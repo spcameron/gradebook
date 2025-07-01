@@ -2,20 +2,26 @@
 
 import os
 import json
+from cli import course_menu
 from cli.menu_helpers import display_menu, confirm_action
-from models.gradebook import Gradebook
 from cli.path_utils import resolve_save_dir, dir_is_empty
+from models.gradebook import Gradebook
 
 
-def run_cli():
+def run_cli() -> None:
     title = "===== GRADEBOOK APP ====="
     options = {
         "Create a new Gradebook": lambda: create_gradebook(),
         "Load an existing Gradebook": lambda: load_gradebook(),
-        "Exit Program": lambda: exit_program(),
     }
+    zero_option = "Exit Program"
 
-    gradebook = display_menu(title, options)
+    gradebook = display_menu(title, options, zero_option)
+
+    if isinstance(gradebook, Gradebook):
+        course_menu.run(gradebook)
+    else:
+        exit_program()
 
 
 def create_gradebook() -> Gradebook:

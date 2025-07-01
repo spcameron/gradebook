@@ -13,7 +13,7 @@ def test_assignment_to_dict(sample_assignment):
     }
 
 
-def test_assignment_from_dict(sample_assignment):
+def test_assignment_from_dict():
     assignment = Assignment.from_dict(
         {
             "id": "a001",

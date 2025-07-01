@@ -3,12 +3,14 @@
 from typing import Callable, Any
 
 
-def display_menu(title: str, options: dict[str, Callable[[], Any]]) -> Any:
+def display_menu(
+    title: str, options: dict[str, Callable[[], Any]], zero_option: str = "Return"
+) -> Any:
     while True:
         print(f"\n{title}")
         for i, key in enumerate(options, 1):
             print(f"{i}. {key}")
-        print("0. Return")
+        print(f"0. {zero_option}")
 
         choice = input("\nSelect an option: ").strip()
         if choice == "0":

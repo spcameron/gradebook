@@ -50,7 +50,7 @@ def view_student(gradebook: Gradebook) -> None:
     search_results = search_students(gradebook)
     student = prompt_student_selection(search_results)
     if student:
-        print(student)
+        print(format_name_and_email(student))
 
 
 def view_all_students(gradebook: Gradebook) -> None:
@@ -64,7 +64,7 @@ def view_all_students(gradebook: Gradebook) -> None:
         return
 
     sorted_roster = sorted(roster, key=lambda s: (s.last_name, s.first_name))
-    display_results(sorted_roster, False, print_name_and_email)
+    display_results(sorted_roster, False, format_name_and_email)
 
 
 def search_students(gradebook: Gradebook) -> list[Student]:
@@ -88,7 +88,7 @@ def prompt_student_selection(search_results: list[Student]) -> Optional[Student]
     print(f"Your search returned {len(search_results)} students: ")
 
     while True:
-        display_results(search_results, True, print_name_and_email)
+        display_results(search_results, True, format_name_and_email)
         choice = input("\nSelect an option (0 to cancel): ").strip()
 
         if choice == "0":
@@ -100,5 +100,5 @@ def prompt_student_selection(search_results: list[Student]) -> Optional[Student]
             print("Invalid selection. Please try again.")
 
 
-def print_name_and_email(student: Student) -> str:
+def format_name_and_email(student: Student) -> str:
     return f"{student.full_name:<20} | {student.email}"

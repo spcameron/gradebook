@@ -4,26 +4,28 @@ from models.student import Student
 
 
 def test_student_to_dict(sample_student):
-    assert sample_student.to_dict() == {
-        "id": "s001",
-        "name": "Sean Cameron",
-        "email": "scameron@mmm.edu",
-        "status": "active",
-    }
+    data = sample_student.to_dict()
+
+    assert data["id"] == "s001"
+    assert data["first_name"] == "Sean"
+    assert data["last_name"] == "Cameron"
+    assert data["email"] == "scameron@mmm.edu"
+    assert data["status"] == "active"
 
 
 def test_student_from_dict():
     student = Student.from_dict(
         {
             "id": "s001",
-            "name": "Sean Cameron",
+            "first_name": "Sean",
+            "last_name": "Cameron",
             "email": "scameron@mmm.edu",
             "status": "active",
         }
     )
 
     assert student.id == "s001"
-    assert student.name == "Sean Cameron"
+    assert student.full_name == "Sean Cameron"
     assert student.email == "scameron@mmm.edu"
     assert student.status == "active"
 

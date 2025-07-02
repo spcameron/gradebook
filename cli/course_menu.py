@@ -1,6 +1,7 @@
 # cli/course_menu.py
 
 from cli.menu_helpers import display_menu, MenuSignal
+from cli import students_menu
 from models.gradebook import Gradebook
 
 
@@ -10,7 +11,7 @@ def run(gradebook: Gradebook) -> None:
 
     title = f"=== {course_name} - {course_term} ==="
     options = {
-        "Manage Students": lambda: print("STUB: Manage Students"),
+        "Manage Students": lambda: students_menu.run(gradebook),
         "Manage Categories": lambda: print("STUB: Manage Categories"),
         "Manage Assignments": lambda: print("STUB: Manage Assignments"),
         "Record Submissions": lambda: print("STUB: Record Submissions"),

@@ -31,7 +31,7 @@ def test_add_student_and_save(sample_gradebook, sample_student):
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["id"] == "s001"
-        assert data[0]["name"] == "Sean Cameron"
+        assert data[0]["last_name"] == "Cameron"
 
 
 def test_add_assignment(sample_gradebook, sample_assignment):

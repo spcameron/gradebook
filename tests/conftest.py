@@ -31,7 +31,7 @@ def load_gradebook_from_file():
 
 @pytest.fixture
 def sample_student():
-    return Student("s001", "Sean Cameron", "scameron@mmm.edu")
+    return Student("s001", "Sean", "Cameron", "scameron@mmm.edu")
 
 
 @pytest.fixture

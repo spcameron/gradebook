@@ -1,7 +1,7 @@
 # cli/menu_helpers.py
 
-from typing import Callable, Any
 from enum import Enum, auto
+from typing import Any, Callable, Iterable
 
 
 class MenuSignal(Enum):
@@ -43,3 +43,13 @@ def confirm_action(prompt: str) -> bool:
 # TODO
 def clear_screen() -> None:
     pass
+
+
+def display_results(
+    results: Iterable[Any],
+    show_index: bool = False,
+    formatter: Callable[[Any], str] = lambda x: str(x),
+) -> None:
+    for i, result in enumerate(results, 1):
+        prefix = f"{i:>2}. " if show_index else ""
+        print(f"{prefix}{formatter(result)}")

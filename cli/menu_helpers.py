@@ -9,12 +9,14 @@ class MenuSignal(Enum):
 
 
 def display_menu(
-    title: str, options: dict[str, Callable[[], Any]], zero_option: str = "Return"
-) -> MenuSignal | Any:
+    title: str,
+    options: list[tuple[str, Callable[..., Any]]],
+    zero_option: str = "Return",
+) -> MenuSignal | Callable[..., Any]:
     while True:
         print(f"\n{title}")
-        for i, key in enumerate(options, 1):
-            print(f"{i}. {key}")
+        for i, label in enumerate(options, 1):
+            print(f"{i}. {label}")
         print(f"0. {zero_option}")
 
         choice = input("\nSelect an option: ").strip()
@@ -22,8 +24,12 @@ def display_menu(
         if choice == "0":
             return MenuSignal.EXIT
         try:
+            # slightly verbose for clarity, can be one-liner
+            # return options[int(choice) - 1][1]
             index = int(choice) - 1
-            return list(options.values())[index]()
+            option = options[index]
+            action = option[1]
+            return action
         except (ValueError, IndexError):
             print("Invalid selection. Please try again.")
 

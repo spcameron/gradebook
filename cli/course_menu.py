@@ -3,6 +3,7 @@
 from cli.menu_helpers import display_menu, MenuSignal
 from cli import students_menu
 from models.gradebook import Gradebook
+from typing import Callable
 
 
 def run(gradebook: Gradebook) -> None:
@@ -10,17 +11,21 @@ def run(gradebook: Gradebook) -> None:
     course_term = gradebook.metadata["term"]
 
     title = f"=== {course_name} - {course_term} ==="
-    options = {
-        "Manage Students": lambda: students_menu.run(gradebook),
-        "Manage Categories": lambda: print("STUB: Manage Categories"),
-        "Manage Assignments": lambda: print("STUB: Manage Assignments"),
-        "Record Submissions": lambda: print("STUB: Record Submissions"),
-        "Generate Reports": lambda: print("STUB: Generate Reports"),
-        "Save Gradebook": lambda: gradebook.save(gradebook.path),
-    }
+    options = [
+        ("Manage Students", lambda: students_menu.run(gradebook)),
+        ("Manage Categories", lambda: print("STUB: Manage Categories")),
+        ("Manage Assignments", lambda: print("STUB: Manage Assignments")),
+        ("Record Submissions", lambda: print("STUB: Record Submissions")),
+        ("Generate Reports", lambda: print("STUB: Generate Reports")),
+        ("Save Gradebook", lambda: gradebook.save(gradebook.path)),
+    ]
     zero_option = "Return to Start Menu"
 
     while True:
-        result = display_menu(title, options, zero_option)
-        if result == MenuSignal.EXIT:
+        menu_response = display_menu(title, options, zero_option)
+
+        if menu_response == MenuSignal.EXIT:
             break
+
+        if isinstance(menu_response, Callable):
+            menu_response()

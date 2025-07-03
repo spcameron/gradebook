@@ -6,24 +6,26 @@ from cli import course_menu
 from cli.menu_helpers import display_menu, confirm_action, MenuSignal
 from cli.path_utils import resolve_save_dir, dir_is_empty
 from models.gradebook import Gradebook
+from typing import Callable
 
 
 def run_cli() -> None:
     title = "===== GRADEBOOK APP ====="
-    options = {
-        "Create a new Gradebook": lambda: create_gradebook(),
-        "Load an existing Gradebook": lambda: load_gradebook(),
-    }
+    options = [
+        ("Create a new Gradebook", lambda: create_gradebook()),
+        ("Load an existing Gradebook", lambda: load_gradebook()),
+    ]
     zero_option = "Exit Program"
 
     while True:
-        result = display_menu(title, options, zero_option)
+        menu_response = display_menu(title, options, zero_option)
 
-        if result == MenuSignal.EXIT:
+        if menu_response == MenuSignal.EXIT:
             exit_program()
 
-        if isinstance(result, Gradebook):
-            course_menu.run(result)
+        if isinstance(menu_response, Callable):
+            gradebook = menu_response()
+            course_menu.run(gradebook)
 
 
 def create_gradebook() -> Gradebook:

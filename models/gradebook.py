@@ -105,3 +105,6 @@ class Gradebook:
 
     def add_submission(self, submission) -> None:
         self.submissions[submission.id] = submission
+
+    def remove_student(self, student: Student) -> None:
+        pass

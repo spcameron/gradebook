@@ -15,7 +15,7 @@ def display_menu(
 ) -> MenuSignal | Callable[..., Any]:
     while True:
         print(f"\n{title}")
-        for i, label in enumerate(options, 1):
+        for i, (label, _) in enumerate(options, 1):
             print(f"{i}. {label}")
         print(f"0. {zero_option}")
 

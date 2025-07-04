@@ -6,6 +6,7 @@ from cli import course_menu
 from cli.menu_helpers import display_menu, confirm_action, MenuSignal
 from cli.path_utils import resolve_save_dir, dir_is_empty
 from models.gradebook import Gradebook
+from textwrap import dedent
 from typing import Callable
 
 
@@ -43,10 +44,13 @@ def create_gradebook() -> Gradebook:
 
         if os.path.exists(dir_path) and not dir_is_empty(dir_path):
             print(
-                """=== WARNING! ===
-            The selected directory is not empty and may contain existing data.
-            It is recommended to store new Gradebooks in an empty directory.
-            Writing to this directory may result in the loss of existing data."""
+                dedent(
+                    """\
+                    === WARNING! ===
+                    The selected directory is not empty and may contain existing data.
+                    It is recommended to store new Gradebooks in an empty directory.
+                    Writing to this directory may result in the loss of existing data."""
+                )
             )
             if confirm_action("Do you wish to continue?"):
                 return Gradebook.create(name, term, dir_path)

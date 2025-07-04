@@ -1,12 +1,13 @@
 # models/gradebook.py
 
-import os, json
+import json
+import os
 from datetime import datetime
-from typing import Any, Callable
-from models.student import Student
-from models.category import Category
 from models.assignment import Assignment
+from models.category import Category
+from models.student import Student
 from models.submission import Submission
+from typing import Any, Callable
 
 
 class Gradebook:
@@ -107,4 +108,9 @@ class Gradebook:
         self.submissions[submission.id] = submission
 
     def remove_student(self, student: Student) -> None:
-        pass
+        try:
+            del self.students[student.id]
+        except KeyError:
+            print(
+                f"No record for {student.full_name} could be found in this Gradebook."
+            )

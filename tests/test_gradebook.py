@@ -3,6 +3,7 @@
 import os
 import json
 import tempfile
+from models.student import Student
 
 
 def test_add_student(sample_gradebook, sample_student):
@@ -71,3 +72,20 @@ def test_create_new_gradebook(create_new_gradebook):
 def test_load_gradebook_from_file(load_gradebook_from_file):
     assert load_gradebook_from_file.metadata["name"] == "THTR 274B"
     assert load_gradebook_from_file.metadata["term"] == "SPRING 2026"
+
+
+def test_add_students_and_remove_one(create_new_gradebook):
+    gradebook = create_new_gradebook
+    student_1 = Student("s001", "Harry", "Potter", "hpotter@hogwarts.edu")
+    student_2 = Student("s002", "Ron", "Weasley", "rweasley@hogwarts.edu")
+
+    gradebook.add_student(student_1)
+    gradebook.add_student(student_2)
+
+    assert student_1 in gradebook.students.values()
+    assert student_2 in gradebook.students.values()
+
+    gradebook.remove_student(student_1)
+
+    assert student_1 not in gradebook.students.values()
+    assert student_2 in gradebook.students.values()

@@ -70,7 +70,7 @@ def edit_student(gradebook: Gradebook) -> None:
 def edit_first_name_and_confirm(
     student: Student, gradebook: Gradebook
 ) -> MenuSignal | None:
-    current_first_name = student.first_name
+    current_first_name = student._first_name
     new_first_name = input("Enter a new first name (leave blank to cancel): ").strip()
 
     if new_first_name == "":
@@ -81,7 +81,7 @@ def edit_first_name_and_confirm(
     save_change = confirm_action("Do you want to save this change?")
 
     if save_change:
-        student.first_name = new_first_name
+        student._first_name = new_first_name
         gradebook.save(gradebook.path)
         print("First name successfully updated!")
     else:
@@ -92,7 +92,7 @@ def edit_first_name_and_confirm(
 def edit_last_name_and_confirm(
     student: Student, gradebook: Gradebook
 ) -> MenuSignal | None:
-    current_last_name = student.last_name
+    current_last_name = student._last_name
     new_last_name = input("Enter a new last name (leave blank to cancel): ").strip()
 
     if new_last_name == "":
@@ -103,7 +103,7 @@ def edit_last_name_and_confirm(
     save_change = confirm_action("Do you want to save this change?")
 
     if save_change:
-        student.last_name = new_last_name
+        student._last_name = new_last_name
         gradebook.save(gradebook.path)
         print("Last name successfully updated.")
     else:
@@ -112,7 +112,7 @@ def edit_last_name_and_confirm(
 
 
 def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> MenuSignal | None:
-    current_email = student.email
+    current_email = student._email
     new_email = input("Enter a new email address (leave blank to cancel): ").strip()
 
     if new_email == "":
@@ -123,7 +123,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> MenuSignal
     save_change = confirm_action("Do you want to save this change?")
 
     if save_change:
-        student.email = new_email
+        student._email = new_email
         gradebook.save(gradebook.path)
         print("Email address successfully updated.")
     else:
@@ -134,7 +134,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> MenuSignal
 def edit_status_and_confirm(
     student: Student, gradebook: Gradebook
 ) -> MenuSignal | None:
-    current_status = student.status
+    current_status = student._status
 
     print(f"Current enrollment status: {current_status}.")
 
@@ -143,7 +143,7 @@ def edit_status_and_confirm(
     if toggle_status:
         student.toggle_enrollment_status()
         gradebook.save(gradebook.path)
-        print(f"Enrollment status successfully updated to {student.status}")
+        print(f"Enrollment status successfully updated to {student._status}")
     else:
         print("No changes made. Returning to Manage Students menu.")
         return MenuSignal.EXIT
@@ -258,4 +258,4 @@ def prompt_student_selection(search_results: list[Student]) -> Optional[Student]
 
 
 def format_name_and_email(student: Student) -> str:
-    return f"{student.full_name:<20} | {student.email}"
+    return f"{student.full_name:<20} | {student._email}"

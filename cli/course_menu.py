@@ -1,6 +1,6 @@
 # cli/course_menu.py
 
-from cli.menu_helpers import display_menu, MenuSignal
+from cli.menu_helpers import display_menu, format_banner_text, MenuSignal
 from cli import students_menu
 from models.gradebook import Gradebook
 from typing import Callable
@@ -10,7 +10,7 @@ def run(gradebook: Gradebook) -> None:
     course_name = gradebook.metadata["name"]
     course_term = gradebook.metadata["term"]
 
-    title = f"=== {course_name} - {course_term} ==="
+    title = format_banner_text(f"{course_name} - {course_term}")
     options = [
         ("Manage Students", lambda: students_menu.run(gradebook)),
         ("Manage Categories", lambda: print("STUB: Manage Categories")),

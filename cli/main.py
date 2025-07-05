@@ -67,7 +67,7 @@ def create_gradebook() -> Gradebook:
         return Gradebook.create(name, term, dir_path)
 
 
-# TODO verify gradebook data (or at least metadata) exists before loading
+# TODO: verify gradebook data (or at least metadata) exists before loading
 def load_gradebook() -> Gradebook | None:
     dir_path = prompt_user_input("Enter path to Gradebook directory: ")
     dir_path = os.path.expanduser(dir_path)
@@ -84,6 +84,7 @@ def load_gradebook() -> Gradebook | None:
         return None
 
 
+# TODO: save before quitting prompt
 def exit_program():
     exit_banner = format_banner_text("Exiting Program")
     print(f"\n{exit_banner}\n")

@@ -23,7 +23,7 @@ def run(gradebook: Gradebook) -> None:
         ("View Student Details", view_student),
         ("View All Students", view_all_students),
     ]
-    zero_option = "Return to Course Menu"
+    zero_option = "Return to Course Manager menu"
 
     while True:
         menu_response = display_menu(title, options, zero_option)
@@ -85,9 +85,7 @@ def edit_student(gradebook: Gradebook) -> None:
             break
 
 
-def edit_first_name_and_confirm(
-    student: Student, gradebook: Gradebook
-) -> MenuSignal | None:
+def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_first_name = student.first_name
     new_first_name = prompt_user_input(
         "Enter a new first name (leave blank to cancel): "
@@ -109,9 +107,7 @@ def edit_first_name_and_confirm(
         print("\nChanges discarded.")
 
 
-def edit_last_name_and_confirm(
-    student: Student, gradebook: Gradebook
-) -> MenuSignal | None:
+def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_last_name = student.last_name
     new_last_name = prompt_user_input("Enter a new last name (leave blank to cancel): ")
 
@@ -131,7 +127,7 @@ def edit_last_name_and_confirm(
         print("\nChanges discarded.")
 
 
-def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> MenuSignal | None:
+def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_email = student.email
     new_email = prompt_user_input("Enter a new email address (leave blank to cancel): ")
 
@@ -151,9 +147,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> MenuSignal
         print("\nChanges discarded.")
 
 
-def edit_status_and_confirm(
-    student: Student, gradebook: Gradebook
-) -> MenuSignal | None:
+def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_status = student.status
 
     print(f"\nCurrent enrollment status: {current_status}.")

@@ -6,6 +6,7 @@ from cli.menu_helpers import (
     display_results,
     format_banner_text,
     prompt_user_input,
+    returning_without_changes,
     MenuSignal,
 )
 from models.gradebook import Gradebook
@@ -29,31 +30,53 @@ def run(gradebook: Gradebook) -> None:
         menu_response = display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            break
+            if confirm_action("Would you like to save before returning?"):
+                gradebook.save(gradebook.path)
+            return None
 
-        if isinstance(menu_response, Callable):
+        if callable(menu_response):
             menu_response(gradebook)
 
 
 def add_student(gradebook: Gradebook) -> None:
     while True:
-        student_first_name = prompt_user_input("Enter student first name: ")
-        student_last_name = prompt_user_input("Enter student last name: ")
-        student_email = prompt_user_input("Enter student email: ")
+        new_student = prompt_new_student_details()
 
-        # bare minimum validation at this point
-        if student_first_name and student_last_name and student_email:
+        if new_student is not None:
+            gradebook.add_student(new_student)
+            print(f"\n{new_student.full_name} successfully added to student roster.")
+
+        if not confirm_action("Would you like to continue adding new students?"):
+            print(f"\nReturning to Manage Students menu.")
+            return None
+
+
+def prompt_new_student_details() -> Student | None:
+    while True:
+        # data collection and chance to cancel
+        first_name = prompt_user_input(
+            "Enter student first name (leave blank to cancel):"
+        )
+        if first_name == "":
+            return None
+
+        last_name = prompt_user_input("Enter last name (leave blank to cancel):")
+        if last_name == "":
+            return None
+
+        email = prompt_user_input("Enter email address (leave blank to cancel):")
+        if email == "":
+            return None
+
+        # data validation - bare minimum for now
+        if first_name and last_name and email:
             break
         else:
             print("Full name and email are required.")
 
     student_id = generate_uuid()
 
-    new_student = Student(
-        student_id, student_first_name, student_last_name, student_email
-    )
-    gradebook.add_student(new_student)
-    print(f"\nStudent {new_student.full_name} successfully added.")
+    return Student(student_id, first_name, last_name, email)
 
 
 def edit_student(gradebook: Gradebook) -> None:
@@ -61,7 +84,7 @@ def edit_student(gradebook: Gradebook) -> None:
     student = prompt_student_selection(search_results)
 
     if not student:
-        return
+        return None
 
     title = format_banner_text("Editable Fields")
     options = get_editable_fields()
@@ -70,32 +93,34 @@ def edit_student(gradebook: Gradebook) -> None:
     while True:
         print("\nYou are viewing the following student record:")
         print(format_name_and_email(student))
+
         menu_response = display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            return
+            return None
 
-        if isinstance(menu_response, Callable):
+        if callable(menu_response):
             menu_response(student, gradebook)
 
         if not confirm_action(
             "Would you like to continue editing this student record?"
         ):
             print("\nReturning to Manage Students menu.")
-            break
+            return None
 
 
 def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_first_name = student.first_name
     new_first_name = prompt_user_input(
-        "Enter a new first name (leave blank to cancel): "
+        "Enter a new first name (leave blank to cancel):"
     )
 
     if new_first_name == "":
-        return
+        return None
 
-    print(f"\nCurrent first name: {current_first_name}")
-    print(f"New first name: {new_first_name}")
+    print(
+        f"\nCurrent first name: {current_first_name} ... New first name: {new_first_name}"
+    )
 
     save_change = confirm_action("Do you want to save this change?")
 
@@ -104,18 +129,19 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         gradebook.save(gradebook.path)
         print("\nFirst name successfully updated.")
     else:
-        print("\nChanges discarded.")
+        returning_without_changes()
 
 
 def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_last_name = student.last_name
-    new_last_name = prompt_user_input("Enter a new last name (leave blank to cancel): ")
+    new_last_name = prompt_user_input("Enter a new last name (leave blank to cancel):")
 
     if new_last_name == "":
-        return
+        return None
 
-    print(f"\nCurrent last name: {current_last_name}")
-    print(f"New last name: {new_last_name}")
+    print(
+        f"\nCurrent last name: {current_last_name} ... New last name: {new_last_name}"
+    )
 
     save_change = confirm_action("Do you want to save this change?")
 
@@ -124,18 +150,19 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         gradebook.save(gradebook.path)
         print("\nLast name successfully updated.")
     else:
-        print("\nChanges discarded.")
+        returning_without_changes()
 
 
 def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     current_email = student.email
-    new_email = prompt_user_input("Enter a new email address (leave blank to cancel): ")
+    new_email = prompt_user_input("Enter a new email address (leave blank to cancel):")
 
     if new_email == "":
-        return
+        return None
 
-    print(f"\nCurrent email address: {current_email}")
-    print(f"New email address: {new_email}")
+    print(
+        f"\nCurrent email address: {current_email} ... New email address: {new_email}"
+    )
 
     save_change = confirm_action("Do you want to save this change?")
 
@@ -144,13 +171,11 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
         gradebook.save(gradebook.path)
         print("\nEmail address successfully updated.")
     else:
-        print("\nChanges discarded.")
+        returning_without_changes()
 
 
 def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
-    current_status = student.status
-
-    print(f"\nCurrent enrollment status: {current_status}.")
+    print(f"\nCurrent enrollment status: {student.status}.")
 
     toggle_status = confirm_action("Do you want to change the enrollment status?")
 
@@ -159,7 +184,7 @@ def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
         gradebook.save(gradebook.path)
         print(f"\nEnrollment status successfully updated to {student.status}.")
     else:
-        print("\nNo changes made. Returning to Manage Students menu.")
+        returning_without_changes()
 
 
 def get_editable_fields() -> (
@@ -178,7 +203,7 @@ def remove_student(gradebook: Gradebook) -> None:
     student = prompt_student_selection(search_results)
 
     if not student:
-        return
+        return None
 
     print("\nYou are viewing the following student record:")
     print(format_name_and_email(student))
@@ -193,9 +218,9 @@ def remove_student(gradebook: Gradebook) -> None:
     menu_response = display_menu(title, options, zero_option)
 
     if menu_response == MenuSignal.EXIT:
-        return
+        return None
 
-    if isinstance(menu_response, Callable):
+    if callable(menu_response):
         menu_response(student, gradebook)
 
 
@@ -214,15 +239,19 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
         gradebook.save(gradebook.path)
         print("\nStudent record successfully removed from Gradebook.")
     else:
-        print("\nNo changes made. Returning to Manage Students menu.")
+        returning_without_changes()
 
 
+# TODO: display "short" report first, prompt for "long" report second
 def view_student(gradebook: Gradebook) -> None:
     search_results = search_students(gradebook)
     student = prompt_student_selection(search_results)
-    if student:
-        print("\nYou are viewing the following student record:")
-        print(format_name_and_email(student))
+
+    if not student:
+        return None
+
+    print("\nYou are viewing the following student record:")
+    print(format_name_and_email(student))
 
 
 def view_all_students(gradebook: Gradebook) -> None:
@@ -232,14 +261,14 @@ def view_all_students(gradebook: Gradebook) -> None:
     roster = list(gradebook.students.values())
     if not roster:
         print("No students enrolled yet.")
-        return
+        return None
 
     sorted_roster = sorted(roster, key=lambda s: (s.last_name, s.first_name))
     display_results(sorted_roster, False, format_name_and_email)
 
 
 def search_students(gradebook: Gradebook) -> list[Student]:
-    query = prompt_user_input("Search for a student by name or email: ").lower()
+    query = prompt_user_input("Search for a student by name or email:").lower()
     matches = [
         student
         for student in gradebook.students.values()
@@ -256,11 +285,11 @@ def prompt_student_selection(search_results: list[Student]) -> Student | None:
     if len(search_results) == 1:
         return search_results[0]
 
-    print(f"\nYour search returned {len(search_results)} students: ")
+    print(f"\nYour search returned {len(search_results)} students:")
 
     while True:
         display_results(search_results, True, format_name_and_email)
-        choice = prompt_user_input("Select an option (0 to cancel): ")
+        choice = prompt_user_input("Select an option (0 to cancel):")
 
         if choice == "0":
             return None

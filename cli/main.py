@@ -13,7 +13,6 @@ from cli.menu_helpers import (
 from cli.path_utils import resolve_save_dir, dir_is_empty
 from models.gradebook import Gradebook
 from textwrap import dedent
-from typing import Callable
 
 
 def run_cli() -> None:

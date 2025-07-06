@@ -8,7 +8,6 @@ from cli.menu_helpers import (
     MenuSignal,
 )
 from models.gradebook import Gradebook
-from typing import Callable
 
 
 def run(gradebook: Gradebook) -> None:

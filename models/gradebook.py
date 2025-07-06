@@ -7,6 +7,7 @@ from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from models.submission import Submission
+from cli.menu_helpers import confirm_action
 from typing import Any, Callable
 
 
@@ -69,11 +70,15 @@ class Gradebook:
             with open(os.path.join(save_dir_path, filename), "w") as f:
                 json.dump(data, f, indent=2, sort_keys=True)
 
+        print("\nSaving Gradebook ...")
+
         write_json("metadata.json", self.metadata)
         write_json("students.json", [s.to_dict() for s in self.students.values()])
         write_json("categories.json", [c.to_dict() for c in self.categories.values()])
         write_json("assignments.json", [a.to_dict() for a in self.assignments.values()])
         write_json("submissions.json", [s.to_dict() for s in self.submissions.values()])
+
+        print("... save complete.")
 
     def import_students(self, student_data: list) -> None:
         for student_dict in student_data:
@@ -96,21 +101,54 @@ class Gradebook:
             self.add_submission(submission)
 
     def add_student(self, student) -> None:
-        self.students[student.id] = student
+        self.add_record(student, self.students)
 
     def add_category(self, category) -> None:
-        self.categories[category.id] = category
+        self.add_record(category, self.categories)
 
     def add_assignment(self, assignment) -> None:
-        self.assignments[assignment.id] = assignment
+        self.add_record(assignment, self.assignments)
 
     def add_submission(self, submission) -> None:
-        self.submissions[submission.id] = submission
+        self.add_record(submission, self.submissions)
 
+    # TODO: Should all submissions from this student be removed, too?
     def remove_student(self, student: Student) -> None:
+        self.remove_record(student, self.students)
+
+    def remove_category(self, category: Category) -> None:
+        self.remove_record(category, self.categories)
+        linked_assignments = [
+            a for a in self.assignments if a.category_id == category.id
+        ]
+        for assignment in linked_assignments:
+            self.remove_assignment(assignment)
+
+    def remove_assignment(self, assignment: Assignment) -> None:
+        self.remove_record(assignment, self.assignments)
+        linked_submissions = [
+            s for s in self.submissions if s.assignment_id == assignment.id
+        ]
+        for submission in linked_submissions:
+            self.remove_submission(submission)
+
+    def remove_submission(self, submission: Submission) -> None:
+        self.remove_record(submission, self.submissions)
+
+    def add_record(
+        self, record: Student | Category | Assignment | Submission, dictionary: dict
+    ) -> None:
+        dictionary[record.id] = record
+
+    def remove_record(
+        self, record: Student | Category | Assignment | Submission, dictionary: dict
+    ) -> None:
         try:
-            del self.students[student.id]
+            del dictionary[record.id]
         except KeyError:
-            print(
-                f"No record for {student.full_name} could be found in this Gradebook."
-            )
+            print("\nERROR: No matching record could be found for deletion.")
+            if confirm_action("Would you like to display the faulty deletion request?"):
+                print(
+                    f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
+                )
+                print(f" ... {record}")

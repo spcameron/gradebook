@@ -42,6 +42,10 @@ def confirm_action(prompt: str) -> bool:
             print("Invalid selection. Please try again.")
 
 
+def returning_without_changes() -> None:
+    print("\nReturning without changes.")
+
+
 def display_results(
     results: Iterable[Any],
     show_index: bool = False,

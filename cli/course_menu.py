@@ -1,7 +1,12 @@
 # cli/course_menu.py
 
-from cli.menu_helpers import display_menu, format_banner_text, MenuSignal
-from cli import students_menu
+from cli import categories_menu, students_menu
+from cli.menu_helpers import (
+    confirm_action,
+    display_menu,
+    format_banner_text,
+    MenuSignal,
+)
 from models.gradebook import Gradebook
 from typing import Callable
 
@@ -13,7 +18,7 @@ def run(gradebook: Gradebook) -> None:
     title = format_banner_text(f"{course_name} - {course_term}")
     options = [
         ("Manage Students", lambda: students_menu.run(gradebook)),
-        ("Manage Categories", lambda: print("STUB: Manage Categories")),
+        ("Manage Categories", lambda: categories_menu.run(gradebook)),
         ("Manage Assignments", lambda: print("STUB: Manage Assignments")),
         ("Record Submissions", lambda: print("STUB: Record Submissions")),
         ("Generate Reports", lambda: print("STUB: Generate Reports")),
@@ -25,7 +30,9 @@ def run(gradebook: Gradebook) -> None:
         menu_response = display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            break
+            if confirm_action("Would you like save before returning?"):
+                gradebook.save(gradebook.path)
+            return None
 
-        if isinstance(menu_response, Callable):
+        if callable(menu_response):
             menu_response()

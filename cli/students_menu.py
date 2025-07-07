@@ -103,6 +103,7 @@ def edit_student(gradebook: Gradebook) -> None:
         menu_response = display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
+            returning_without_changes()
             return None
 
         if callable(menu_response):
@@ -122,6 +123,7 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     )
 
     if new_first_name == "":
+        returning_without_changes()
         return None
 
     print(
@@ -130,12 +132,13 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
     save_change = confirm_action("Do you want to save this change?")
 
-    if save_change:
-        student.first_name = new_first_name
-        gradebook.save(gradebook.path)
-        print("\nFirst name successfully updated.")
-    else:
+    if not save_change:
         returning_without_changes()
+        return None
+
+    student.first_name = new_first_name
+    gradebook.save(gradebook.path)
+    print("\nFirst name successfully updated.")
 
 
 def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
@@ -143,6 +146,7 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     new_last_name = prompt_user_input("Enter a new last name (leave blank to cancel):")
 
     if new_last_name == "":
+        returning_without_changes()
         return None
 
     print(
@@ -151,12 +155,13 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
     save_change = confirm_action("Do you want to save this change?")
 
-    if save_change:
-        student.last_name = new_last_name
-        gradebook.save(gradebook.path)
-        print("\nLast name successfully updated.")
-    else:
+    if not save_change:
         returning_without_changes()
+        return None
+
+    student.last_name = new_last_name
+    gradebook.save(gradebook.path)
+    print("\nLast name successfully updated.")
 
 
 def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
@@ -164,6 +169,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     new_email = prompt_user_input("Enter a new email address (leave blank to cancel):")
 
     if new_email == "":
+        returning_without_changes()
         return None
 
     print(
@@ -172,25 +178,25 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
     save_change = confirm_action("Do you want to save this change?")
 
-    if save_change:
-        student.email = new_email
-        gradebook.save(gradebook.path)
-        print("\nEmail address successfully updated.")
-    else:
+    if not save_change:
         returning_without_changes()
+        return None
+
+    student.email = new_email
+    gradebook.save(gradebook.path)
+    print("\nEmail address successfully updated.")
 
 
 def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
-    print(f"\nCurrent enrollment status: {student.status}.")
+    print(f"\nThis student is currently {student.status}.")
 
-    toggle_status = confirm_action("Do you want to change the enrollment status?")
-
-    if toggle_status:
-        student.toggle_enrollment_status()
-        gradebook.save(gradebook.path)
-        print(f"\nEnrollment status successfully updated to {student.status}.")
-    else:
+    if not confirm_action("Do you want to change the enrollment status?"):
         returning_without_changes()
+        return None
+
+    student.toggle_enrollment_status()
+    gradebook.save(gradebook.path)
+    print(f"\nEnrollment status successfully updated to {student.status}.")
 
 
 def get_editable_fields() -> (
@@ -224,6 +230,7 @@ def remove_student(gradebook: Gradebook) -> None:
     menu_response = display_menu(title, options, zero_option)
 
     if menu_response == MenuSignal.EXIT:
+        returning_without_changes()
         return None
 
     if callable(menu_response):
@@ -240,12 +247,13 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
         "Are you sure you want to permanently remove this student? This action cannot be undone."
     )
 
-    if confirm_deletion:
-        gradebook.remove_student(student)
-        gradebook.save(gradebook.path)
-        print("\nStudent record successfully removed from Gradebook.")
-    else:
+    if not confirm_deletion:
         returning_without_changes()
+        return None
+
+    gradebook.remove_student(student)
+    gradebook.save(gradebook.path)
+    print("\nStudent record successfully removed from Gradebook.")
 
 
 # TODO: display "short" report first, prompt for "long" report second

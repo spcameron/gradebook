@@ -40,23 +40,23 @@ def run(gradebook: Gradebook) -> None:
 
 def add_student(gradebook: Gradebook) -> None:
     while True:
-        new_student = prompt_new_student_details()
+        new_student = prompt_new_student()
 
         if new_student is not None:
             gradebook.add_student(new_student)
-            print(f"\n{new_student.full_name} successfully added to student roster.")
+            print(
+                f"\n{new_student.full_name} successfully added to {gradebook.metadata["name"]}."
+            )
 
         if not confirm_action("Would you like to continue adding new students?"):
             print(f"\nReturning to Manage Students menu.")
             return None
 
 
-def prompt_new_student_details() -> Student | None:
+def prompt_new_student() -> Student | None:
     while True:
         # data collection and chance to cancel
-        first_name = prompt_user_input(
-            "Enter student first name (leave blank to cancel):"
-        )
+        first_name = prompt_user_input("Enter first name (leave blank to cancel):")
         if first_name == "":
             return None
 
@@ -68,15 +68,21 @@ def prompt_new_student_details() -> Student | None:
         if email == "":
             return None
 
-        # data validation - bare minimum for now
+        # TODO: data validation - bare minimum for now
         if first_name and last_name and email:
             break
         else:
             print("Full name and email are required.")
 
-    student_id = generate_uuid()
+    try:
+        student_id = generate_uuid()
+        new_student = Student(student_id, first_name, last_name, email)
+    # currently no exceptions can be raised, but placeholder for future input validation
+    except Exception as e:
+        print(f"\nError: Could not create student ... {e}")
+        return None
 
-    return Student(student_id, first_name, last_name, email)
+    return new_student
 
 
 def edit_student(gradebook: Gradebook) -> None:

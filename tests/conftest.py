@@ -15,7 +15,7 @@ TEST_DATA_DIR = os.path.join(
 
 @pytest.fixture
 def sample_gradebook():
-    return Gradebook()
+    return Gradebook.create("THTR 274A", "FALL 2025", TEST_DATA_DIR)
 
 
 @pytest.fixture

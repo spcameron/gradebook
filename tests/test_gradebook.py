@@ -65,13 +65,13 @@ def test_add_assignment_and_save(sample_gradebook, sample_assignment):
 
 
 def test_create_new_gradebook(create_new_gradebook):
-    assert create_new_gradebook.metadata["name"] == "THTR 274A"
-    assert create_new_gradebook.metadata["term"] == "FALL 2025"
+    assert create_new_gradebook.name == "THTR 274A"
+    assert create_new_gradebook.term == "FALL 2025"
 
 
 def test_load_gradebook_from_file(load_gradebook_from_file):
-    assert load_gradebook_from_file.metadata["name"] == "THTR 274B"
-    assert load_gradebook_from_file.metadata["term"] == "SPRING 2026"
+    assert load_gradebook_from_file.name == "THTR 274B"
+    assert load_gradebook_from_file.term == "SPRING 2026"
 
 
 def test_add_students_and_remove_one(create_new_gradebook):

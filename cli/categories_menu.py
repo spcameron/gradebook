@@ -48,9 +48,7 @@ def add_category(gradebook: Gradebook) -> None:
 
         if new_category is not None:
             gradebook.add_category(new_category)
-            print(
-                f"\n{new_category.name} successfully added to {gradebook._metadata["name"]}"
-            )
+            print(f"\n{new_category.name} successfully added to {gradebook.name}")
 
         if not confirm_action("Would you like to continue adding new categories?"):
             print(f"\nReturning to Manage Categories menu.")

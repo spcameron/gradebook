@@ -11,10 +11,7 @@ from models.gradebook import Gradebook
 
 
 def run(gradebook: Gradebook) -> None:
-    course_name = gradebook.metadata["name"]
-    course_term = gradebook.metadata["term"]
-
-    title = format_banner_text(f"{course_name} - {course_term}")
+    title = format_banner_text(f"{gradebook.name} - {gradebook.term}")
     options = [
         ("Manage Students", lambda: students_menu.run(gradebook)),
         ("Manage Categories", lambda: categories_menu.run(gradebook)),

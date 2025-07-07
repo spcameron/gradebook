@@ -44,9 +44,7 @@ def add_student(gradebook: Gradebook) -> None:
 
         if new_student is not None:
             gradebook.add_student(new_student)
-            print(
-                f"\n{new_student.full_name} successfully added to {gradebook.metadata["name"]}."
-            )
+            print(f"\n{new_student.full_name} successfully added to {gradebook.name}.")
 
         if not confirm_action("Would you like to continue adding new students?"):
             print(f"\nReturning to Manage Students menu.")

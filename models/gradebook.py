@@ -3,35 +3,51 @@
 import json
 import os
 from datetime import datetime
+from cli.menu_helpers import confirm_action
 from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from models.submission import Submission
-from cli.menu_helpers import confirm_action
 from typing import Any, Callable
 
 
 class Gradebook:
 
-    def __init__(self):
+    def __init__(self, save_dir_path: str):
         self.students = {}
         self.categories = {}
         self.assignments = {}
         self.submissions = {}
-        self.metadata = {}  # assumed to contain name, term, and created_at
-        self._dir_path: str | None = None
+        self._metadata = {}  # assumed to contain name, term, and created_at
+        self._dir_path = save_dir_path
 
     @property
-    def path(self):
+    def path(self) -> str:
         return self._dir_path
 
+    @property
+    def name(self) -> str:
+        return self._metadata["name"]
+
+    @property
+    def term(self) -> str:
+        return self._metadata["term"]
+
+    @property
+    def uses_weighting(self) -> bool:
+        return self._metadata["uses_weighting"]
+
+    def toggle_uses_weighting(self) -> None:
+        self._metadata["uses_weighting"] = False if self.uses_weighting else True
+
     @classmethod
-    def create(cls, name, term, save_dir_path) -> "Gradebook":
-        gradebook = cls()
+    def create(cls, name: str, term: str, save_dir_path: str) -> "Gradebook":
+        gradebook = cls(save_dir_path)
         gradebook._dir_path = save_dir_path
-        gradebook.metadata = {
+        gradebook._metadata = {
             "name": name,
             "term": term,
+            "uses_weighting": False,
             "created_at": datetime.now().isoformat(),
         }
 
@@ -40,8 +56,8 @@ class Gradebook:
         return gradebook
 
     @classmethod
-    def load(cls, save_dir_path) -> "Gradebook":
-        def read_json(filename) -> list[Any] | dict[str, Any]:
+    def load(cls, save_dir_path: str) -> "Gradebook":
+        def read_json(filename: str) -> list[Any] | dict[str, Any]:
             with open(os.path.join(save_dir_path, filename), "r") as f:
                 return json.load(f)
 
@@ -54,9 +70,9 @@ class Gradebook:
             else:
                 import_fn(data)
 
-        gradebook = cls()
+        gradebook = cls(save_dir_path)
         gradebook._dir_path = save_dir_path
-        gradebook.metadata = read_json("metadata.json")
+        gradebook._metadata = read_json("metadata.json")
 
         load_and_import("students.json", gradebook.import_students)
         load_and_import("categories.json", gradebook.import_categories)
@@ -65,20 +81,22 @@ class Gradebook:
 
         return gradebook
 
-    def save(self, save_dir_path) -> None:
-        def write_json(filename, data) -> None:
+    def save(self, save_dir_path: str) -> None:
+        def write_json(filename: str, data: list | dict) -> None:
             with open(os.path.join(save_dir_path, filename), "w") as f:
                 json.dump(data, f, indent=2, sort_keys=True)
 
         print("\nSaving Gradebook ...")
 
-        write_json("metadata.json", self.metadata)
+        write_json("metadata.json", self._metadata)
         write_json("students.json", [s.to_dict() for s in self.students.values()])
         write_json("categories.json", [c.to_dict() for c in self.categories.values()])
         write_json("assignments.json", [a.to_dict() for a in self.assignments.values()])
         write_json("submissions.json", [s.to_dict() for s in self.submissions.values()])
 
         print("... save complete.")
+
+    # === import methods ===
 
     def import_students(self, student_data: list) -> None:
         for student_dict in student_data:
@@ -100,17 +118,26 @@ class Gradebook:
             submission = Submission.from_dict(submission_dict)
             self.add_submission(submission)
 
-    def add_student(self, student) -> None:
+    # === add methods ===
+
+    def add_student(self, student: Student) -> None:
         self.add_record(student, self.students)
 
-    def add_category(self, category) -> None:
+    def add_category(self, category: Category) -> None:
         self.add_record(category, self.categories)
 
-    def add_assignment(self, assignment) -> None:
+    def add_assignment(self, assignment: Assignment) -> None:
         self.add_record(assignment, self.assignments)
 
-    def add_submission(self, submission) -> None:
+    def add_submission(self, submission: Submission) -> None:
         self.add_record(submission, self.submissions)
+
+    def add_record(
+        self, record: Student | Category | Assignment | Submission, dictionary: dict
+    ) -> None:
+        dictionary[record.id] = record
+
+    # === remove methods ===
 
     # TODO: Should all submissions from this student be removed, too?
     def remove_student(self, student: Student) -> None:
@@ -134,11 +161,6 @@ class Gradebook:
 
     def remove_submission(self, submission: Submission) -> None:
         self.remove_record(submission, self.submissions)
-
-    def add_record(
-        self, record: Student | Category | Assignment | Submission, dictionary: dict
-    ) -> None:
-        dictionary[record.id] = record
 
     def remove_record(
         self, record: Student | Category | Assignment | Submission, dictionary: dict

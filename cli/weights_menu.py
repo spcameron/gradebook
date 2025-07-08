@@ -13,7 +13,7 @@ from models.gradebook import Gradebook
 def run(gradebook: Gradebook) -> None:
     title = format_banner_text("Manage Category Weights")
     options = [
-        ("Toggle Weighting On/Off", toggle_weights),
+        ("Toggle Weighting On/Off", toggle_weighting),
         ("Assign Weights", assign_weights),
         ("View Current Weights", view_current_weights),
         ("Validate Weights", validate_weights),
@@ -34,7 +34,7 @@ def run(gradebook: Gradebook) -> None:
             menu_response(gradebook)
 
 
-def toggle_weights(gradebook: Gradebook) -> None:
+def toggle_weighting(gradebook: Gradebook) -> None:
     uses_weighting = "uses" if gradebook.uses_weighting else "does not use"
     on_or_off = "off" if gradebook.uses_weighting else "on"
 

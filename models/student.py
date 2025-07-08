@@ -86,4 +86,4 @@ class Student:
         return f"Student({self._id}, {self._first_name}, {self._last_name}, {self._email}, {self._is_enrolled})"
 
     def __str__(self) -> str:
-        return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self.id}"
+        return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self._id}"

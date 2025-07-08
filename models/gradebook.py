@@ -8,7 +8,10 @@ from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from models.submission import Submission
-from typing import Any, Callable
+from typing import Any, Callable, Optional, TypeVar
+
+
+T = TypeVar("T", Assignment, Category, Student, Submission)
 
 
 class Gradebook:
@@ -120,6 +123,9 @@ class Gradebook:
 
     # === add methods ===
 
+    def add_record(self, record: T, dictionary: dict) -> None:
+        dictionary[record.id] = record
+
     def add_student(self, student: Student) -> None:
         self.add_record(student, self.students)
 
@@ -132,12 +138,18 @@ class Gradebook:
     def add_submission(self, submission: Submission) -> None:
         self.add_record(submission, self.submissions)
 
-    def add_record(
-        self, record: Student | Category | Assignment | Submission, dictionary: dict
-    ) -> None:
-        dictionary[record.id] = record
-
     # === remove methods ===
+
+    def remove_record(self, record: T, dictionary: dict) -> None:
+        try:
+            del dictionary[record.id]
+        except KeyError:
+            print("\nERROR: No matching record could be found for deletion.")
+            if confirm_action("Would you like to display the faulty deletion request?"):
+                print(
+                    f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
+                )
+                print(f" ... {record}")
 
     # TODO: Should all submissions from this student be removed, too?
     def remove_student(self, student: Student) -> None:
@@ -162,15 +174,19 @@ class Gradebook:
     def remove_submission(self, submission: Submission) -> None:
         self.remove_record(submission, self.submissions)
 
-    def remove_record(
-        self, record: Student | Category | Assignment | Submission, dictionary: dict
-    ) -> None:
-        try:
-            del dictionary[record.id]
-        except KeyError:
-            print("\nERROR: No matching record could be found for deletion.")
-            if confirm_action("Would you like to display the faulty deletion request?"):
-                print(
-                    f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
-                )
-                print(f" ... {record}")
+    # === find record by uuid ===
+
+    def find_record_by_uuid(self, uuid: str, dictionary: dict[str, T]) -> Optional[T]:
+        return dictionary.get(uuid)
+
+    def find_student_by_uuid(self, uuid: str) -> Optional[Student]:
+        return self.find_record_by_uuid(uuid, self.students)
+
+    def find_category_by_uuid(self, uuid: str) -> Optional[Category]:
+        return self.find_record_by_uuid(uuid, self.categories)
+
+    def find_assignment_by_uuid(self, uuid: str) -> Optional[Assignment]:
+        return self.find_record_by_uuid(uuid, self.assignments)
+
+    def find_submission_by_uuid(self, uuid: str) -> Optional[Submission]:
+        return self.find_record_by_uuid(uuid, self.submissions)

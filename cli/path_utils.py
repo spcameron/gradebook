@@ -1,13 +1,14 @@
 # cli/path_utils.py
 
 import os
+from typing import Optional
 
 
 def sanitize_name(name: str) -> str:
     return name.strip().replace(" ", "_")
 
 
-def get_save_dir(course_name: str, course_term: str, user_input: str | None) -> str:
+def get_save_dir(course_name: str, course_term: str, user_input: Optional[str]) -> str:
     if user_input:
         return os.path.expanduser(user_input.strip())
     else:
@@ -15,7 +16,9 @@ def get_save_dir(course_name: str, course_term: str, user_input: str | None) -> 
         return os.path.join(documents, "Gradebooks", course_term, course_name)
 
 
-def resolve_save_dir(course_name: str, course_term: str, dir_input: str | None) -> str:
+def resolve_save_dir(
+    course_name: str, course_term: str, dir_input: Optional[str]
+) -> str:
 
     course = sanitize_name(course_name)
     term = sanitize_name(course_term)

@@ -6,13 +6,14 @@ from cli.menu_helpers import (
     display_menu,
     display_results,
     format_banner_text,
+    prompt_record_selection,
     prompt_user_input,
     returning_without_changes,
     MenuSignal,
 )
 from models.category import Category
 from models.gradebook import Gradebook
-from typing import Callable
+from typing import Callable, Optional
 from utils.utils import generate_uuid
 
 
@@ -22,7 +23,8 @@ def run(gradebook: Gradebook) -> None:
         ("Add Category", add_category),
         ("Edit Category", edit_category),
         ("Remove Category", remove_category),
-        ("View Category Details", view_category),
+        ("View Individual Category", view_individual_category),
+        # TODO: condense view categories into view multiple categories
         ("View All Categories", view_all_categories),
         ("View Active Categories", view_active_categories),
         ("View Archived Categories", view_archived_categories),
@@ -48,14 +50,14 @@ def add_category(gradebook: Gradebook) -> None:
 
         if new_category is not None:
             gradebook.add_category(new_category)
-            print(f"\n{new_category.name} successfully added to {gradebook.name}")
+            print(f"\n{new_category.name} successfully added to {gradebook.name}.")
 
         if not confirm_action("Would you like to continue adding new categories?"):
             print(f"\nReturning to Manage Categories menu.")
             return None
 
 
-def prompt_new_category() -> Category | None:
+def prompt_new_category() -> Optional[Category]:
     while True:
         name = prompt_user_input("Enter category name (leave blank to cancel):")
         if name == "":
@@ -134,14 +136,14 @@ def edit_archive_and_confirm(category: Category, gradebook: Gradebook) -> None:
         returning_without_changes()
         return None
 
-    if category.is_archived:
-        confirm_and_reactivate(category, gradebook)
-    else:
+    if category.is_active:
         confirm_and_archive(category, gradebook)
+    else:
+        confirm_and_reactivate(category, gradebook)
 
 
 def get_editable_fields() -> (
-    list[tuple[str, Callable[[Category, Gradebook], MenuSignal | None]]]
+    list[tuple[str, Callable[[Category, Gradebook], Optional[MenuSignal]]]]
 ):
     return [
         ("Name", edit_name_and_confirm),
@@ -246,7 +248,7 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
 
 
 # TODO: display "short" report first, prompt for "long" report second
-def view_category(gradebook: Gradebook) -> None:
+def view_individual_category(gradebook: Gradebook) -> None:
     search_results = search_categories(gradebook)
     category = prompt_category_selection(search_results)
 
@@ -273,7 +275,7 @@ def view_active_categories(gradebook: Gradebook) -> None:
     active_categories_banner = format_banner_text("Active Categories")
     print(f"\n{active_categories_banner}")
 
-    active_categories = [c for c in gradebook.categories.values() if not c.is_archived]
+    active_categories = [c for c in gradebook.categories.values() if c.is_active]
     if not active_categories:
         print("No active categories yet.")
         return None
@@ -300,34 +302,13 @@ def sort_and_display_results(categories: list[Category]) -> None:
 
 def search_categories(gradebook: Gradebook) -> list[Category]:
     query = prompt_user_input("Search for a category by name:").lower()
-    matches = [
-        category
-        for category in gradebook.categories.values()
-        if query in category.name.lower()
-    ]
-    return matches
+    return gradebook.find_category_by_query(query)
 
 
-def prompt_category_selection(search_results: list[Category]) -> Category | None:
-    if not search_results:
-        print("\nNo matching categories found.")
-
-    if len(search_results) == 1:
-        return search_results[0]
-
-    print(f"\nYour search returned {len(search_results)} categories:")
-
-    while True:
-        display_results(search_results, True, lambda c: f"{c.name}")
-        choice = prompt_user_input("Select an option (0 to cancel): ")
-
-        if choice == "0":
-            return None
-        try:
-            index = int(choice) - 1
-            return search_results[index]
-        except (ValueError, IndexError):
-            print("\nInvalid selection. Please try again.")
+def prompt_category_selection(search_results: list[Category]) -> Optional[Category]:
+    return prompt_record_selection(
+        search_results, lambda x: x.name, format_name_and_weight
+    )
 
 
 def format_name_and_weight(category: Category) -> str:

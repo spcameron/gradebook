@@ -8,10 +8,8 @@ from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from models.submission import Submission
-from typing import Any, Callable, Optional, TypeVar
-
-
-T = TypeVar("T", Assignment, Category, Student, Submission)
+from models.types import RecordType
+from typing import Any, Callable, Optional
 
 
 class Gradebook:
@@ -123,7 +121,7 @@ class Gradebook:
 
     # === add methods ===
 
-    def add_record(self, record: T, dictionary: dict) -> None:
+    def add_record(self, record: RecordType, dictionary: dict) -> None:
         dictionary[record.id] = record
 
     def add_student(self, student: Student) -> None:
@@ -140,7 +138,7 @@ class Gradebook:
 
     # === remove methods ===
 
-    def remove_record(self, record: T, dictionary: dict) -> None:
+    def remove_record(self, record: RecordType, dictionary: dict) -> None:
         try:
             del dictionary[record.id]
         except KeyError:
@@ -176,7 +174,9 @@ class Gradebook:
 
     # === find record by uuid ===
 
-    def find_record_by_uuid(self, uuid: str, dictionary: dict[str, T]) -> Optional[T]:
+    def find_record_by_uuid(
+        self, uuid: str, dictionary: dict[str, RecordType]
+    ) -> Optional[RecordType]:
         return dictionary.get(uuid)
 
     def find_student_by_uuid(self, uuid: str) -> Optional[Student]:
@@ -190,3 +190,38 @@ class Gradebook:
 
     def find_submission_by_uuid(self, uuid: str) -> Optional[Submission]:
         return self.find_record_by_uuid(uuid, self.submissions)
+
+    # === find record by query ===
+
+    # TODO: potential abstraction
+    def find_record_by_query(
+        self, name: str, dictionary: dict[str, RecordType]
+    ) -> Optional[RecordType]:
+        pass
+
+    def find_student_by_query(self, query: str) -> list[Student]:
+        matches = [
+            student
+            for student in self.students.values()
+            if query in student.full_name.lower() or query in student.email.lower()
+        ]
+
+        return matches
+
+    def find_category_by_query(self, query: str) -> list[Category]:
+        matches = [
+            category
+            for category in self.categories.values()
+            if query in category.name.lower()
+        ]
+
+        return matches
+
+    def find_assignment_by_query(self, query: str) -> list[Assignment]:
+        matches = [
+            assignment
+            for assignment in self.assignments.values()
+            if query in assignment.name.lower()
+        ]
+
+        return matches

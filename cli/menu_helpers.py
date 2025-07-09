@@ -1,7 +1,8 @@
 # cli/menu_helpers.py
 
 from enum import Enum, auto
-from typing import Any, Callable, Iterable
+from models.types import RecordType
+from typing import Any, Callable, Iterable, Optional
 
 
 class MenuSignal(Enum):
@@ -30,6 +31,16 @@ def display_menu(
             print("Invalid selection. Please try again.")
 
 
+def display_results(
+    results: Iterable[Any],
+    show_index: bool = False,
+    formatter: Callable[[Any], str] = lambda x: str(x),
+) -> None:
+    for i, result in enumerate(results, 1):
+        prefix = f"{i:>2}. " if show_index else ""
+        print(f"{prefix}{formatter(result)}")
+
+
 def confirm_action(prompt: str) -> bool:
     while True:
         choice = prompt_user_input(f"{prompt} (y/n): ").lower()
@@ -42,18 +53,36 @@ def confirm_action(prompt: str) -> bool:
             print("Invalid selection. Please try again.")
 
 
-def returning_without_changes() -> None:
-    print("\nReturning without changes.")
+def prompt_user_input(prompt: str) -> str:
+    return input(f"\n{prompt}\n  >> ").strip()
 
 
-def display_results(
-    results: Iterable[Any],
-    show_index: bool = False,
-    formatter: Callable[[Any], str] = lambda x: str(x),
-) -> None:
-    for i, result in enumerate(results, 1):
-        prefix = f"{i:>2}. " if show_index else ""
-        print(f"{prefix}{formatter(result)}")
+def prompt_record_selection(
+    search_results: list[RecordType],
+    sort_key: Callable[[RecordType], Any] = lambda x: x,
+    formatter: Callable[[RecordType], str] = lambda x: str(x),
+) -> Optional[RecordType]:
+    if not search_results:
+        print("\nYour search returned no results.")
+        return None
+
+    if len(search_results) == 1:
+        return search_results[0]
+
+    print(f"\nYour search returned {len(search_results)}:")
+    sorted_results = sorted(search_results, key=sort_key)
+
+    while True:
+        display_results(sorted_results, True, formatter)
+        choice = prompt_user_input("Select an option (0 to cancel):")
+
+        if choice == "0":
+            return None
+        try:
+            index = int(choice) - 1
+            return sorted_results[index]
+        except (ValueError, IndexError):
+            print("\nInvalid selection. Please try again.")
 
 
 def format_banner_text(title: str, width: int = 40) -> str:
@@ -62,5 +91,5 @@ def format_banner_text(title: str, width: int = 40) -> str:
     return f"{line}\n{centered_title}\n{line}"
 
 
-def prompt_user_input(prompt: str) -> str:
-    return input(f"\n{prompt}\n  >> ").strip()
+def returning_without_changes() -> None:
+    print("\nReturning without changes.")

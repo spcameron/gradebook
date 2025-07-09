@@ -13,6 +13,7 @@ from cli.menu_helpers import (
 from cli.path_utils import resolve_save_dir, dir_is_empty
 from models.gradebook import Gradebook
 from textwrap import dedent
+from typing import Optional
 
 
 def run_cli() -> None:
@@ -67,7 +68,7 @@ def create_gradebook() -> Gradebook:
 
 
 # TODO: verify gradebook data (or at least metadata) exists before loading
-def load_gradebook() -> Gradebook | None:
+def load_gradebook() -> Optional[Gradebook]:
     dir_path = prompt_user_input("Enter path to Gradebook directory:")
     dir_path = os.path.expanduser(dir_path)
     dir_path = os.path.abspath(dir_path)

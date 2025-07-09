@@ -5,13 +5,14 @@ from cli.menu_helpers import (
     display_menu,
     display_results,
     format_banner_text,
+    prompt_record_selection,
     prompt_user_input,
     returning_without_changes,
     MenuSignal,
 )
 from models.gradebook import Gradebook
 from models.student import Student
-from typing import Callable
+from typing import Callable, Optional
 from utils.utils import generate_uuid
 
 
@@ -21,7 +22,8 @@ def run(gradebook: Gradebook) -> None:
         ("Add Student", add_student),
         ("Edit Student", edit_student),
         ("Remove Student", remove_student),
-        ("View Student Details", view_student),
+        ("View Individual Student", view_individual_student),
+        # TODO: view multiple students - all, active, inactive
         ("View All Students", view_all_students),
     ]
     zero_option = "Return to Course Manager menu"
@@ -51,7 +53,7 @@ def add_student(gradebook: Gradebook) -> None:
             return None
 
 
-def prompt_new_student() -> Student | None:
+def prompt_new_student() -> Optional[Student]:
     while True:
         # data collection and chance to cancel
         first_name = prompt_user_input("Enter first name (leave blank to cancel):")
@@ -198,7 +200,7 @@ def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
 
 def get_editable_fields() -> (
-    list[tuple[str, Callable[[Student, Gradebook], MenuSignal | None]]]
+    list[tuple[str, Callable[[Student, Gradebook], Optional[MenuSignal]]]]
 ):
     return [
         ("First Name", edit_first_name_and_confirm),
@@ -255,7 +257,7 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
 
 
 # TODO: display "short" report first, prompt for "long" report second
-def view_student(gradebook: Gradebook) -> None:
+def view_individual_student(gradebook: Gradebook) -> None:
     search_results = search_students(gradebook)
     student = prompt_student_selection(search_results)
 
@@ -281,35 +283,13 @@ def view_all_students(gradebook: Gradebook) -> None:
 
 def search_students(gradebook: Gradebook) -> list[Student]:
     query = prompt_user_input("Search for a student by name or email:").lower()
-    matches = [
-        student
-        for student in gradebook.students.values()
-        if query in student.full_name.lower() or query in student.email.lower()
-    ]
-    return matches
+    return gradebook.find_student_by_query(query)
 
 
-def prompt_student_selection(search_results: list[Student]) -> Student | None:
-    if not search_results:
-        print("\nNo matching students found.")
-        return
-
-    if len(search_results) == 1:
-        return search_results[0]
-
-    print(f"\nYour search returned {len(search_results)} students:")
-
-    while True:
-        display_results(search_results, True, format_name_and_email)
-        choice = prompt_user_input("Select an option (0 to cancel):")
-
-        if choice == "0":
-            return None
-        try:
-            index = int(choice) - 1
-            return search_results[index]
-        except (ValueError, IndexError):
-            print("\nInvalid selection. Please try again.")
+def prompt_student_selection(search_results: list[Student]) -> Optional[Student]:
+    return prompt_record_selection(
+        search_results, lambda x: (x.last_name, x.first_name), format_name_and_email
+    )
 
 
 def format_name_and_email(student: Student) -> str:

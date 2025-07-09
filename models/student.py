@@ -9,13 +9,13 @@ class Student:
         first_name: str,
         last_name: str,
         email: str,
-        enrolled: bool = True,
+        active: bool = True,
     ):
         self._id = id
         self._first_name = first_name
         self._last_name = last_name
         self._email = email
-        self._is_enrolled = enrolled
+        self._is_active = active
 
     @property
     def id(self) -> str:
@@ -50,18 +50,15 @@ class Student:
         self._email = email
 
     @property
-    def is_enrolled(self) -> bool:
-        return self._is_enrolled
+    def is_active(self) -> bool:
+        return self._is_active
 
     @property
     def status(self) -> str:
-        if self._is_enrolled:
-            return "'ACTIVE'"
-        else:
-            return "'INACTIVE'"
+        return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
     def toggle_enrollment_status(self) -> None:
-        self._is_enrolled = False if self._is_enrolled else True
+        self._is_active = False if self._is_active else True
 
     def to_dict(self) -> dict:
         return {
@@ -69,7 +66,7 @@ class Student:
             "first_name": self._first_name,
             "last_name": self._last_name,
             "email": self._email,
-            "enrolled": self._is_enrolled,
+            "active": self._is_active,
         }
 
     @classmethod
@@ -79,11 +76,11 @@ class Student:
             first_name=data["first_name"],
             last_name=data["last_name"],
             email=data["email"],
-            enrolled=data["enrolled"],
+            active=data["active"],
         )
 
     def __repr__(self) -> str:
-        return f"Student({self._id}, {self._first_name}, {self._last_name}, {self._email}, {self._is_enrolled})"
+        return f"Student({self._id}, {self._first_name}, {self._last_name}, {self._email}, {self._is_active})"
 
     def __str__(self) -> str:
         return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self._id}"

@@ -84,4 +84,8 @@ def prompt_assignment_selection(
     search_results: list[Assignment],
 ) -> Optional[Assignment]:
     # prompt_record_selection()
-    pass
+    return prompt_record_selection(
+        search_results,
+        lambda x: x.name,
+        # formatter
+    )

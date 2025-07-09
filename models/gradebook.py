@@ -225,3 +225,19 @@ class Gradebook:
         ]
 
         return matches
+
+    # === get records ===
+
+    def get_records(
+        self,
+        dictionary: dict[str, RecordType],
+        predicate: Optional[Callable[[RecordType], bool]] = None,
+    ) -> list[RecordType]:
+        if predicate:
+            return [record for record in dictionary.values() if predicate(record)]
+        return list(dictionary.values())
+
+
+# TODO: update students_menu and categories_menu with umbrella view_*,
+# write subsidiary functions for view indiviudal, view all, view active, view inactive,
+# use gradebook.get_records to implement each

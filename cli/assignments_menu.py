@@ -8,7 +8,9 @@ from cli.menu_helpers import (
     prompt_user_input,
     MenuSignal,
 )
+from datetime import datetime
 from models.assignment import Assignment
+from models.category import Category
 from models.gradebook import Gradebook
 from typing import Optional
 
@@ -39,7 +41,7 @@ def run(gradebook: Gradebook) -> None:
 # TODO:
 def add_assignment(gradebook: Gradebook) -> None:
     while True:
-        new_assignment = prompt_new_assignment()
+        new_assignment = prompt_new_assignment(gradebook)
 
         if new_assignment is not None:
             gradebook.add_assignment(new_assignment)
@@ -51,8 +53,40 @@ def add_assignment(gradebook: Gradebook) -> None:
 
 
 # TODO:
-def prompt_new_assignment() -> Optional[Assignment]:
-    pass
+def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
+    name = prompt_user_input("Enter name (leave blank to cancel):")
+    if name == "":
+        return None
+
+    category = prompt_linked_category(gradebook)
+    # TODO: ehhh, we need to allow for None to be uncategorized
+    if category == None:
+        return None
+
+    points_possible = prompt_user_input(
+        "Enter total points possible (leave blank to cancel):"
+    )
+    if points_possible == "":
+        return None
+
+    due_date_str = (
+        prompt_user_input("Enter due date (YYY-MM-DD, leave blank for no due date):")
+        or None
+    )
+    if due_date_str:
+        due_time_str = prompt_user_input(
+            "Enter due time(24-hour HH:MM, leave blank for 23:59):"
+        )
+
+    print("You are about to create the following assignment:")
+    print(f"... Name: {name}")
+    # TODO: Pick up from here
+    print(f"... Category: ")
+
+
+# TODO:
+def prompt_linked_category(gradebook: Gradebook) -> Optional[Category]:
+    return None
 
 
 # TODO:

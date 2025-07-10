@@ -23,11 +23,7 @@ def run(gradebook: Gradebook) -> None:
         ("Add Category", add_category),
         ("Edit Category", edit_category),
         ("Remove Category", remove_category),
-        ("View Individual Category", view_individual_category),
-        # TODO: condense view categories into view multiple categories
-        ("View All Categories", view_all_categories),
-        ("View Active Categories", view_active_categories),
-        ("View Archived Categories", view_archived_categories),
+        ("View Categories", view_categories_menu),
         ("Manage Category Weights", weights_menu.run),
     ]
     zero_option = "Return to Course Manager menu"
@@ -42,6 +38,9 @@ def run(gradebook: Gradebook) -> None:
 
         if callable(menu_response):
             menu_response(gradebook)
+
+
+# === add category ===
 
 
 def add_category(gradebook: Gradebook) -> None:
@@ -77,6 +76,18 @@ def prompt_new_category() -> Optional[Category]:
         return None
 
     return new_category
+
+
+# === edit category ===
+
+
+def get_editable_fields() -> (
+    list[tuple[str, Callable[[Category, Gradebook], Optional[MenuSignal]]]]
+):
+    return [
+        ("Name", edit_name_and_confirm),
+        ("Archived Status", edit_status_and_confirm),
+    ]
 
 
 def edit_category(gradebook: Gradebook) -> None:
@@ -129,7 +140,7 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
     print("\nName successfully updated.")
 
 
-def edit_archive_and_confirm(category: Category, gradebook: Gradebook) -> None:
+def edit_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
     print(f"\nThis category is currently {category.status}.")
 
     if not confirm_action("Would you like to edit the archived status?"):
@@ -142,13 +153,7 @@ def edit_archive_and_confirm(category: Category, gradebook: Gradebook) -> None:
         confirm_and_reactivate(category, gradebook)
 
 
-def get_editable_fields() -> (
-    list[tuple[str, Callable[[Category, Gradebook], Optional[MenuSignal]]]]
-):
-    return [
-        ("Name", edit_name_and_confirm),
-        ("Archived Status", edit_archive_and_confirm),
-    ]
+# === remove category ===
 
 
 def remove_category(gradebook: Gradebook) -> None:
@@ -247,6 +252,28 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
     print(f"\nCategory successfully reactivated.")
 
 
+# === view category ===
+
+
+def view_categories_menu(gradebook: Gradebook) -> None:
+    title = "View Categories"
+    options = [
+        ("View Individual Category", view_individual_category),
+        ("View Active Categories", view_active_categories),
+        ("View Inactive Categories", view_inactive_categories),
+        ("View All Categories", view_all_categories),
+    ]
+    zero_option = "Return to Manage Categories menu"
+
+    menu_response = display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return None
+
+    if callable(menu_response):
+        menu_response(gradebook)
+
+
 # TODO: display "short" report first, prompt for "long" report second
 def view_individual_category(gradebook: Gradebook) -> None:
     search_results = search_categories(gradebook)
@@ -259,45 +286,52 @@ def view_individual_category(gradebook: Gradebook) -> None:
     print(format_name_and_weight(category))
 
 
-def view_all_categories(gradebook: Gradebook) -> None:
-    all_categories_banner = format_banner_text("All Categories")
-    print(f"\n{all_categories_banner}")
-
-    all_categories = list(gradebook.categories.values())
-    if not all_categories:
-        print("No categories created yet.")
-        return None
-
-    sort_and_display_results(all_categories)
-
-
 def view_active_categories(gradebook: Gradebook) -> None:
-    active_categories_banner = format_banner_text("Active Categories")
-    print(f"\n{active_categories_banner}")
+    print(f"\n{format_banner_text("Active Categories")}")
 
-    active_categories = [c for c in gradebook.categories.values() if c.is_active]
+    active_categories = gradebook.get_records(
+        gradebook.categories, lambda x: x.is_active
+    )
+
     if not active_categories:
-        print("No active categories yet.")
+        print("There are no active categories.")
         return None
 
-    sort_and_display_results(active_categories)
+    sort_and_display_categories(active_categories)
 
 
-def view_archived_categories(gradebook: Gradebook) -> None:
-    archived_categories_banner = format_banner_text("Archived Categories")
-    print(f"\n{archived_categories_banner}")
+def view_inactive_categories(gradebook: Gradebook) -> None:
+    print(f"\n{format_banner_text("Inactive Categories")}")
 
-    archived_categories = [c for c in gradebook.categories.values() if c.is_archived]
-    if not archived_categories:
-        print("No archived categories yet.")
+    inactive_categories = gradebook.get_records(
+        gradebook.categories, lambda x: not x.is_active
+    )
+
+    if not inactive_categories:
+        print("There are no inactive categories.")
         return None
 
-    sort_and_display_results(archived_categories)
+    sort_and_display_categories(inactive_categories)
 
 
-def sort_and_display_results(categories: list[Category]) -> None:
+def view_all_categories(gradebook: Gradebook) -> None:
+    print(f"\n{format_banner_text("All Categories")}")
+
+    all_categories = gradebook.get_records(gradebook.categories)
+
+    if not all_categories:
+        print("There are no categories yet.")
+        return None
+
+    sort_and_display_categories(all_categories)
+
+
+def sort_and_display_categories(categories: list[Category]) -> None:
     sorted_categories = sorted(categories, key=lambda c: c.name)
     display_results(sorted_categories, False, format_name_and_weight)
+
+
+# === search and select ===
 
 
 def search_categories(gradebook: Gradebook) -> list[Category]:
@@ -309,6 +343,9 @@ def prompt_category_selection(search_results: list[Category]) -> Optional[Catego
     return prompt_record_selection(
         search_results, lambda x: x.name, format_name_and_weight
     )
+
+
+# === formatter methods ===
 
 
 def format_name_and_weight(category: Category) -> str:

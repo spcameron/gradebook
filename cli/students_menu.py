@@ -22,9 +22,7 @@ def run(gradebook: Gradebook) -> None:
         ("Add Student", add_student),
         ("Edit Student", edit_student),
         ("Remove Student", remove_student),
-        ("View Individual Student", view_individual_student),
-        # TODO: view multiple students - all, active, inactive
-        ("View All Students", view_all_students),
+        ("View Students", view_students_menu),
     ]
     zero_option = "Return to Course Manager menu"
 
@@ -38,6 +36,9 @@ def run(gradebook: Gradebook) -> None:
 
         if callable(menu_response):
             menu_response(gradebook)
+
+
+# === add student ===
 
 
 def add_student(gradebook: Gradebook) -> None:
@@ -83,6 +84,20 @@ def prompt_new_student() -> Optional[Student]:
         return None
 
     return new_student
+
+
+# === edit student ===
+
+
+def get_editable_fields() -> (
+    list[tuple[str, Callable[[Student, Gradebook], Optional[MenuSignal]]]]
+):
+    return [
+        ("First Name", edit_first_name_and_confirm),
+        ("Last Name", edit_last_name_and_confirm),
+        ("Email Address", edit_email_and_confirm),
+        ("Enrollment Status", edit_status_and_confirm),
+    ]
 
 
 def edit_student(gradebook: Gradebook) -> None:
@@ -199,15 +214,7 @@ def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     print(f"\nEnrollment status successfully updated to {student.status}.")
 
 
-def get_editable_fields() -> (
-    list[tuple[str, Callable[[Student, Gradebook], Optional[MenuSignal]]]]
-):
-    return [
-        ("First Name", edit_first_name_and_confirm),
-        ("Last Name", edit_last_name_and_confirm),
-        ("Email Address", edit_email_and_confirm),
-        ("Enrollment Status", edit_status_and_confirm),
-    ]
+# === remove student ===
 
 
 def remove_student(gradebook: Gradebook) -> None:
@@ -256,6 +263,28 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
     print("\nStudent record successfully removed from Gradebook.")
 
 
+# === view student ===
+
+
+def view_students_menu(gradebook: Gradebook) -> None:
+    title = "View Students"
+    options = [
+        ("View Individual Student", view_individual_student),
+        ("View Active Students", view_active_students),
+        ("View Inactive Students", view_inactive_students),
+        ("View All Students", view_all_students),
+    ]
+    zero_option = "Return to Manage Students menu"
+
+    menu_response = display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return None
+
+    if callable(menu_response):
+        menu_response(gradebook)
+
+
 # TODO: display "short" report first, prompt for "long" report second
 def view_individual_student(gradebook: Gradebook) -> None:
     search_results = search_students(gradebook)
@@ -268,17 +297,50 @@ def view_individual_student(gradebook: Gradebook) -> None:
     print(format_name_and_email(student))
 
 
-def view_all_students(gradebook: Gradebook) -> None:
-    roster_banner = format_banner_text("Student Roster")
-    print(f"\n{roster_banner}")
+def view_active_students(gradebook: Gradebook) -> None:
+    print(f"\n{format_banner_text("Active Students")}")
 
-    roster = list(gradebook.students.values())
-    if not roster:
-        print("No students enrolled yet.")
+    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+
+    if not active_students:
+        print("There are no active students.")
         return None
 
-    sorted_roster = sorted(roster, key=lambda s: (s.last_name, s.first_name))
+    sort_and_display_students(active_students)
+
+
+def view_inactive_students(gradebook: Gradebook) -> None:
+    print(f"\n{format_banner_text("Inactive Students")}")
+
+    inactive_students = gradebook.get_records(
+        gradebook.students, lambda x: not x.is_active
+    )
+
+    if not inactive_students:
+        print("There are no inactive students.")
+        return None
+
+    sort_and_display_students(inactive_students)
+
+
+def view_all_students(gradebook: Gradebook) -> None:
+    print(f"\n{format_banner_text("All Students")}")
+
+    all_students = gradebook.get_records(gradebook.students)
+
+    if not all_students:
+        print("There are no students yet.")
+        return None
+
+    sort_and_display_students(all_students)
+
+
+def sort_and_display_students(roster: list[Student]) -> None:
+    sorted_roster = sorted(roster, key=lambda x: (x.last_name, x.first_name))
     display_results(sorted_roster, False, format_name_and_email)
+
+
+# === search and select ===
 
 
 def search_students(gradebook: Gradebook) -> list[Student]:
@@ -290,6 +352,9 @@ def prompt_student_selection(search_results: list[Student]) -> Optional[Student]
     return prompt_record_selection(
         search_results, lambda x: (x.last_name, x.first_name), format_name_and_email
     )
+
+
+# === formatter methods ===
 
 
 def format_name_and_email(student: Student) -> str:

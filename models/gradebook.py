@@ -193,12 +193,6 @@ class Gradebook:
 
     # === find record by query ===
 
-    # TODO: potential abstraction
-    def find_record_by_query(
-        self, name: str, dictionary: dict[str, RecordType]
-    ) -> Optional[RecordType]:
-        pass
-
     def find_student_by_query(self, query: str) -> list[Student]:
         matches = [
             student
@@ -236,8 +230,3 @@ class Gradebook:
         if predicate:
             return [record for record in dictionary.values() if predicate(record)]
         return list(dictionary.values())
-
-
-# TODO: update students_menu and categories_menu with umbrella view_*,
-# write subsidiary functions for view indiviudal, view all, view active, view inactive,
-# use gradebook.get_records to implement each

@@ -1,24 +1,17 @@
 # cli/categories_menu.py
 
-from cli import weights_menu
-from cli.menu_helpers import (
-    confirm_action,
-    display_menu,
-    display_results,
-    format_banner_text,
-    prompt_record_selection,
-    prompt_user_input,
-    returning_without_changes,
-    MenuSignal,
-)
+import cli.formatters as formatters
+import cli.menu_helpers as helpers
+import cli.weights_menu as weights_menu
+from cli.menu_helpers import MenuSignal
 from models.category import Category
 from models.gradebook import Gradebook
-from typing import Callable, Optional
+from typing import cast, Callable, Optional
 from utils.utils import generate_uuid
 
 
 def run(gradebook: Gradebook) -> None:
-    title = format_banner_text("Manage Categories")
+    title = formatters.format_banner_text("Manage Categories")
     options = [
         ("Add Category", add_category),
         ("Edit Category", edit_category),
@@ -29,10 +22,10 @@ def run(gradebook: Gradebook) -> None:
     zero_option = "Return to Course Manager menu"
 
     while True:
-        menu_response = display_menu(title, options, zero_option)
+        menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            if confirm_action("Would you like to save before returning?"):
+            if helpers.confirm_action("Would you like to save before returning?"):
                 gradebook.save(gradebook.path)
             return None
 
@@ -51,26 +44,37 @@ def add_category(gradebook: Gradebook) -> None:
             gradebook.add_category(new_category)
             print(f"\n{new_category.name} successfully added to {gradebook.name}.")
 
-        if not confirm_action("Would you like to continue adding new categories?"):
+        if not helpers.confirm_action(
+            "Would you like to continue adding new categories?"
+        ):
             print(f"\nReturning to Manage Categories menu.")
             return None
 
 
 def prompt_new_category() -> Optional[Category]:
-    while True:
-        name = prompt_user_input("Enter category name (leave blank to cancel):")
-        if name == "":
-            return None
+    # collect user input
+    name = helpers.prompt_user_input_or_cancel(
+        "Enter category name (leave blank to cancel):"
+    )
+    if name == MenuSignal.CANCEL:
+        return None
+    else:
+        name = cast(str, name)
 
-        # TODO: data validation - bare minimum for now
-        if name:
-            break
-        else:
-            print("A name is required.")
+    # preview and confirm
+    print("\nYou are about to create the following category:")
+    print(f"... Name: {name}")
 
+    if not helpers.confirm_action("\nConfirm creation?"):
+        return None
+
+    # attempt object instantiation
     try:
         category_id = generate_uuid()
-        new_category = Category(category_id, name)
+        new_category = Category(
+            id=category_id,
+            name=name,
+        )
     except (TypeError, ValueError) as e:
         print(f"\nError: Could not create category ... {e}")
         return None
@@ -91,48 +95,50 @@ def get_editable_fields() -> (
 
 
 def edit_category(gradebook: Gradebook) -> None:
-    search_results = search_categories(gradebook)
-    category = prompt_category_selection(search_results)
+    search_results = helpers.search_categories(gradebook)
+    category = helpers.prompt_category_selection(search_results)
 
     if not category:
         return None
 
-    title = format_banner_text("Editable Fields")
+    title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
     zero_option = "Return without changes"
 
     while True:
         print("\nYou are viewing the following category:")
-        print(format_name_and_weight(category))
+        print(formatters.format_category_oneline(category))
 
-        menu_response = display_menu(title, options, zero_option)
+        menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            returning_without_changes()
+            helpers.returning_without_changes()
             return None
 
         if callable(menu_response):
             menu_response(category, gradebook)
 
-        if not confirm_action("Would you like to continue editing this category?"):
+        if not helpers.confirm_action(
+            "Would you like to continue editing this category?"
+        ):
             print("\nReturning to Manage Categories menu.")
             return None
 
 
 def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
     current_name = category.name
-    new_name = prompt_user_input("Enter a new name (leave blank to cancel):")
+    new_name = helpers.prompt_user_input("Enter a new name (leave blank to cancel):")
 
     if new_name == "":
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     print(f"\nCurrent category name: {current_name} ... New category name: {new_name}")
 
-    save_change = confirm_action("Do you want to save this change?")
+    save_change = helpers.confirm_action("Do you want to save this change?")
 
     if not save_change:
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     category.name = new_name
@@ -143,8 +149,8 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
 def edit_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
     print(f"\nThis category is currently {category.status}.")
 
-    if not confirm_action("Would you like to edit the archived status?"):
-        returning_without_changes()
+    if not helpers.confirm_action("Would you like to edit the archived status?"):
+        helpers.returning_without_changes()
         return None
 
     if category.is_active:
@@ -157,14 +163,14 @@ def edit_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
 
 
 def remove_category(gradebook: Gradebook) -> None:
-    search_results = search_categories(gradebook)
-    category = prompt_category_selection(search_results)
+    search_results = helpers.search_categories(gradebook)
+    category = helpers.prompt_category_selection(search_results)
 
     if not category:
         return None
 
     print("\nYou are viewing the following category:")
-    print(format_name_and_weight(category))
+    print(formatters.format_category_oneline(category))
 
     title = "What would you like to do?"
     options = [
@@ -179,10 +185,10 @@ def remove_category(gradebook: Gradebook) -> None:
     ]
     zero_option = "Return to Manage Categories menu"
 
-    menu_response = display_menu(title, options, zero_option)
+    menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response == MenuSignal.EXIT:
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     if callable(menu_response):
@@ -190,18 +196,18 @@ def remove_category(gradebook: Gradebook) -> None:
 
 
 def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
-    caution_banner = format_banner_text("CAUTION!")
+    caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
     print("You are about to permanently delete the following category:")
     print(f"{category.name}")
     print(f"\nThis will also delete all linked assignments and submissions.")
 
-    confirm_deletion = confirm_action(
+    confirm_deletion = helpers.confirm_action(
         "Are you sure you want to permanently remove this category? This action cannot be undone."
     )
 
     if not confirm_deletion:
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     gradebook.remove_category(category)
@@ -219,12 +225,12 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
         f"\nThis will preserve all linked assignments and submissions,\nbut they will no longer appear in reports or grade calculation."
     )
 
-    confirm_archiving = confirm_action(
+    confirm_archiving = helpers.confirm_action(
         "Are you sure you want to archive this category and all linked assignments and submissions?"
     )
 
     if not confirm_archiving:
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     category.toggle_archived_status()
@@ -239,12 +245,12 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
     print("You are about to reactivate the following category:")
     print(f"{category.name}")
 
-    confirm_reactivate = confirm_action(
+    confirm_reactivate = helpers.confirm_action(
         "Are you sure you want to reactivate this category and all linked assignments and submissions?"
     )
 
     if not confirm_reactivate:
-        returning_without_changes()
+        helpers.returning_without_changes()
         return None
 
     category.toggle_archived_status()
@@ -265,7 +271,7 @@ def view_categories_menu(gradebook: Gradebook) -> None:
     ]
     zero_option = "Return to Manage Categories menu"
 
-    menu_response = display_menu(title, options, zero_option)
+    menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response == MenuSignal.EXIT:
         return None
@@ -276,18 +282,18 @@ def view_categories_menu(gradebook: Gradebook) -> None:
 
 # TODO: display "short" report first, prompt for "long" report second
 def view_individual_category(gradebook: Gradebook) -> None:
-    search_results = search_categories(gradebook)
-    category = prompt_category_selection(search_results)
+    search_results = helpers.search_categories(gradebook)
+    category = helpers.prompt_category_selection(search_results)
 
     if not category:
         return None
 
     print("\nYou are viewing the following category:")
-    print(format_name_and_weight(category))
+    print(formatters.format_category_oneline(category))
 
 
 def view_active_categories(gradebook: Gradebook) -> None:
-    print(f"\n{format_banner_text("Active Categories")}")
+    print(f"\n{formatters.format_banner_text("Active Categories")}")
 
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
@@ -301,7 +307,7 @@ def view_active_categories(gradebook: Gradebook) -> None:
 
 
 def view_inactive_categories(gradebook: Gradebook) -> None:
-    print(f"\n{format_banner_text("Inactive Categories")}")
+    print(f"\n{formatters.format_banner_text("Inactive Categories")}")
 
     inactive_categories = gradebook.get_records(
         gradebook.categories, lambda x: not x.is_active
@@ -315,7 +321,7 @@ def view_inactive_categories(gradebook: Gradebook) -> None:
 
 
 def view_all_categories(gradebook: Gradebook) -> None:
-    print(f"\n{format_banner_text("All Categories")}")
+    print(f"\n{formatters.format_banner_text("All Categories")}")
 
     all_categories = gradebook.get_records(gradebook.categories)
 
@@ -328,25 +334,6 @@ def view_all_categories(gradebook: Gradebook) -> None:
 
 def sort_and_display_categories(categories: list[Category]) -> None:
     sorted_categories = sorted(categories, key=lambda c: c.name)
-    display_results(sorted_categories, False, format_name_and_weight)
-
-
-# === search and select ===
-
-
-def search_categories(gradebook: Gradebook) -> list[Category]:
-    query = prompt_user_input("Search for a category by name:").lower()
-    return gradebook.find_category_by_query(query)
-
-
-def prompt_category_selection(search_results: list[Category]) -> Optional[Category]:
-    return prompt_record_selection(
-        search_results, lambda x: x.name, format_name_and_weight
+    helpers.display_results(
+        sorted_categories, False, formatters.format_category_oneline
     )
-
-
-# === formatter methods ===
-
-
-def format_name_and_weight(category: Category) -> str:
-    return f"{category.name:<20} | {category.weight} %"

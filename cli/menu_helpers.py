@@ -6,7 +6,21 @@ from typing import Any, Callable, Iterable, Optional
 
 
 class MenuSignal(Enum):
+    CANCEL = auto()
+    DEFAULT = auto()
     EXIT = auto()
+
+
+def confirm_action(prompt: str) -> bool:
+    while True:
+        choice = prompt_user_input(f"{prompt} (y/n): ").lower()
+
+        if choice == "y" or choice == "yes":
+            return True
+        elif choice == "n" or choice == "no":
+            return False
+        else:
+            print("Invalid selection. Please try again.")
 
 
 def display_menu(
@@ -41,20 +55,10 @@ def display_results(
         print(f"{prefix}{formatter(result)}")
 
 
-def confirm_action(prompt: str) -> bool:
-    while True:
-        choice = prompt_user_input(f"{prompt} (y/n): ").lower()
-
-        if choice == "y" or choice == "yes":
-            return True
-        elif choice == "n" or choice == "no":
-            return False
-        else:
-            print("Invalid selection. Please try again.")
-
-
-def prompt_user_input(prompt: str) -> str:
-    return input(f"\n{prompt}\n  >> ").strip()
+def format_banner_text(title: str, width: int = 40) -> str:
+    line = "=" * width
+    centered_title = f"{title:^{width}}"
+    return f"{line}\n{centered_title}\n{line}"
 
 
 def prompt_record_selection(
@@ -85,10 +89,18 @@ def prompt_record_selection(
             print("\nInvalid selection. Please try again.")
 
 
-def format_banner_text(title: str, width: int = 40) -> str:
-    line = "=" * width
-    centered_title = f"{title:^{width}}"
-    return f"{line}\n{centered_title}\n{line}"
+def prompt_user_input(prompt: str) -> str:
+    return input(f"\n{prompt}\n  >> ").strip()
+
+
+def prompt_user_input_or_cancel(prompt: str) -> str | MenuSignal:
+    response = input(f"\n{prompt}\n  >> ").strip()
+    return MenuSignal.CANCEL if response == "" else response
+
+
+def prompt_user_input_or_default(prompt: str) -> str | MenuSignal:
+    response = input(f"\n{prompt}\n  >> ").strip()
+    return MenuSignal.DEFAULT if response == "" else response
 
 
 def returning_without_changes() -> None:

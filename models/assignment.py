@@ -1,5 +1,8 @@
 # models/assignment.py
 
+from datetime import datetime
+from typing import Optional
+
 
 class Assignment:
 
@@ -7,16 +10,18 @@ class Assignment:
         self,
         id: str,
         name: str,
-        category_id: str,
+        category_id: Optional[str],
         points_possible: float,
+        due_date_iso: Optional[str],
         is_extra_credit: bool = False,
     ):
         self._id = id
         self._name = name
         self._category_id = category_id
-        self._is_extra_credit = is_extra_credit
         # points_possible uses setter method for defensive validation
         self.points_possible = points_possible
+        self._due_date_iso = due_date_iso
+        self._is_extra_credit = is_extra_credit
 
     @property
     def id(self) -> str:
@@ -27,7 +32,7 @@ class Assignment:
         return self._name
 
     @property
-    def category_id(self) -> str:
+    def category_id(self) -> Optional[str]:
         return self._category_id
 
     @property
@@ -41,6 +46,10 @@ class Assignment:
         self._points_possible = points
 
     @property
+    def due_date_iso(self) -> Optional[str]:
+        return self._due_date_iso
+
+    @property
     def is_extra_credit(self) -> bool:
         return self._is_extra_credit
 
@@ -50,6 +59,7 @@ class Assignment:
             "name": self._name,
             "category_id": self._category_id,
             "points_possible": self._points_possible,
+            "due_date": self._due_date_iso,
             "extra_credit": self._is_extra_credit,
         }
 
@@ -60,6 +70,7 @@ class Assignment:
             name=data["name"],
             category_id=data["category_id"],
             points_possible=data["points_possible"],
+            due_date_iso=data["due_date"],
             is_extra_credit=data["extra_credit"],
         )
 

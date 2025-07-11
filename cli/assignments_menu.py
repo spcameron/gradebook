@@ -6,13 +6,16 @@ from cli.menu_helpers import (
     format_banner_text,
     prompt_record_selection,
     prompt_user_input,
+    prompt_user_input_or_cancel,
+    prompt_user_input_or_default,
     MenuSignal,
 )
 from datetime import datetime
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
-from typing import Optional
+from typing import cast, Optional
+from utils.utils import generate_uuid
 
 
 def run(gradebook: Gradebook) -> None:
@@ -38,6 +41,9 @@ def run(gradebook: Gradebook) -> None:
             menu_response(gradebook)
 
 
+# === add assignment ===
+
+
 # TODO:
 def add_assignment(gradebook: Gradebook) -> None:
     while True:
@@ -54,38 +60,95 @@ def add_assignment(gradebook: Gradebook) -> None:
 
 # TODO:
 def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
-    name = prompt_user_input("Enter name (leave blank to cancel):")
-    if name == "":
+    # collect user input
+    name = prompt_user_input_or_cancel("Enter name (leave blank to cancel):")
+    if name == MenuSignal.CANCEL:
         return None
+    else:
+        name = cast(str, name)
 
     category = prompt_linked_category(gradebook)
-    # TODO: ehhh, we need to allow for None to be uncategorized
-    if category == None:
+    if category == MenuSignal.CANCEL:
         return None
+    elif category is not None:
+        category = cast(Category, category)
 
-    points_possible = prompt_user_input(
+    points_possible_str = prompt_user_input_or_cancel(
         "Enter total points possible (leave blank to cancel):"
     )
-    if points_possible == "":
+    if points_possible_str == MenuSignal.CANCEL:
+        return None
+    else:
+        points_possible_str = cast(str, points_possible_str)
+
+    due_date_str = prompt_user_input_or_default(
+        "Enter due date (YYYY-MM-DD, leave blank for no due date):"
+    )
+    if due_date_str == MenuSignal.DEFAULT:
+        due_date_str = None
+    else:
+        due_date_str = cast(str, due_date_str)
+
+    due_time_str = (
+        prompt_user_input_or_default(
+            "Enter due time (24-hour HH:MM, leave blank for 23:59)"
+        )
+        if due_date_str
+        else None
+    )
+    if due_time_str == MenuSignal.DEFAULT:
+        due_time_str = "23:59"
+    elif due_time_str is not None:
+        due_time_str = cast(str, due_time_str)
+
+    # formatting for preview
+    category_name = category.name if category else "Uncategorized"
+
+    due_str = (
+        f"{due_date_str} at {due_time_str}"
+        if due_date_str and due_time_str
+        else "No due date"
+    )
+
+    # preview and confirm
+    print("\nYou are about to create the following assignment:")
+    print(f"... Name: {name}")
+    print(f"... Category: {category_name}")
+    print(f"... Due: {due_str}")
+    print(f"... Points: {points_possible_str}")
+
+    if not confirm_action("\nConfirm creation?"):
         return None
 
-    due_date_str = (
-        prompt_user_input("Enter due date (YYY-MM-DD, leave blank for no due date):")
-        or None
-    )
-    if due_date_str:
-        due_time_str = prompt_user_input(
-            "Enter due time(24-hour HH:MM, leave blank for 23:59):"
+    # attempt object instanstiation
+    try:
+        assignment_id = generate_uuid()
+        points_possible = float(points_possible_str)
+        due_date = (
+            datetime.strptime(
+                f"{due_date_str} {due_time_str}", "%Y-%m-%d %H:%M"
+            ).isoformat()
+            if due_date_str and due_time_str
+            else None
         )
+        category_id = category.id if category else None
 
-    print("You are about to create the following assignment:")
-    print(f"... Name: {name}")
-    # TODO: Pick up from here
-    print(f"... Category: ")
+        new_assignment = Assignment(
+            id=assignment_id,
+            name=name,
+            category_id=category_id,
+            points_possible=points_possible,
+            due_date_iso=due_date,
+        )
+    except Exception as e:
+        print(f"\nError: Could not create assignment ... {e}")
+        return None
+
+    return new_assignment
 
 
 # TODO:
-def prompt_linked_category(gradebook: Gradebook) -> Optional[Category]:
+def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
     return None
 
 
@@ -109,6 +172,9 @@ def view_multiple_assignments() -> None:
     pass
 
 
+# === search and select ===
+
+
 def search_assignments(gradebook: Gradebook) -> list[Assignment]:
     query = prompt_user_input("Search for an assignment by name:").lower()
     return gradebook.find_assignment_by_query(query)
@@ -117,9 +183,5 @@ def search_assignments(gradebook: Gradebook) -> list[Assignment]:
 def prompt_assignment_selection(
     search_results: list[Assignment],
 ) -> Optional[Assignment]:
-    # prompt_record_selection()
-    return prompt_record_selection(
-        search_results,
-        lambda x: x.name,
-        # formatter
-    )
+    # TODO: add formmatter when it's written
+    return prompt_record_selection(search_results, lambda x: x.name)

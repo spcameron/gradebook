@@ -222,11 +222,16 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
 def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     print(f"\nThis student is currently {student.status}.")
 
-    if not helpers.confirm_action("Do you want to change the enrollment status?"):
+    if not helpers.confirm_action("Do you want to edit the enrollment status?"):
         helpers.returning_without_changes()
         return None
 
-    student.toggle_enrollment_status()
+    if student.is_active:
+        confirm_and_archive(student, gradebook)
+    else:
+        confirm_and_reactivate(student, gradebook)
+
+    student.toggle_archived_status()
     gradebook.save(gradebook.path)
     print(f"\nEnrollment status successfully updated to {student.status}.")
 
@@ -246,10 +251,13 @@ def remove_student(gradebook: Gradebook) -> None:
 
     title = "What would you like to do?"
     options = [
-        ("Permanently remove this student (destroys record)", confirm_and_remove),
         (
-            "Change enrollment status instead (archives record)",
-            edit_active_status_and_confirm,
+            "Permanently remove this student (deletes all linked submissions)",
+            confirm_and_remove,
+        ),
+        (
+            "Archive this student instead (preserves all linked records)",
+            confirm_and_archive,
         ),
     ]
     zero_option = "Return to Manage Students menu"
@@ -271,7 +279,7 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
     print(formatters.format_student_oneline(student))
 
     confirm_deletion = helpers.confirm_action(
-        "Are you sure you want to permanently remove this student? This action cannot be undone."
+        "Are you sure you want to permanently delete this student? This action cannot be undone."
     )
 
     if not confirm_deletion:
@@ -281,6 +289,53 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
     gradebook.remove_student(student)
     gradebook.save(gradebook.path)
     print("\nStudent record successfully removed from Gradebook.")
+
+
+def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
+    if not student.is_active:
+        print("\nThis student has already been archived.")
+        return None
+
+    print(
+        "\nArchiving a student is a safe way to deactivate a student without losing data."
+    )
+    print("You are about to archive the following student:")
+    print(f"{formatters.format_student_oneline(student)}")
+    print("\nThis will preserve all linked submissions,")
+    print("but they will not longer appear in reports or grade calculations.")
+
+    confirm_archiving = helpers.confirm_action(
+        "Are you sure you want to archive this student?"
+    )
+
+    if not confirm_archiving:
+        helpers.returning_without_changes()
+        return None
+
+    student.toggle_archived_status()
+    gradebook.save(gradebook.path)
+    print("\nStudent successfully archived.")
+
+
+def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
+    if student.is_active:
+        print("\nThis student is already active.")
+        return None
+
+    print("\nYou are about to reactivate the following student:")
+    print(f"{formatters.format_student_oneline(student)}")
+
+    confirm_reactivate = helpers.confirm_action(
+        "Are you sure you want to reactive this student?"
+    )
+
+    if not confirm_reactivate:
+        helpers.returning_without_changes()
+        return None
+
+    student.toggle_archived_status()
+    gradebook.save(gradebook.path)
+    print("\nStudent successfully reactivated.")
 
 
 # === view student ===

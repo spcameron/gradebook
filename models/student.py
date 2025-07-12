@@ -57,7 +57,7 @@ class Student:
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
-    def toggle_enrollment_status(self) -> None:
+    def toggle_archived_status(self) -> None:
         self._is_active = False if self._is_active else True
 
     def to_dict(self) -> dict:

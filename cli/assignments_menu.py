@@ -17,8 +17,7 @@ def run(gradebook: Gradebook) -> None:
         ("Add Assignment", add_assignment),
         ("Edit Assignment", edit_assignment),
         ("Remove Assignment", remove_assignment),
-        ("View Individual Assignment", view_individual_assignment),
-        ("List Assignments", view_multiple_assignments),
+        ("View Assignments", view_assignments_menu),
     ]
     zero_option = "Return to Course Manager menu"
 
@@ -48,7 +47,7 @@ def add_assignment(gradebook: Gradebook) -> None:
         if not helpers.confirm_action(
             "Would you like to continue adding new assignments?"
         ):
-            print(f"\nReturning to Manage Assignments menu.")
+            print("\nReturning to Manage Assignments menu.")
             return None
 
 
@@ -251,7 +250,6 @@ def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
     print("\nName successfully updated.")
 
 
-# TODO:
 def edit_linked_category_and_confirm(
     assignment: Assignment, gradebook: Gradebook
 ) -> None:
@@ -361,7 +359,6 @@ def edit_points_possible_and_confirm(
         return None
 
 
-# TODO:
 def edit_active_status_and_confirm(
     assignment: Assignment, gradebook: Gradebook
 ) -> None:
@@ -380,27 +377,112 @@ def edit_active_status_and_confirm(
 # === remove assignment ===
 
 
-# TODO:
-def remove_assignment() -> None:
-    pass
+def remove_assignment(gradebook: Gradebook) -> None:
+    search_results = helpers.search_assignments(gradebook)
+    assignment = helpers.prompt_assignment_selection_from_search(search_results)
+
+    if not assignment:
+        return None
+
+    print("\nYou are viewing the following assignment:")
+    print(formatters.format_assignment_oneline(assignment))
+
+    title = "What would you like to do?"
+    options = [
+        (
+            "Permanently remove this assignment (deletes all linked submissions)",
+            confirm_and_remove,
+        ),
+        (
+            "Archive this assignment instead (preserves all linked submissions)",
+            confirm_and_archive,
+        ),
+    ]
+    zero_option = "Return to Manage Assignments menu"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        helpers.returning_without_changes()
+        return None
+
+    if callable(menu_response):
+        menu_response(assignment, gradebook)
 
 
-# TODO:
 def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> None:
-    pass
+    caution_banner = formatters.format_banner_text("CAUTION!")
+    print(f"\n{caution_banner}")
+    print("You are about to permanently delete the following assignment:")
+    print(f"{formatters.format_assignment_oneline(assignment)}")
+    print("\nThis will also delete all linked submissions.")
+
+    confirm_deletion = helpers.confirm_action(
+        "Are you sure you want to permanently delete this assignment? This action cannot be undone."
+    )
+
+    if not confirm_deletion:
+        helpers.returning_without_changes()
+        return None
+
+    gradebook.remove_assignment(assignment)
+    gradebook.save(gradebook.path)
+    print("\nAssignment successfully removed from Gradebook.")
 
 
-# TODO:
 def confirm_and_archive(assignment: Assignment, gradebook: Gradebook) -> None:
-    pass
+    if not assignment.is_active:
+        print("\nThis assignment has already been archived.")
+        return None
+
+    print(
+        "\nArchiving an assignment is a safe way to deactivate an assignment without losing data."
+    )
+    print("You are about to archive the following assignment:")
+    print(f"{formatters.format_assignment_oneline(assignment)}")
+    print("\nThis will preserve all linked submissions,")
+    print("but they will no longer appear in reports or grade calculations.")
+
+    confirm_archiving = helpers.confirm_action(
+        "Are you sure you want to archive this assignment?"
+    )
+
+    if not confirm_archiving:
+        helpers.returning_without_changes()
+        return None
+
+    assignment.toggle_archived_status()
+    gradebook.save(gradebook.path)
+    print("\nAssignment successfully archived.")
 
 
-# TODO:
 def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> None:
-    pass
+    if assignment.is_active:
+        print("\nThis assignment is already active.")
+        return None
+
+    print("\nYou are about to reactivate the following assignment:")
+    print(f"{formatters.format_assignment_oneline(assignment)}")
+
+    confirm_reactivate = helpers.confirm_action(
+        "Are you sure you want to reactivate this assignment?"
+    )
+
+    if not confirm_reactivate:
+        helpers.returning_without_changes()
+        return None
+
+    assignment.toggle_archived_status()
+    gradebook.save(gradebook.path)
+    print("\nAssignment successfully reactivated.")
 
 
 # === view assignment ===
+
+
+# TODO:
+def view_assignments_menu() -> None:
+    pass
 
 
 # TODO:
@@ -409,5 +491,15 @@ def view_individual_assignment() -> None:
 
 
 # TODO:
-def view_multiple_assignments() -> None:
+def view_active_assignments() -> None:
+    pass
+
+
+# TODO:
+def view_inactive_assignments() -> None:
+    pass
+
+
+# TODO:
+def sort_and_display_assignments() -> None:
     pass

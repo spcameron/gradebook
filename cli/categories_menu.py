@@ -47,7 +47,7 @@ def add_category(gradebook: Gradebook) -> None:
         if not helpers.confirm_action(
             "Would you like to continue adding new categories?"
         ):
-            print(f"\nReturning to Manage Categories menu.")
+            print("\nReturning to Manage Categories menu.")
             return None
 
 
@@ -179,7 +179,7 @@ def remove_category(gradebook: Gradebook) -> None:
             confirm_and_remove,
         ),
         (
-            "Archive category instead (preserves all linked assignments and submissions)",
+            "Archive this category instead (preserves all linked assignments and submissions)",
             confirm_and_archive,
         ),
     ]
@@ -200,10 +200,10 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
     print(f"\n{caution_banner}")
     print("You are about to permanently delete the following category:")
     print(f"{category.name}")
-    print(f"\nThis will also delete all linked assignments and submissions.")
+    print("\nThis will also delete all linked assignments and submissions.")
 
     confirm_deletion = helpers.confirm_action(
-        "Are you sure you want to permanently remove this category? This action cannot be undone."
+        "Are you sure you want to permanently delete this category? This action cannot be undone."
     )
 
     if not confirm_deletion:
@@ -216,17 +216,20 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
 
 
 def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
+    if not category.is_active:
+        print("\nThis category has already been archived.")
+        return None
+
     print(
-        f"\nArchiving a category is safe way to deactivate a category without losing data."
+        "\nArchiving a category is a safe way to deactivate a category without losing data."
     )
     print("You are about to archive the following category:")
     print(f"{category.name}")
-    print(
-        f"\nThis will preserve all linked assignments and submissions,\nbut they will no longer appear in reports or grade calculation."
-    )
+    print("\nThis will preserve all linked assignments and submissions,")
+    print("but they will no longer appear in reports or grade calculations.")
 
     confirm_archiving = helpers.confirm_action(
-        "Are you sure you want to archive this category and all linked assignments and submissions?"
+        "Are you sure you want to archive this category?"
     )
 
     if not confirm_archiving:
@@ -235,18 +238,19 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
 
     category.toggle_archived_status()
     gradebook.save(gradebook.path)
-    print(f"\nCategory successfully archived.")
+    print("\nCategory successfully archived.")
 
 
 def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
-    print(
-        f"\nReactivating a category will also restore any linked assignments and submissions."
-    )
-    print("You are about to reactivate the following category:")
+    if category.is_active:
+        print("\nThis category is already active.")
+        return None
+
+    print("\nYou are about to reactivate the following category:")
     print(f"{category.name}")
 
     confirm_reactivate = helpers.confirm_action(
-        "Are you sure you want to reactivate this category and all linked assignments and submissions?"
+        "Are you sure you want to reactivate this category?"
     )
 
     if not confirm_reactivate:
@@ -255,7 +259,7 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
 
     category.toggle_archived_status()
     gradebook.save(gradebook.path)
-    print(f"\nCategory successfully reactivated.")
+    print("\nCategory successfully reactivated.")
 
 
 # === view category ===

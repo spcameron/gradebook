@@ -1,6 +1,7 @@
 # cli/formatters.py
 
 
+from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from typing import Optional
@@ -38,6 +39,14 @@ def format_assignment_due_date(
         if due_date_str and due_time_str
         else "No due date"
     )
+
+
+def format_assignment_oneline(assignment: Assignment) -> str:
+    due_date = format_assignment_due_date(
+        assignment.due_date_str,
+        assignment.due_time_str,
+    )
+    return f"{assignment.name:<20} | Due: {due_date}"
 
 
 # === Submission formatters ===

@@ -109,7 +109,7 @@ def get_editable_fields() -> (
         ("First Name", edit_first_name_and_confirm),
         ("Last Name", edit_last_name_and_confirm),
         ("Email Address", edit_email_and_confirm),
-        ("Enrollment Status", edit_status_and_confirm),
+        ("Enrollment Status", edit_active_status_and_confirm),
     ]
 
 
@@ -219,7 +219,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     print("\nEmail address successfully updated.")
 
 
-def edit_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
+def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     print(f"\nThis student is currently {student.status}.")
 
     if not helpers.confirm_action("Do you want to change the enrollment status?"):
@@ -247,7 +247,10 @@ def remove_student(gradebook: Gradebook) -> None:
     title = "What would you like to do?"
     options = [
         ("Permanently remove this student (destroys record)", confirm_and_remove),
-        ("Change enrollment status instead (archives record)", edit_status_and_confirm),
+        (
+            "Change enrollment status instead (archives record)",
+            edit_active_status_and_confirm,
+        ),
     ]
     zero_option = "Return to Manage Students menu"
 

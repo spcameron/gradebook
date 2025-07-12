@@ -60,25 +60,29 @@ def display_results(
         print(f"{prefix}{formatter(result)}")
 
 
+# === prompt user input methods ===
+
+
 def prompt_user_input(prompt: str) -> str:
     return input(f"\n{prompt}\n  >> ").strip()
 
 
 def prompt_user_input_or_cancel(prompt: str) -> str | MenuSignal:
-    response = input(f"\n{prompt}\n  >> ").strip()
+    response = prompt_user_input(prompt)
     return MenuSignal.CANCEL if response == "" else response
 
 
 def prompt_user_input_or_default(prompt: str) -> str | MenuSignal:
-    response = input(f"\n{prompt}\n  >> ").strip()
+    response = prompt_user_input(prompt)
     return MenuSignal.DEFAULT if response == "" else response
 
 
 def prompt_user_input_or_none(prompt: str) -> str | None:
-    response = input(f"\n{prompt}\n  >> ").strip()
+    response = prompt_user_input(prompt)
     return None if response == "" else response
 
 
+# TODO: probably not worth the function
 def returning_without_changes() -> None:
     print("\nReturning without changes.")
 
@@ -86,7 +90,34 @@ def returning_without_changes() -> None:
 # === search and select methods ===
 
 
-def prompt_record_selection(
+def prompt_selection_from_list(
+    list_data: list[RecordType],
+    list_description: str,
+    sort_key: Callable[[RecordType], Any] = lambda x: x,
+    formatter: Callable[[RecordType], str] = lambda x: str(x),
+) -> Optional[RecordType]:
+    if not list_data:
+        print(f"\nThere are no {list_description.lower()}.")
+        return None
+
+    print(f"\nThere are {len(list_data)} {list_description.lower()}.")
+    sorted_list = sorted(list_data, key=sort_key)
+
+    while True:
+        print(f"\n{formatters.format_banner_text(list_description)}")
+        display_results(sorted_list, True, formatter)
+        choice = prompt_user_input("Select an option (0 to cancel):")
+
+        if choice == "0":
+            return None
+        try:
+            index = int(choice) - 1
+            return sorted_list[index]
+        except (ValueError, IndexError):
+            print("\nInvalid selection. Please try again.")
+
+
+def prompt_selection_from_search(
     search_results: list[RecordType],
     sort_key: Callable[[RecordType], Any] = lambda x: x,
     formatter: Callable[[RecordType], str] = lambda x: str(x),
@@ -120,8 +151,19 @@ def search_students(gradebook: Gradebook) -> list[Student]:
 
 
 def prompt_student_selection(search_results: list[Student]) -> Optional[Student]:
-    return prompt_record_selection(
+    return prompt_selection_from_search(
         search_results,
+        lambda x: (x.last_name, x.first_name),
+        formatters.format_student_oneline,
+    )
+
+
+def prompt_student_selection_from_list(
+    list_data: list[Student], list_description: str
+) -> Optional[Student]:
+    return prompt_selection_from_list(
+        list_data,
+        list_description,
         lambda x: (x.last_name, x.first_name),
         formatters.format_student_oneline,
     )
@@ -132,9 +174,22 @@ def search_categories(gradebook: Gradebook) -> list[Category]:
     return gradebook.find_category_by_query(query)
 
 
-def prompt_category_selection(search_results: list[Category]) -> Optional[Category]:
-    return prompt_record_selection(
+def prompt_category_selection_from_search(
+    search_results: list[Category],
+) -> Optional[Category]:
+    return prompt_selection_from_search(
         search_results, lambda x: x.name, formatters.format_category_oneline
+    )
+
+
+def prompt_category_selection_from_list(
+    list_data: list[Category], list_description: str
+) -> Optional[Category]:
+    return prompt_selection_from_list(
+        list_data,
+        list_description,
+        lambda x: x.name,
+        formatters.format_category_oneline,
     )
 
 
@@ -143,8 +198,20 @@ def search_assignments(gradebook: Gradebook) -> list[Assignment]:
     return gradebook.find_assignment_by_query(query)
 
 
-def prompt_assignment_selection(
+def prompt_assignment_selection_from_search(
     search_results: list[Assignment],
 ) -> Optional[Assignment]:
-    # TODO: add formmatter when it's written
-    return prompt_record_selection(search_results, lambda x: x.name)
+    return prompt_selection_from_search(
+        search_results, lambda x: x.name, formatters.format_assignment_oneline
+    )
+
+
+def prompt_assignment_selection_from_list(
+    list_data: list[Assignment], list_description: str
+) -> Optional[Assignment]:
+    return prompt_selection_from_list(
+        list_data,
+        list_description,
+        lambda x: (x.category_id, x.due_date_iso),
+        formatters.format_assignment_oneline,
+    )

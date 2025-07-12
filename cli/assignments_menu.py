@@ -7,7 +7,7 @@ from datetime import datetime
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
-from typing import cast, Optional
+from typing import cast, Callable, Optional
 from utils.utils import generate_uuid
 
 
@@ -113,10 +113,8 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     try:
         assignment_id = generate_uuid()
         points_possible = float(points_possible_str)
-        due_date_iso = (
-            datetime.strptime(
-                f"{due_date_str} {due_time_str}", "%Y-%m-%d %H:%M"
-            ).isoformat()
+        due_date = (
+            datetime.strptime(f"{due_date_str} {due_time_str}", "%Y-%m-%d %H:%M")
             if due_date_str and due_time_str
             else None
         )
@@ -127,7 +125,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
             name=name,
             category_id=category_id,
             points_possible=points_possible,
-            due_date_iso=due_date_iso,
+            due_date=due_date,
         )
     except Exception as e:
         print(f"\nError: Could not create assignment ... {e}")
@@ -156,7 +154,7 @@ def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSig
 
 def link_category_by_search(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
     search_results = helpers.search_categories(gradebook)
-    category = helpers.prompt_category_selection(search_results)
+    category = helpers.prompt_category_selection_from_search(search_results)
     return MenuSignal.CANCEL if category is None else category
 
 
@@ -164,7 +162,9 @@ def link_category_from_list(gradebook: Gradebook) -> Optional[Category] | MenuSi
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
     )
-    category = helpers.prompt_category_selection(active_categories)
+    category = helpers.prompt_category_selection_from_list(
+        active_categories, "Active Categories"
+    )
     return MenuSignal.CANCEL if category is None else category
 
 
@@ -172,14 +172,114 @@ def mark_as_uncategorized(_: Gradebook) -> None:
     return None
 
 
+# === edit assignment ===
+
+
+def get_editable_fields() -> (
+    list[tuple[str, Callable[[Assignment, Gradebook], Optional[MenuSignal]]]]
+):
+    return [
+        ("Name", edit_name_and_confirm),
+        ("Linked Category", edit_linked_category_and_confirm),
+        ("Due Date", edit_due_date_and_confirm),
+        ("Points Possible", edit_points_possible_and_confirm),
+        ("Archived Status", edit_active_status_and_confirm),
+    ]
+
+
+def edit_assignment(gradebook: Gradebook) -> None:
+    search_results = helpers.search_assignments(gradebook)
+    assignment = helpers.prompt_assignment_selection_from_search(search_results)
+
+    if not assignment:
+        return None
+
+    title = formatters.format_banner_text("Editable Fields")
+    options = get_editable_fields()
+    zero_option = "Return without changes"
+
+    while True:
+        print("\nYou are viewing the following assignment:")
+        print(formatters.format_assignment_oneline(assignment))
+
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response == MenuSignal.EXIT:
+            helpers.returning_without_changes()
+            return None
+
+        if callable(menu_response):
+            menu_response(assignment, gradebook)
+
+        if not helpers.confirm_action(
+            "Would you like to continue editing this assignment?"
+        ):
+            print("\nReturning to Manage Assignments menu.")
+            return None
+
+
+def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
+    current_name = assignment.name
+    new_name = helpers.prompt_user_input_or_cancel(
+        "Enter a new name (leave blank to cancel):"
+    )
+
+    if new_name == MenuSignal.CANCEL:
+        helpers.returning_without_changes()
+        return None
+    else:
+        new_name = cast(str, new_name)
+
+    print(
+        f"\nCurrent assignment name: {current_name} ... New assignment name: {new_name}"
+    )
+
+    save_change = helpers.confirm_action("Do you want to save this change?")
+
+    if not save_change:
+        helpers.returning_without_changes()
+        return None
+
+    assignment.name = new_name
+    gradebook.save(gradebook.path)
+    print("\nName successfully updated.")
+
+
 # TODO:
-def edit_assignment() -> None:
+def edit_linked_category_and_confirm(
+    assignment: Assignment, gradebook: Gradebook
+) -> None:
     pass
+
+
+# TODO:
+def edit_due_date_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
+    pass
+
+
+# TODO:
+def edit_points_possible_and_confirm(
+    assignment: Assignment, gradebook: Gradebook
+) -> None:
+    pass
+
+
+# TODO:
+def edit_active_status_and_confirm(
+    assignment: Assignment, gradebook: Gradebook
+) -> None:
+    pass
+
+
+# === remove assignment ===
 
 
 # TODO:
 def remove_assignment() -> None:
     pass
+
+
+# === view assignment ===
 
 
 # TODO:

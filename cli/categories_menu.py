@@ -90,13 +90,13 @@ def get_editable_fields() -> (
 ):
     return [
         ("Name", edit_name_and_confirm),
-        ("Archived Status", edit_status_and_confirm),
+        ("Archived Status", edit_active_status_and_confirm),
     ]
 
 
 def edit_category(gradebook: Gradebook) -> None:
     search_results = helpers.search_categories(gradebook)
-    category = helpers.prompt_category_selection(search_results)
+    category = helpers.prompt_category_selection_from_search(search_results)
 
     if not category:
         return None
@@ -146,7 +146,7 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
     print("\nName successfully updated.")
 
 
-def edit_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
+def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
     print(f"\nThis category is currently {category.status}.")
 
     if not helpers.confirm_action("Would you like to edit the archived status?"):
@@ -164,7 +164,7 @@ def edit_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
 
 def remove_category(gradebook: Gradebook) -> None:
     search_results = helpers.search_categories(gradebook)
-    category = helpers.prompt_category_selection(search_results)
+    category = helpers.prompt_category_selection_from_search(search_results)
 
     if not category:
         return None
@@ -283,7 +283,7 @@ def view_categories_menu(gradebook: Gradebook) -> None:
 # TODO: display "short" report first, prompt for "long" report second
 def view_individual_category(gradebook: Gradebook) -> None:
     search_results = helpers.search_categories(gradebook)
-    category = helpers.prompt_category_selection(search_results)
+    category = helpers.prompt_category_selection_from_search(search_results)
 
     if not category:
         return None

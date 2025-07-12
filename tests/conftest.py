@@ -37,13 +37,13 @@ def sample_student():
 
 @pytest.fixture
 def sample_assignment():
-    due_date = datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M").isoformat()
+    due_date = datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M")
     return Assignment(
         id="a001",
         name="test_assignment",
         category_id="c001",
         points_possible=50.0,
-        due_date_iso=due_date,
+        due_date=due_date,
     )
 
 

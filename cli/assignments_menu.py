@@ -136,8 +136,39 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     return new_assignment
 
 
-# TODO:
 def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
+    title = formatters.format_banner_text("Category Selection")
+    options = [
+        ("Search for a category", link_category_by_search),
+        ("Select from active categories", link_category_from_list),
+        ("Mark as 'Uncategorized'", mark_as_uncategorized),
+    ]
+    zero_option = "Return and cancel assignment creation"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return MenuSignal.CANCEL
+
+    if callable(menu_response):
+        return menu_response(gradebook)
+
+
+def link_category_by_search(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
+    search_results = helpers.search_categories(gradebook)
+    category = helpers.prompt_category_selection(search_results)
+    return MenuSignal.CANCEL if category is None else category
+
+
+def link_category_from_list(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
+    active_categories = gradebook.get_records(
+        gradebook.categories, lambda x: x.is_active
+    )
+    category = helpers.prompt_category_selection(active_categories)
+    return MenuSignal.CANCEL if category is None else category
+
+
+def mark_as_uncategorized(_: Gradebook) -> None:
     return None
 
 

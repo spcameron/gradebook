@@ -1,21 +1,22 @@
 # cli/course_menu.py
 
-from cli import categories_menu, students_menu
-from cli.menu_helpers import (
-    confirm_action,
-    display_menu,
-    format_banner_text,
-    MenuSignal,
+from cli import (
+    assignments_menu,
+    categories_menu,
+    students_menu,
 )
+import cli.formatters as formatters
+import cli.menu_helpers as helpers
+from cli.menu_helpers import MenuSignal
 from models.gradebook import Gradebook
 
 
 def run(gradebook: Gradebook) -> None:
-    title = format_banner_text(f"{gradebook.name} - {gradebook.term}")
+    title = formatters.format_banner_text(f"{gradebook.name} - {gradebook.term}")
     options = [
         ("Manage Students", lambda: students_menu.run(gradebook)),
         ("Manage Categories", lambda: categories_menu.run(gradebook)),
-        ("Manage Assignments", lambda: print("STUB: Manage Assignments")),
+        ("Manage Assignments", lambda: assignments_menu.run(gradebook)),
         ("Record Submissions", lambda: print("STUB: Record Submissions")),
         ("Generate Reports", lambda: print("STUB: Generate Reports")),
         ("Save Gradebook", lambda: gradebook.save(gradebook.path)),
@@ -23,10 +24,10 @@ def run(gradebook: Gradebook) -> None:
     zero_option = "Return to Start Menu"
 
     while True:
-        menu_response = display_menu(title, options, zero_option)
+        menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            if confirm_action("Would you like save before returning?"):
+            if helpers.confirm_action("Would you like save before returning?"):
                 gradebook.save(gradebook.path)
             return None
 

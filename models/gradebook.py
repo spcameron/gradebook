@@ -3,7 +3,6 @@
 import json
 import os
 from datetime import datetime
-from cli.menu_helpers import confirm_action
 from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
@@ -143,6 +142,8 @@ class Gradebook:
             del dictionary[record.id]
         except KeyError:
             print("\nERROR: No matching record could be found for deletion.")
+            from cli.menu_helpers import confirm_action
+
             if confirm_action("Would you like to display the faulty deletion request?"):
                 print(
                     f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"

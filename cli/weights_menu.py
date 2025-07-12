@@ -1,17 +1,13 @@
 # cli/weights_menu.py
 
-from cli.menu_helpers import (
-    confirm_action,
-    display_menu,
-    format_banner_text,
-    MenuSignal,
-    returning_without_changes,
-)
+import cli.formatters as formatters
+import cli.menu_helpers as helpers
+from cli.menu_helpers import MenuSignal
 from models.gradebook import Gradebook
 
 
 def run(gradebook: Gradebook) -> None:
-    title = format_banner_text("Manage Category Weights")
+    title = formatters.format_banner_text("Manage Category Weights")
     options = [
         ("Toggle Weighting On/Off", toggle_weighting),
         ("Assign Weights", assign_weights),
@@ -23,10 +19,10 @@ def run(gradebook: Gradebook) -> None:
     zero_option = "Return to Manage Categories menu"
 
     while True:
-        menu_response = display_menu(title, options, zero_option)
+        menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
-            if confirm_action("Would you like to save before returning?"):
+            if helpers.confirm_action("Would you like to save before returning?"):
                 gradebook.save(gradebook.path)
             return None
 
@@ -40,8 +36,10 @@ def toggle_weighting(gradebook: Gradebook) -> None:
 
     print(f"\nThis Gradebook currently {uses_weighting} weighted categories.")
 
-    if not confirm_action(f"Do you want to turn weighted categories {on_or_off}?"):
-        returning_without_changes()
+    if not helpers.confirm_action(
+        f"Do you want to turn weighted categories {on_or_off}?"
+    ):
+        helpers.returning_without_changes()
         return None
 
     gradebook.toggle_uses_weighting()

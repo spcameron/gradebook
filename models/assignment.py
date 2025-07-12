@@ -14,14 +14,16 @@ class Assignment:
         points_possible: float,
         due_date: Optional[datetime],
         is_extra_credit: bool = False,
+        active: bool = True,
     ):
         self._id = id
         self._name = name
         self._category_id = category_id
         # points_possible uses setter method for defensive validation
         self.points_possible = points_possible
-        self._due_date = due_date
+        self._due_date_dt = due_date
         self._is_extra_credit = is_extra_credit
+        self._is_active = active
 
     @property
     def id(self) -> str:
@@ -39,6 +41,10 @@ class Assignment:
     def category_id(self) -> Optional[str]:
         return self._category_id
 
+    @category_id.setter
+    def category_id(self, category_id: Optional[str]) -> None:
+        self._category_id = category_id
+
     @property
     def points_possible(self) -> float:
         return self._points_possible
@@ -50,20 +56,39 @@ class Assignment:
         self._points_possible = points
 
     @property
+    def due_date_dt(self) -> Optional[datetime]:
+        return self._due_date_dt
+
+    @due_date_dt.setter
+    def due_date_dt(self, due_date_dt: Optional[datetime]) -> None:
+        self._due_date_dt = due_date_dt
+
+    @property
     def due_date_iso(self) -> Optional[str]:
-        return self._due_date.isoformat() if self._due_date else None
+        return self._due_date_dt.isoformat() if self._due_date_dt else None
 
     @property
     def due_date_str(self) -> Optional[str]:
-        return self._due_date.strftime("%Y-%m-%d") if self._due_date else None
+        return self._due_date_dt.strftime("%Y-%m-%d") if self._due_date_dt else None
 
     @property
     def due_time_str(self) -> Optional[str]:
-        return self._due_date.strftime("%H:%M") if self._due_date else None
+        return self._due_date_dt.strftime("%H:%M") if self._due_date_dt else None
 
     @property
     def is_extra_credit(self) -> bool:
         return self._is_extra_credit
+
+    @property
+    def is_active(self) -> bool:
+        return self._is_active
+
+    @property
+    def status(self) -> str:
+        return "'ACTIVE'" if self._is_active else "'INACTIVE'"
+
+    def toggle_archived_status(self) -> None:
+        self._is_active = False if self._is_active else True
 
     def to_dict(self) -> dict:
         return {

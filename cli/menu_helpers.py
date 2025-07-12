@@ -82,11 +82,6 @@ def prompt_user_input_or_none(prompt: str) -> str | None:
     return None if response == "" else response
 
 
-# TODO: probably not worth the function
-def returning_without_changes() -> None:
-    print("\nReturning without changes.")
-
-
 # === search and select methods ===
 
 
@@ -215,3 +210,10 @@ def prompt_assignment_selection_from_list(
         lambda x: (x.category_id, x.due_date_iso),
         formatters.format_assignment_oneline,
     )
+
+
+# === often used messages ===
+
+
+def returning_without_changes() -> None:
+    print("\nReturning without changes.")

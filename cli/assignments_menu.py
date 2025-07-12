@@ -74,25 +74,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     else:
         points_possible_str = cast(str, points_possible_str)
 
-    due_date_str = helpers.prompt_user_input_or_default(
-        "Enter due date (YYYY-MM-DD, leave blank for no due date):"
-    )
-    if due_date_str == MenuSignal.DEFAULT:
-        due_date_str = None
-    else:
-        due_date_str = cast(str, due_date_str)
-
-    due_time_str = (
-        helpers.prompt_user_input_or_default(
-            "Enter due time (24-hour HH:MM, leave blank for 23:59)"
-        )
-        if due_date_str
-        else None
-    )
-    if due_time_str == MenuSignal.DEFAULT:
-        due_time_str = "23:59"
-    elif due_time_str is not None:
-        due_time_str = cast(str, due_time_str)
+    due_date_str, due_time_str = prompt_due_date()
 
     # formatting for preview
     category_name = category.name if category else "Uncategorized"
@@ -134,6 +116,30 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     return new_assignment
 
 
+def prompt_due_date() -> tuple[Optional[str], Optional[str]]:
+    due_date_str = helpers.prompt_user_input_or_default(
+        "Enter due date (YYYY-MM-DD, leave blank for no due date):"
+    )
+    if due_date_str == MenuSignal.DEFAULT:
+        due_date_str = None
+    else:
+        due_date_str = cast(str, due_date_str)
+
+    due_time_str = (
+        helpers.prompt_user_input_or_default(
+            "Enter due time (24-hour HH:MM, leave blank for 23:59):"
+        )
+        if due_date_str
+        else None
+    )
+    if due_time_str == MenuSignal.DEFAULT:
+        due_time_str = "23:59"
+    elif due_time_str is not None:
+        due_time_str = cast(str, due_time_str)
+
+    return (due_date_str, due_time_str)
+
+
 def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
     title = formatters.format_banner_text("Category Selection")
     options = [
@@ -141,7 +147,7 @@ def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSig
         ("Select from active categories", link_category_from_list),
         ("Mark as 'Uncategorized'", mark_as_uncategorized),
     ]
-    zero_option = "Return and cancel assignment creation"
+    zero_option = "Return and cancel"
 
     menu_response = helpers.display_menu(title, options, zero_option)
 
@@ -249,26 +255,126 @@ def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
 def edit_linked_category_and_confirm(
     assignment: Assignment, gradebook: Gradebook
 ) -> None:
-    pass
+    current_category = (
+        gradebook.find_category_by_uuid(assignment.category_id)
+        if assignment.category_id
+        else None
+    )
+    new_category = prompt_linked_category
+
+    if new_category == MenuSignal.CANCEL:
+        helpers.returning_without_changes()
+        return None
+    elif new_category is not None:
+        new_category = cast(Category, new_category)
+
+    current_category_preview = (
+        current_category.name if current_category else "Uncategorized"
+    )
+    new_category_preview = new_category.name if new_category else "Uncategorized"
+
+    print(
+        f"\nCurrent category: {current_category_preview} ... New category: {new_category_preview}"
+    )
+
+    save_change = helpers.confirm_action("Do you want to save this change?")
+
+    if not save_change:
+        helpers.returning_without_changes()
+        return None
+
+    assignment.category_id = new_category.id if new_category else None
+    gradebook.save(gradebook.path)
+    print("\nCategory successfully updated.")
 
 
-# TODO:
 def edit_due_date_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
-    pass
+    current_due_date_str, current_due_time_str = (
+        assignment.due_date_str,
+        assignment.due_time_str,
+    )
+    new_due_date_str, new_due_time_str = prompt_due_date()
+
+    current_due_date_preview = formatters.format_assignment_due_date(
+        current_due_date_str, current_due_time_str
+    )
+    new_due_date_preview = formatters.format_assignment_due_date(
+        new_due_date_str, new_due_time_str
+    )
+
+    print(
+        f"\nCurrent due date: {current_due_date_preview} ... New due date: {new_due_date_preview}"
+    )
+
+    save_change = helpers.confirm_action("Do you want to save this change?")
+
+    if not save_change:
+        helpers.returning_without_changes()
+        return None
+
+    try:
+        due_date_dt = (
+            datetime.strptime(
+                f"{new_due_date_str} {new_due_time_str}", "%Y-%m-%d %H:%M"
+            )
+            if new_due_date_str and new_due_time_str
+            else None
+        )
+        assignment.due_date_dt = due_date_dt
+        gradebook.save(gradebook.path)
+        print("\nDue date successfully updated.")
+    except Exception as e:
+        print(f"\nError: Could not update the due date ... {e}")
+        return None
 
 
-# TODO:
 def edit_points_possible_and_confirm(
     assignment: Assignment, gradebook: Gradebook
 ) -> None:
-    pass
+    current_points_possible = str(assignment.points_possible)
+    new_points_possible = helpers.prompt_user_input_or_cancel(
+        "Enter total points possible (leave blank to cancel):"
+    )
+
+    if new_points_possible == MenuSignal.CANCEL:
+        return None
+    else:
+        new_points_possible = cast(str, new_points_possible)
+
+    print(
+        f"\nCurrent points possible: {current_points_possible} ... New points possible: {new_points_possible}"
+    )
+
+    save_change = helpers.confirm_action("Do you want to save this change?")
+
+    if not save_change:
+        helpers.returning_without_changes()
+        return None
+
+    try:
+        new_points_possible = float(new_points_possible)
+        assignment.points_possible = new_points_possible
+        gradebook.save(gradebook.path)
+        print("\nPoints possible successfully updated.")
+    except ValueError as e:
+        print(f"\nError: Could not update the points possible ... {e}")
+        return None
 
 
 # TODO:
 def edit_active_status_and_confirm(
     assignment: Assignment, gradebook: Gradebook
 ) -> None:
-    pass
+    print(f"\nThis assignment is currently {assignment.status}")
+
+    if not helpers.confirm_action("Would you like to edit the archived status?"):
+        helpers.returning_without_changes()
+        return None
+
+    if assignment.is_active:
+        confirm_and_archive(assignment, gradebook)
+    else:
+        confirm_and_reactivate(assignment, gradebook)
 
 
 # === remove assignment ===
@@ -276,6 +382,21 @@ def edit_active_status_and_confirm(
 
 # TODO:
 def remove_assignment() -> None:
+    pass
+
+
+# TODO:
+def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> None:
+    pass
+
+
+# TODO:
+def confirm_and_archive(assignment: Assignment, gradebook: Gradebook) -> None:
+    pass
+
+
+# TODO:
+def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> None:
     pass
 
 

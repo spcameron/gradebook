@@ -307,7 +307,11 @@ def view_active_categories(gradebook: Gradebook) -> None:
         print("There are no active categories.")
         return None
 
-    sort_and_display_categories(active_categories)
+    helpers.sort_and_display_records(
+        records=active_categories,
+        sort_key=lambda x: x.name,
+        formatter=formatters.format_category_oneline,
+    )
 
 
 def view_inactive_categories(gradebook: Gradebook) -> None:
@@ -321,7 +325,11 @@ def view_inactive_categories(gradebook: Gradebook) -> None:
         print("There are no inactive categories.")
         return None
 
-    sort_and_display_categories(inactive_categories)
+    helpers.sort_and_display_records(
+        records=inactive_categories,
+        sort_key=lambda x: x.name,
+        formatter=formatters.format_category_oneline,
+    )
 
 
 def view_all_categories(gradebook: Gradebook) -> None:
@@ -333,11 +341,8 @@ def view_all_categories(gradebook: Gradebook) -> None:
         print("There are no categories yet.")
         return None
 
-    sort_and_display_categories(all_categories)
-
-
-def sort_and_display_categories(categories: list[Category]) -> None:
-    sorted_categories = sorted(categories, key=lambda c: c.name)
-    helpers.display_results(
-        sorted_categories, False, formatters.format_category_oneline
+    helpers.sort_and_display_records(
+        records=all_categories,
+        sort_key=lambda x: x.name,
+        formatter=formatters.format_category_oneline,
     )

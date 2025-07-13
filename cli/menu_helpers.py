@@ -16,16 +16,7 @@ class MenuSignal(Enum):
     EXIT = auto()
 
 
-def confirm_action(prompt: str) -> bool:
-    while True:
-        choice = prompt_user_input(f"{prompt} (y/n): ").lower()
-
-        if choice == "y" or choice == "yes":
-            return True
-        elif choice == "n" or choice == "no":
-            return False
-        else:
-            print("Invalid selection. Please try again.")
+# === display methods ===
 
 
 def display_menu(
@@ -60,7 +51,29 @@ def display_results(
         print(f"{prefix}{formatter(result)}")
 
 
+def sort_and_display_records(
+    records: Iterable[RecordType],
+    show_index: bool = False,
+    formatter: Callable[[Any], str] = lambda x: str(x),
+    sort_key: Callable[[RecordType], Any] = lambda x: x,
+) -> None:
+    sorted_records = sorted(records, key=sort_key)
+    display_results(sorted_records, show_index, formatter)
+
+
 # === prompt user input methods ===
+
+
+def confirm_action(prompt: str) -> bool:
+    while True:
+        choice = prompt_user_input(f"{prompt} (y/n): ").lower()
+
+        if choice == "y" or choice == "yes":
+            return True
+        elif choice == "n" or choice == "no":
+            return False
+        else:
+            print("Invalid selection. Please try again.")
 
 
 def prompt_user_input(prompt: str) -> str:

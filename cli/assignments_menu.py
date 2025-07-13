@@ -485,21 +485,76 @@ def view_assignments_menu() -> None:
     pass
 
 
-# TODO:
-def view_individual_assignment() -> None:
-    pass
+# TODO: display oneline first, then options for short and long
+def view_individual_assignment(gradebook: Gradebook) -> None:
+    search_results = helpers.search_assignments(gradebook)
+    assignment = helpers.prompt_assignment_selection_from_search(search_results)
+
+    if not assignment:
+        return None
+
+    print("\nYou are viewing the following assignment:")
+    print(formatters.format_assignment_oneline(assignment))
 
 
-# TODO:
-def view_active_assignments() -> None:
-    pass
+def view_active_assignments(gradebook: Gradebook) -> None:
+    print(f"\n{formatters.format_banner_text("Active Assignments")}")
+
+    active_assignments = gradebook.get_records(
+        gradebook.assignments, lambda x: x.is_active
+    )
+
+    if not active_assignments:
+        print("There are no active assignments.")
+        return None
+
+    helpers.sort_and_display_records(
+        records=active_assignments,
+        sort_key=lambda x: (
+            gradebook.find_category_by_uuid(x.category_id),
+            x.due_date_iso,
+            x.name,
+        ),
+        formatter=formatters.format_assignment_oneline,
+    )
 
 
-# TODO:
-def view_inactive_assignments() -> None:
-    pass
+def view_inactive_assignments(gradebook: Gradebook) -> None:
+    print(f"\n{formatters.format_banner_text("Inactive Assignment")}")
+
+    inactive_assignments = gradebook.get_records(
+        gradebook.assignments, lambda x: not x.is_active
+    )
+
+    if not inactive_assignments:
+        print("There are no inactive assignments.")
+
+    helpers.sort_and_display_records(
+        records=inactive_assignments,
+        sort_key=lambda x: (
+            gradebook.find_category_by_uuid(x.category_id),
+            x.due_date_iso,
+            x.name,
+        ),
+        formatter=formatters.format_assignment_oneline,
+    )
 
 
-# TODO:
-def sort_and_display_assignments() -> None:
-    pass
+def view_all_assignments(gradebook: Gradebook) -> None:
+    print(f"\n{formatters.format_banner_text("All Assignments")}")
+
+    all_assignments = gradebook.get_records(gradebook.assignments)
+
+    if not all_assignments:
+        print("There are no assignments yet.")
+        return None
+
+    helpers.sort_and_display_records(
+        records=all_assignments,
+        sort_key=lambda x: (
+            gradebook.find_category_by_uuid(x.category_id),
+            x.due_date_iso,
+            x.name,
+        ),
+        formatter=formatters.format_assignment_oneline,
+    )

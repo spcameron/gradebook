@@ -381,7 +381,11 @@ def view_active_students(gradebook: Gradebook) -> None:
         print("There are no active students.")
         return None
 
-    sort_and_display_students(active_students)
+    helpers.sort_and_display_records(
+        records=active_students,
+        sort_key=lambda x: (x.last_name, x.first_name),
+        formatter=formatters.format_student_oneline,
+    )
 
 
 def view_inactive_students(gradebook: Gradebook) -> None:
@@ -395,7 +399,11 @@ def view_inactive_students(gradebook: Gradebook) -> None:
         print("There are no inactive students.")
         return None
 
-    sort_and_display_students(inactive_students)
+    helpers.sort_and_display_records(
+        records=inactive_students,
+        sort_key=lambda x: (x.last_name, x.first_name),
+        formatter=formatters.format_student_oneline,
+    )
 
 
 def view_all_students(gradebook: Gradebook) -> None:
@@ -407,9 +415,8 @@ def view_all_students(gradebook: Gradebook) -> None:
         print("There are no students yet.")
         return None
 
-    sort_and_display_students(all_students)
-
-
-def sort_and_display_students(roster: list[Student]) -> None:
-    sorted_roster = sorted(roster, key=lambda x: (x.last_name, x.first_name))
-    helpers.display_results(sorted_roster, False, formatters.format_student_oneline)
+    helpers.sort_and_display_records(
+        records=all_students,
+        sort_key=lambda x: (x.last_name, x.first_name),
+        formatter=formatters.format_student_oneline,
+    )

@@ -25,8 +25,7 @@ class Category:
 
     @property
     def name(self) -> str:
-        postfix = " (ARCHIVED)" if not self._is_active else ""
-        return f"{self._name}{postfix}"
+        return self._name
 
     @name.setter
     def name(self, name: str) -> None:

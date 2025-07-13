@@ -258,7 +258,7 @@ def edit_linked_category_and_confirm(
         if assignment.category_id
         else None
     )
-    new_category = prompt_linked_category
+    new_category = prompt_linked_category(gradebook)
 
     if new_category == MenuSignal.CANCEL:
         helpers.returning_without_changes()
@@ -480,8 +480,23 @@ def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> None
 # === view assignment ===
 
 
-# TODO:
-def view_assignments_menu() -> None:
+def view_assignments_menu(gradebook: Gradebook) -> None:
+    title = "View Assignments"
+    options = [
+        ("View Individual Assignment", view_individual_assignment),
+        ("View Active Assignments", view_active_assignments),
+        ("View Inactive Assignments", view_inactive_assignments),
+        ("View All Assignments", view_all_assignments),
+    ]
+    zero_option = "Return to Manage Assignments menu"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return None
+
+    if callable(menu_response):
+        menu_response(gradebook)
     pass
 
 
@@ -520,7 +535,7 @@ def view_active_assignments(gradebook: Gradebook) -> None:
 
 
 def view_inactive_assignments(gradebook: Gradebook) -> None:
-    print(f"\n{formatters.format_banner_text("Inactive Assignment")}")
+    print(f"\n{formatters.format_banner_text("Inactive Assignments")}")
 
     inactive_assignments = gradebook.get_records(
         gradebook.assignments, lambda x: not x.is_active
@@ -528,6 +543,7 @@ def view_inactive_assignments(gradebook: Gradebook) -> None:
 
     if not inactive_assignments:
         print("There are no inactive assignments.")
+        return None
 
     helpers.sort_and_display_records(
         records=inactive_assignments,

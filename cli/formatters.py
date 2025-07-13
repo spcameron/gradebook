@@ -17,7 +17,8 @@ def format_banner_text(title: str, width: int = 40) -> str:
 
 
 def format_student_oneline(student: Student) -> str:
-    return f"{student.full_name:<20} | {student.email}"
+    status = "[ARCHIVED]" if not student.is_active else ""
+    return f"{student.full_name:<20} {status} | {student.email}"
 
 
 # === Category formatters ===
@@ -25,7 +26,9 @@ def format_student_oneline(student: Student) -> str:
 
 # TODO: handle weighted and unweighted gracefully
 def format_category_oneline(category: Category) -> str:
-    return f"{category.name:<20} | {category.weight} %"
+    status = "[ARCHIVED]" if not category.is_active else ""
+    weight = f"{category.weight} %" if category.weight else "Unweighted"
+    return f"{category.name:<20} {status} | {weight}"
 
 
 # === Assignment formatters ===
@@ -42,11 +45,12 @@ def format_assignment_due_date(
 
 
 def format_assignment_oneline(assignment: Assignment) -> str:
+    status = "[ARCHIVED]" if not assignment.is_active else ""
     due_date = format_assignment_due_date(
         assignment.due_date_str,
         assignment.due_time_str,
     )
-    return f"{assignment.name:<20} | Due: {due_date}"
+    return f"{assignment.name:<20} {status}| Due: {due_date}"
 
 
 # === Submission formatters ===

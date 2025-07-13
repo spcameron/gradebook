@@ -38,7 +38,7 @@ def run(gradebook: Gradebook) -> None:
 
 def add_category(gradebook: Gradebook) -> None:
     while True:
-        new_category = prompt_new_category()
+        new_category = prompt_new_category(gradebook)
 
         if new_category is not None:
             gradebook.add_category(new_category)
@@ -51,7 +51,7 @@ def add_category(gradebook: Gradebook) -> None:
             return None
 
 
-def prompt_new_category() -> Optional[Category]:
+def prompt_new_category(gradebook: Gradebook) -> Optional[Category]:
     # collect user input
     name = helpers.prompt_user_input_or_cancel(
         "Enter category name (leave blank to cancel):"
@@ -70,7 +70,9 @@ def prompt_new_category() -> Optional[Category]:
 
     # attempt object instantiation
     try:
+        gradebook.require_unique_category_name(name)
         category_id = generate_uuid()
+
         new_category = Category(
             id=category_id,
             name=name,

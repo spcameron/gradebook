@@ -36,7 +36,7 @@ def run(gradebook: Gradebook) -> None:
 
 def add_student(gradebook: Gradebook) -> None:
     while True:
-        new_student = prompt_new_student()
+        new_student = prompt_new_student(gradebook)
 
         if new_student is not None:
             gradebook.add_student(new_student)
@@ -49,7 +49,7 @@ def add_student(gradebook: Gradebook) -> None:
             return None
 
 
-def prompt_new_student() -> Optional[Student]:
+def prompt_new_student(gradebook: Gradebook) -> Optional[Student]:
     # collect user input
     first_name = helpers.prompt_user_input_or_cancel(
         "Enter first name (leave blank to cancel):"
@@ -85,7 +85,9 @@ def prompt_new_student() -> Optional[Student]:
 
     # attempt object instantiation
     try:
+        gradebook.require_unique_student_email(email)
         student_id = generate_uuid()
+
         new_student = Student(
             id=student_id,
             first_name=first_name,

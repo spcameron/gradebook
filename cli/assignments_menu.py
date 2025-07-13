@@ -92,7 +92,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
 
     # attempt object instantiation
     try:
-        assignment_id = generate_uuid()
+        gradebook.require_unique_assignment_name(name)
         points_possible = float(points_possible_str)
         due_date = (
             datetime.strptime(f"{due_date_str} {due_time_str}", "%Y-%m-%d %H:%M")
@@ -100,6 +100,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
             else None
         )
         category_id = category.id if category else None
+        assignment_id = generate_uuid()
 
         new_assignment = Assignment(
             id=assignment_id,
@@ -108,7 +109,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
             points_possible=points_possible,
             due_date=due_date,
         )
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         print(f"\nError: Could not create assignment ... {e}")
         return None
 

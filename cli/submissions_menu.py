@@ -16,8 +16,8 @@ def run(gradebook: Gradebook) -> None:
     options = [
         ("Add Single Submission", add_single_submission),
         ("Batch Enter Submissions by Assignment", add_submissions_by_assignment),
-        ("Edit Submission", edit_submission),
-        ("Remove Submission", remove_submission),
+        ("Edit Submission", find_and_edit_submission),
+        ("Remove Submission", find_and_remove_submission),
         ("View Submissions", view_submissions_menu),
     ]
     zero_option = "Return to Course Manager menu"
@@ -108,7 +108,7 @@ def prompt_new_submission(
             id=submission_id,
             student_id=linked_student.id,
             assignment_id=linked_assignment.id,
-            score=points_earned,
+            points_earned=points_earned,
         )
     except (TypeError, ValueError) as e:
         print(f"\nError: Could not create submission ... {e}")
@@ -365,51 +365,108 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None
         print(f"\nError: Could not update submission ... {e}:")
 
 
-# TODO: add updated status inside success message
 def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
-    late_status = "marked late" if submission.is_late else "not marked late"
-    print(f"\nThis submission is currently {late_status}.")
+    print(
+        f"\nSubmission current late status: {'Late' if submission.is_late else 'Not Late'}"
+    )
 
     if not helpers.confirm_action("Would you like to edit the late status?"):
         helpers.returning_without_changes()
         return None
-    else:
-        submission.toggle_late_status()
-        gradebook.save(gradebook.path)
-        print("\nSubmission late status successfully updated.")
+
+    submission.toggle_late_status()
+    gradebook.save(gradebook.path)
+    print(
+        f"\nSubmission late status successfully updated to: {'Late' if submission.is_late else 'Not Late'}"
+    )
 
 
-# TODO: discard pre/post check, add updated status inside success message
 def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
-    exempt_status = "marked exempt" if submission.is_exempt else "not marked exempt"
-    print(f"\nThis submission is currently {exempt_status}.")
+    print(
+        f"\nSubmission current exempt status: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
+    )
 
     if not helpers.confirm_action("Would you like to edit the exempt status?"):
         helpers.returning_without_changes()
         return None
-    else:
-        status_pre = submission.is_exempt
 
-        submission.toggle_exempt_status()
-        gradebook.save(gradebook.path)
-
-        status_post = submission.is_exempt
-
-        assert status_pre is not status_post
-        print("\nSubmission exempt status successfully updated.")
+    submission.toggle_exempt_status()
+    gradebook.save(gradebook.path)
+    print(
+        f"\nSubmission exempt status successfully updated to: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
+    )
 
 
 # === remove submission ===
 
 
-# TODO:
-def remove_submission(gradebook: Gradebook) -> None:
-    pass
+def find_and_remove_submission(gradebook: Gradebook) -> None:
+    linked_assignment = prompt_linked_assignment(gradebook)
+    if linked_assignment == MenuSignal.CANCEL:
+        return None
+    else:
+        linked_assignment = cast(Assignment, linked_assignment)
+
+    linked_student = prompt_linked_student(gradebook)
+    if linked_student == MenuSignal.CANCEL:
+        return None
+    else:
+        linked_student = cast(Student, linked_student)
+
+    submission = gradebook.find_submission_by_assignment_and_student(
+        linked_assignment.id, linked_student.id
+    )
+
+    if submission is None:
+        return None
+
+    remove_submission(submission, gradebook)
 
 
-# TODO:
+def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
+    print(f"\nYou are viewing the following submission:")
+    print(formatters.format_submission_oneline(submission, gradebook))
+
+    title = "What would you like to do?"
+    options = [
+        (
+            "Permanently remove this submission (deletes the record entirely)",
+            confirm_and_remove,
+        ),
+        (
+            "Edit this submission instead (update score, late status, or exempt status)",
+            edit_submission,
+        ),
+    ]
+    zero_option = "Return to Manage Submissions menu"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        helpers.returning_without_changes()
+        return None
+
+    if callable(menu_response):
+        menu_response(submission, gradebook)
+
+
 def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
-    pass
+    caution_banner = formatters.format_banner_text("CAUTION!")
+    print(f"\n{caution_banner}")
+    print("You are about to permanently delete the following submission:")
+    print(f"{formatters.format_submission_multiline(submission, gradebook)}")
+
+    confirm_deletion = helpers.confirm_action(
+        "Are you sure you want to permanently delete this submission? This action cannot be undone."
+    )
+
+    if not confirm_deletion:
+        helpers.returning_without_changes()
+        return None
+
+    gradebook.remove_submission(submission)
+    gradebook.save(gradebook.path)
+    print("\nSubmission successfully removed from Gradebook.")
 
 
 # === view submission ===

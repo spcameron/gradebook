@@ -8,14 +8,14 @@ class Submission:
         id: str,
         student_id: str,
         assignment_id: str,
-        score: float,
+        points_earned: float,
         is_late: bool = False,
         is_exempt: bool = False,
     ):
         self.id = id
         self._student_id = student_id
         self._assignment_id = assignment_id
-        self._points_earned = score
+        self._points_earned = points_earned
         self._is_late = is_late
         self._is_exempt = is_exempt
         # self.resolved_refs = False
@@ -57,8 +57,9 @@ class Submission:
             "id": self.id,
             "student_id": self._student_id,
             "assignment_id": self._assignment_id,
-            "score": self._points_earned,
+            "points_earned": self._points_earned,
             "is_late": self._is_late,
+            "is_exempt": self._is_exempt,
         }
 
     @classmethod
@@ -67,12 +68,13 @@ class Submission:
             id=data["id"],
             student_id=data["student_id"],
             assignment_id=data["assignment_id"],
-            score=data["score"],
+            points_earned=data["points_earned"],
             is_late=data["is_late"],
+            is_exempt=data["is_exempt"],
         )
 
     def __repr__(self) -> str:
-        return f"Submission({self.id}, {self._student_id}, {self._assignment_id}, {self._points_earned}, {self._is_late})"
+        return f"Submission({self.id}, {self._student_id}, {self._assignment_id}, {self._points_earned}, {self._is_late}, {self._is_exempt})"
 
     def __str__(self) -> str:
         return f"SUBMISSION: id: {self.id}, student id: {self._student_id}, assignment id: {self._assignment_id}"

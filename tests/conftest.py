@@ -59,7 +59,14 @@ def sample_weighted_category():
 
 @pytest.fixture
 def sample_submission():
-    return Submission("sub001", "s001", "a001", 40.0)
+    return Submission(
+        id="sub001",
+        student_id="s001",
+        assignment_id="a001",
+        points_earned=40.0,
+        is_late=False,
+        is_exempt=False,
+    )
 
 
 @pytest.fixture

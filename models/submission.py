@@ -32,13 +32,25 @@ class Submission:
     def points_earned(self) -> float:
         return self._points_earned
 
+    @points_earned.setter
+    def points_earned(self, points_earned: float) -> None:
+        if points_earned < 0:
+            raise ValueError("Points earned cannot be less than zero.")
+        self._points_earned = points_earned
+
     @property
     def is_late(self) -> bool:
         return self._is_late
 
+    def toggle_late_status(self) -> None:
+        self._is_late = False if self._is_late else True
+
     @property
     def is_exempt(self) -> bool:
         return self._is_exempt
+
+    def toggle_exempt_status(self) -> None:
+        self._is_exempt = False if self._is_exempt else True
 
     def to_dict(self) -> dict:
         return {

@@ -76,6 +76,10 @@ def confirm_action(prompt: str) -> bool:
             print("Invalid selection. Please try again.")
 
 
+def confirm_save_change() -> bool:
+    return confirm_action("Do you want to save this change?")
+
+
 def prompt_user_input(prompt: str) -> str:
     return input(f"\n{prompt}\n  >> ").strip()
 

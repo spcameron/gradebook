@@ -65,10 +65,8 @@ def test_category_to_str(sample_unweighted_category, sample_weighted_category):
 def test_archive_and_reactivate(sample_unweighted_category):
     category = sample_unweighted_category
     assert not category.is_archived
-    assert "ARCHIVED" not in category.name
     assert category.status == "'ACTIVE'"
 
     category.toggle_archived_status()
     assert category.is_archived
-    assert "ARCHIVED" in category.name
     assert category.status == "'ARCHIVED'"

@@ -158,7 +158,9 @@ def search_students(gradebook: Gradebook) -> list[Student]:
     return gradebook.find_student_by_query(query)
 
 
-def prompt_student_selection(search_results: list[Student]) -> Optional[Student]:
+def prompt_student_selection_from_search(
+    search_results: list[Student],
+) -> Optional[Student]:
     return prompt_selection_from_search(
         search_results,
         lambda x: (x.last_name, x.first_name),

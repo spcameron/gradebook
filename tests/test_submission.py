@@ -25,10 +25,10 @@ def test_submission_from_dict():
     )
 
     assert submission.id == "sub001"
-    assert submission.student_id == "s001"
-    assert submission.assignment_id == "a001"
-    assert submission.score == 40.0
-    assert not submission.is_late
+    assert submission._student_id == "s001"
+    assert submission._assignment_id == "a001"
+    assert submission._points_earned == 40.0
+    assert not submission._is_late
 
 
 def test_late_submission(sample_late_submission):

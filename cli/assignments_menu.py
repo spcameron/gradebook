@@ -51,6 +51,7 @@ def add_assignment(gradebook: Gradebook) -> None:
             return None
 
 
+# TODO: extract data collection, preview & confirm
 def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     # collect user input
     name = helpers.prompt_user_input_or_cancel("Enter name (leave blank to cancel):")
@@ -59,11 +60,11 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     else:
         name = cast(str, name)
 
-    category = prompt_linked_category(gradebook)
-    if category == MenuSignal.CANCEL:
+    linked_category = prompt_linked_category(gradebook)
+    if linked_category == MenuSignal.CANCEL:
         return None
-    elif category is not None:
-        category = cast(Category, category)
+    elif linked_category is not None:
+        linked_category = cast(Category, linked_category)
 
     points_possible_str = helpers.prompt_user_input_or_cancel(
         "Enter total points possible (leave blank to cancel):"
@@ -76,7 +77,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     due_date_str, due_time_str = prompt_due_date()
 
     # formatting for preview
-    category_name = category.name if category else "Uncategorized"
+    category_name = linked_category.name if linked_category else "Uncategorized"
 
     due_date_preview = formatters.format_assignment_due_date(due_date_str, due_time_str)
 
@@ -99,7 +100,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
             if due_date_str and due_time_str
             else None
         )
-        category_id = category.id if category else None
+        category_id = linked_category.id if linked_category else None
         assignment_id = generate_uuid()
 
         new_assignment = Assignment(
@@ -158,13 +159,13 @@ def prompt_linked_category(gradebook: Gradebook) -> Optional[Category] | MenuSig
         return menu_response(gradebook)
 
 
-def link_category_by_search(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
+def link_category_by_search(gradebook: Gradebook) -> Category | MenuSignal:
     search_results = helpers.search_categories(gradebook)
     category = helpers.prompt_category_selection_from_search(search_results)
     return MenuSignal.CANCEL if category is None else category
 
 
-def link_category_from_list(gradebook: Gradebook) -> Optional[Category] | MenuSignal:
+def link_category_from_list(gradebook: Gradebook) -> Category | MenuSignal:
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
     )

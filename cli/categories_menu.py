@@ -51,6 +51,7 @@ def add_category(gradebook: Gradebook) -> None:
             return None
 
 
+# TODO: extract data collection, preview & confirm
 def prompt_new_category(gradebook: Gradebook) -> Optional[Category]:
     # collect user input
     name = helpers.prompt_user_input_or_cancel(

@@ -192,6 +192,17 @@ class Gradebook:
     def find_submission_by_uuid(self, uuid: str) -> Optional[Submission]:
         return self.find_record_by_uuid(uuid, self.submissions)
 
+    def find_submission_by_assignment_and_student(
+        self, assignment_id: str, student_id: str
+    ) -> Optional[Submission]:
+        for submission in self.submissions.values():
+            if (
+                submission.assignment_id == assignment_id
+                and submission.student_id == student_id
+            ):
+                return submission
+        return None
+
     # === find record by query ===
 
     def find_student_by_query(self, query: str) -> list[Student]:
@@ -253,3 +264,10 @@ class Gradebook:
             self._normalize(a.name) == normalized for a in self.assignments.values()
         ):
             raise ValueError(f"An assignment with the name '{name}' already exists.")
+
+    # TODO: create secondary submissions index with (s_id, a_id) tuple as key
+    def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
+        return any(
+            (s.assignment_id == assignment_id and s.student_id == student_id)
+            for s in self.submissions.values()
+        )

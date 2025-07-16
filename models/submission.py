@@ -10,21 +10,43 @@ class Submission:
         assignment_id: str,
         score: float,
         is_late: bool = False,
+        is_exempt: bool = False,
     ):
         self.id = id
-        self.student_id = student_id
-        self.assignment_id = assignment_id
-        self.score = score
-        self.is_late = is_late
+        self._student_id = student_id
+        self._assignment_id = assignment_id
+        self._points_earned = score
+        self._is_late = is_late
+        self._is_exempt = is_exempt
         # self.resolved_refs = False
+
+    @property
+    def student_id(self) -> str:
+        return self._student_id
+
+    @property
+    def assignment_id(self) -> str:
+        return self._assignment_id
+
+    @property
+    def points_earned(self) -> float:
+        return self._points_earned
+
+    @property
+    def is_late(self) -> bool:
+        return self._is_late
+
+    @property
+    def is_exempt(self) -> bool:
+        return self._is_exempt
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "student_id": self.student_id,
-            "assignment_id": self.assignment_id,
-            "score": self.score,
-            "is_late": self.is_late,
+            "student_id": self._student_id,
+            "assignment_id": self._assignment_id,
+            "score": self._points_earned,
+            "is_late": self._is_late,
         }
 
     @classmethod
@@ -38,7 +60,7 @@ class Submission:
         )
 
     def __repr__(self) -> str:
-        return f"Submission({self.id}, {self.student_id}, {self.assignment_id}, {self.score}, {self.is_late})"
+        return f"Submission({self.id}, {self._student_id}, {self._assignment_id}, {self._points_earned}, {self._is_late})"
 
     def __str__(self) -> str:
-        return f"SUBMISSION: id: {self.id}, student id: {self.student_id}, assignment id: {self.assignment_id}"
+        return f"SUBMISSION: id: {self.id}, student id: {self._student_id}, assignment id: {self._assignment_id}"

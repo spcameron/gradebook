@@ -49,6 +49,7 @@ def add_student(gradebook: Gradebook) -> None:
             return None
 
 
+# TODO: extract data collection, preview & confirm
 def prompt_new_student(gradebook: Gradebook) -> Optional[Student]:
     # collect user input
     first_name = helpers.prompt_user_input_or_cancel(
@@ -117,7 +118,7 @@ def get_editable_fields() -> (
 
 def edit_student(gradebook: Gradebook) -> None:
     search_results = helpers.search_students(gradebook)
-    student = helpers.prompt_student_selection(search_results)
+    student = helpers.prompt_student_selection_from_search(search_results)
 
     if not student:
         return None
@@ -243,7 +244,7 @@ def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> No
 
 def remove_student(gradebook: Gradebook) -> None:
     search_results = helpers.search_students(gradebook)
-    student = helpers.prompt_student_selection(search_results)
+    student = helpers.prompt_student_selection_from_search(search_results)
 
     if not student:
         return None
@@ -365,7 +366,7 @@ def view_students_menu(gradebook: Gradebook) -> None:
 # TODO: display "short" report first, prompt for "long" report second
 def view_individual_student(gradebook: Gradebook) -> None:
     search_results = helpers.search_students(gradebook)
-    student = helpers.prompt_student_selection(search_results)
+    student = helpers.prompt_student_selection_from_search(search_results)
 
     if not student:
         return None

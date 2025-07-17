@@ -6,6 +6,7 @@ from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
 from models.student import Student
+from models.submission import Submission
 from models.types import RecordType
 from typing import Any, Callable, Iterable, Optional
 
@@ -59,6 +60,28 @@ def sort_and_display_records(
 ) -> None:
     sorted_records = sorted(records, key=sort_key)
     display_results(sorted_records, show_index, formatter)
+
+
+def display_submission_results(
+    results: Iterable[Submission],
+    gradebook: Gradebook,
+    show_index: bool = False,
+    formatter: Callable[[Submission, Gradebook], str] = lambda s, g: str(s),
+) -> None:
+    for i, result in enumerate(results, 1):
+        prefix = f"{i:>2}. " if show_index else ""
+        print(f"{prefix}{formatter(result, gradebook)}")
+
+
+def sort_and_display_submissions(
+    submissions: Iterable[Submission],
+    gradebook: Gradebook,
+    show_index: bool = False,
+    formatter: Callable[[Submission, Gradebook], str] = lambda s, g: str(s),
+    sort_key: Callable[[Submission], Any] = lambda x: x,
+) -> None:
+    sorted_submissions = sorted(submissions, key=sort_key)
+    display_submission_results(sorted_submissions, gradebook, show_index, formatter)
 
 
 # === prompt user input methods ===

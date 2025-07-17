@@ -39,13 +39,13 @@ def run(gradebook: Gradebook) -> None:
 
 def add_single_submission(gradebook: Gradebook) -> None:
     while True:
-        linked_assignment = prompt_linked_assignment(gradebook)
+        linked_assignment = prompt_find_assignment(gradebook)
         if linked_assignment == MenuSignal.CANCEL:
             return None
         else:
             linked_assignment = cast(Assignment, linked_assignment)
 
-        linked_student = prompt_linked_student(gradebook)
+        linked_student = prompt_find_student(gradebook)
         if linked_student == MenuSignal.CANCEL:
             return None
         else:
@@ -199,78 +199,6 @@ def prompt_points_earned_input() -> str | MenuSignal:
     )
 
 
-def prompt_linked_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
-    title = formatters.format_banner_text("Assignment Selection")
-    options = [
-        ("Search for an assignment", link_assignment_by_search),
-        ("Select from active assignments", link_assignment_from_list),
-    ]
-    zero_option = "Return and cancel"
-
-    menu_response = helpers.display_menu(title, options, zero_option)
-
-    if menu_response == MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-
-    if callable(menu_response):
-        return menu_response(gradebook)
-
-    raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-
-def link_assignment_by_search(
-    gradebook: Gradebook,
-) -> Assignment | MenuSignal:
-    search_results = helpers.search_assignments(gradebook)
-    assignment = helpers.prompt_assignment_selection_from_search(search_results)
-    return MenuSignal.CANCEL if assignment is None else assignment
-
-
-def link_assignment_from_list(
-    gradebook: Gradebook,
-) -> Assignment | MenuSignal:
-    active_assignments = gradebook.get_records(
-        gradebook.assignments, lambda x: x.is_active
-    )
-    assignment = helpers.prompt_assignment_selection_from_list(
-        active_assignments, "Active Assignments"
-    )
-    return MenuSignal.CANCEL if assignment is None else assignment
-
-
-def prompt_linked_student(gradebook: Gradebook) -> Student | MenuSignal:
-    title = formatters.format_banner_text("Student Selection")
-    options = [
-        ("Search for a student", link_student_by_search),
-        ("Select from active students", link_student_from_list),
-    ]
-    zero_option = "Return and cancel"
-
-    menu_response = helpers.display_menu(title, options, zero_option)
-
-    if menu_response == MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-
-    if callable(menu_response):
-        return menu_response(gradebook)
-
-    raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-
-def link_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
-    search_results = helpers.search_students(gradebook)
-    student = helpers.prompt_student_selection_from_search(search_results)
-    return MenuSignal.CANCEL if student is None else student
-
-
-def link_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
-    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
-    student = helpers.prompt_student_selection_from_list(
-        active_students, "Active Students"
-    )
-    return MenuSignal.CANCEL if student is None else student
-
-
 # === edit submission ===
 
 
@@ -285,26 +213,9 @@ def get_editable_fields() -> (
 
 
 def find_and_edit_submission(gradebook: Gradebook) -> None:
-    linked_assignment = prompt_linked_assignment(gradebook)
-    if linked_assignment == MenuSignal.CANCEL:
-        return None
-    else:
-        linked_assignment = cast(Assignment, linked_assignment)
-
-    linked_student = prompt_linked_student(gradebook)
-    if linked_student == MenuSignal.CANCEL:
-        return None
-    else:
-        linked_student = cast(Student, linked_student)
-
-    submission = gradebook.find_submission_by_assignment_and_student(
-        linked_assignment.id, linked_student.id
-    )
-
-    if submission is None:
-        return None
-
-    edit_submission(submission, gradebook)
+    submission = find_submission(gradebook)
+    if submission is not None:
+        edit_submission(submission, gradebook)
 
 
 def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
@@ -401,26 +312,9 @@ def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> Non
 
 
 def find_and_remove_submission(gradebook: Gradebook) -> None:
-    linked_assignment = prompt_linked_assignment(gradebook)
-    if linked_assignment == MenuSignal.CANCEL:
-        return None
-    else:
-        linked_assignment = cast(Assignment, linked_assignment)
-
-    linked_student = prompt_linked_student(gradebook)
-    if linked_student == MenuSignal.CANCEL:
-        return None
-    else:
-        linked_student = cast(Student, linked_student)
-
-    submission = gradebook.find_submission_by_assignment_and_student(
-        linked_assignment.id, linked_student.id
-    )
-
-    if submission is None:
-        return None
-
-    remove_submission(submission, gradebook)
+    submission = find_submission(gradebook)
+    if submission is not None:
+        remove_submission(submission, gradebook)
 
 
 def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
@@ -473,7 +367,6 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
 
 
 def view_submissions_menu(gradebook: Gradebook) -> None:
-    pass
     title = "View Submissions"
     options = [
         ("View Individual Submission", view_individual_submission),
@@ -491,16 +384,171 @@ def view_submissions_menu(gradebook: Gradebook) -> None:
         menu_response(gradebook)
 
 
-# TODO:
 def view_individual_submission(gradebook: Gradebook) -> None:
-    pass
+    submission = find_submission(gradebook)
+
+    if not submission:
+        return None
+
+    print("\nYou are viewing the following submission:")
+    print(formatters.format_submission_oneline(submission, gradebook))
+
+    if helpers.confirm_action("Would you like to see an expanded view of this record?"):
+        print(formatters.format_submission_multiline(submission, gradebook))
 
 
-# TODO:
 def view_submissions_by_assignment(gradebook: Gradebook) -> None:
-    pass
+    def sort_key_student_last_name(submission: Submission) -> str:
+        student = gradebook.find_student_by_uuid(submission.student_id)
+        return student.last_name if student else ""
+
+    assignment = prompt_find_assignment(gradebook)
+    if assignment == MenuSignal.CANCEL:
+        return None
+    else:
+        assignment = cast(Assignment, assignment)
+
+    submissions = gradebook.get_records(
+        gradebook.submissions, lambda x: x.assignment_id == assignment.id
+    )
+
+    banner = formatters.format_banner_text(f"Submissions to {assignment.name}")
+    print(f"\n{banner}")
+
+    if not submissions:
+        print(f"There are no submissions linked to this assignment yet.")
+        return None
+
+    helpers.sort_and_display_submissions(
+        submissions=submissions,
+        gradebook=gradebook,
+        sort_key=sort_key_student_last_name,
+        formatter=formatters.format_submission_oneline,
+    )
 
 
-# TODO:
 def view_submissions_by_student(gradebook: Gradebook) -> None:
-    pass
+    def sort_key_assignment_due_date(submission: Submission) -> str:
+        assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+        due_date_iso = assignment.due_date_iso if assignment else ""
+        return due_date_iso if due_date_iso else ""
+
+    student = prompt_find_student(gradebook)
+    if student == MenuSignal.CANCEL:
+        return None
+    else:
+        student = cast(Student, student)
+
+    submissions = gradebook.get_records(
+        gradebook.submissions, lambda x: x.student_id == student.id
+    )
+
+    banner = formatters.format_banner_text(f"Submissions from {student.full_name}")
+    print(f"\n{banner}")
+
+    if not submissions:
+        print(f"There are no submissions linked to this student yet.")
+        return None
+
+    helpers.sort_and_display_submissions(
+        submissions=submissions,
+        gradebook=gradebook,
+        sort_key=sort_key_assignment_due_date,
+        formatter=formatters.format_submission_oneline,
+    )
+
+
+# === finder methods ===
+
+
+def find_submission(gradebook: Gradebook) -> Optional[Submission]:
+    linked_assignment = prompt_find_assignment(gradebook)
+    if linked_assignment == MenuSignal.CANCEL:
+        return None
+    else:
+        linked_assignment = cast(Assignment, linked_assignment)
+
+    linked_student = prompt_find_student(gradebook)
+    if linked_student == MenuSignal.CANCEL:
+        return None
+    else:
+        linked_student = cast(Student, linked_student)
+
+    submission = gradebook.find_submission_by_assignment_and_student(
+        linked_assignment.id, linked_student.id
+    )
+
+    if submission is not None:
+        return submission
+
+
+def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
+    title = formatters.format_banner_text("Assignment Selection")
+    options = [
+        ("Search for an assignment", find_assignment_by_search),
+        ("Select from active assignments", find_assignment_from_list),
+    ]
+    zero_option = "Return and cancel"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return MenuSignal.CANCEL
+
+    if callable(menu_response):
+        return menu_response(gradebook)
+
+    raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+
+def find_assignment_by_search(
+    gradebook: Gradebook,
+) -> Assignment | MenuSignal:
+    search_results = helpers.search_assignments(gradebook)
+    assignment = helpers.prompt_assignment_selection_from_search(search_results)
+    return MenuSignal.CANCEL if assignment is None else assignment
+
+
+def find_assignment_from_list(
+    gradebook: Gradebook,
+) -> Assignment | MenuSignal:
+    active_assignments = gradebook.get_records(
+        gradebook.assignments, lambda x: x.is_active
+    )
+    assignment = helpers.prompt_assignment_selection_from_list(
+        active_assignments, "Active Assignments"
+    )
+    return MenuSignal.CANCEL if assignment is None else assignment
+
+
+def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
+    title = formatters.format_banner_text("Student Selection")
+    options = [
+        ("Search for a student", find_student_by_search),
+        ("Select from active students", find_student_from_list),
+    ]
+    zero_option = "Return and cancel"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response == MenuSignal.EXIT:
+        return MenuSignal.CANCEL
+
+    if callable(menu_response):
+        return menu_response(gradebook)
+
+    raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+
+def find_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
+    search_results = helpers.search_students(gradebook)
+    student = helpers.prompt_student_selection_from_search(search_results)
+    return MenuSignal.CANCEL if student is None else student
+
+
+def find_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
+    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+    student = helpers.prompt_student_selection_from_list(
+        active_students, "Active Students"
+    )
+    return MenuSignal.CANCEL if student is None else student

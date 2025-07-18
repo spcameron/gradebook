@@ -254,6 +254,21 @@ def prompt_assignment_selection_from_list(
     )
 
 
+def get_assignment_and_student(
+    submission: Submission, gradebook: Gradebook
+) -> tuple[Assignment, Student]:
+    linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+    linked_student = gradebook.find_student_by_uuid(submission.student_id)
+
+    if linked_assignment is None:
+        raise KeyError("No linked assignment could be found.")
+
+    if linked_student is None:
+        raise KeyError("No linked student could be found.")
+
+    return (linked_assignment, linked_student)
+
+
 # === often used messages ===
 
 

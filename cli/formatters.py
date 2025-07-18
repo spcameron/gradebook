@@ -1,6 +1,7 @@
 # cli/formatters.py
 
 
+import menu_helpers as helpers
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
@@ -60,35 +61,31 @@ def format_assignment_oneline(assignment: Assignment) -> str:
 
 
 def format_submission_oneline(submission: Submission, gradebook: Gradebook) -> str:
-    linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
-    linked_student = gradebook.find_student_by_uuid(submission.student_id)
-
-    if linked_assignment is None or linked_student is None:
-        return "Error: Submission is missing either the linked student or assignment record"
+    try:
+        assignment, student = helpers.get_assignment_and_student(submission, gradebook)
+    except KeyError as e:
+        return f"\nFormatter error: {e}"
 
     late_status = "[LATE] " if submission.is_late else ""
     score_or_exempt = (
         "[EXEMPT]"
         if submission.is_exempt
-        else f"{submission.points_earned} / {linked_assignment.points_possible}"
+        else f"{submission.points_earned} / {assignment.points_possible}"
     )
 
-    return f"{late_status}{linked_assignment.name:<20} | {linked_student.full_name:<20} | {score_or_exempt}"
+    return f"{late_status}{assignment.name:<20} | {student.full_name:<20} | {score_or_exempt}"
 
 
 def format_submission_multiline(submission: Submission, gradebook: Gradebook) -> str:
-    linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
-    linked_student = gradebook.find_student_by_uuid(submission.student_id)
-
-    if linked_assignment is None or linked_student is None:
-        return (
-            "Error: Submission is missing either the inked student or assignment record"
-        )
+    try:
+        assignment, student = helpers.get_assignment_and_student(submission, gradebook)
+    except KeyError as e:
+        return f"\nFormatter error: {e}"
 
     return dedent(
         f"""\
-        Submission from {linked_student.full_name} in {linked_assignment.name}:
-        ... Score: {submission.points_earned} / {linked_assignment.points_possible}
+        Submission from {student.full_name} in {assignment.name}:
+        ... Score: {submission.points_earned} / {assignment.points_possible}
         ... Late: {'Yes' if submission.is_late else 'No'}
         ... Exempt: {'Yes' if submission.is_exempt else 'No'}
         """

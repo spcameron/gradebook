@@ -99,6 +99,7 @@ def confirm_action(prompt: str) -> bool:
             print("Invalid selection. Please try again.")
 
 
+# TODO: rename confirm_make_change after the submissions menu edit/save pattern has been duly exported
 def confirm_save_change() -> bool:
     return confirm_action("Do you want to save this change?")
 

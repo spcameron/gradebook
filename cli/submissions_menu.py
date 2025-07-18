@@ -60,7 +60,7 @@ def add_single_submission(gradebook: Gradebook) -> None:
         ):
             gradebook.add_submission(new_submission)
             print(
-                f"\nSubmission for {linked_student.full_name} to {linked_assignment.name} successfully added to {gradebook.name}"
+                f"\nSubmission for {linked_student.full_name} to {linked_assignment.name} successfully added."
             )
 
         if not helpers.confirm_action(
@@ -198,12 +198,12 @@ def preview_and_confirm_submission(
     if not student or not assignment:
         return False
 
-    print("\nYou are about to add the following submission:")
+    print("\nYou are about to create the following submission:")
     print(f"...Assignment: {assignment.name}")
     print(f"...Student: {student.full_name}")
     print(f"...Score: {submission.points_earned} / {assignment.points_possible}")
 
-    return helpers.confirm_action("\nConfirm creation?")
+    return helpers.confirm_action("\nCreate this submission?")
 
 
 def preview_batch_submissions(
@@ -304,14 +304,76 @@ def edit_batch_submissions(
             menu_response()
 
 
-# TODO:
 def review_skipped_students(
     assignment: Assignment,
     skipped_students: list[Student],
     queued_submissions: list[Submission],
     gradebook: Gradebook,
 ) -> None:
-    pass
+    def prompt_score_skipped_student(student: Student) -> None:
+        new_submission = prompt_new_submission(assignment, student, gradebook)
+
+        if new_submission is not None and preview_and_confirm_submission(
+            new_submission, gradebook
+        ):
+            queued_submissions.append(new_submission)
+            skipped_students.remove(student)
+            print(
+                f"\nSubmission for {student.full_name} to {assignment.name} successfully added."
+            )
+
+    def create_exempt_submission(student: Student) -> None:
+        new_submission = Submission(
+            id=generate_uuid(),
+            student_id=student.id,
+            assignment_id=assignment.id,
+            points_earned=0,
+            is_exempt=True,
+        )
+
+        if new_submission is not None:
+            queued_submissions.append(new_submission)
+            skipped_students.remove(student)
+            print(
+                f"\n{student.full_name} successfully exempted from {assignment.name}."
+            )
+
+    def make_new_submission_fn(student: Student) -> Callable[[], None]:
+        return lambda: prompt_score_skipped_student(student)
+
+    def make_mark_exempt_fn(student: Student) -> Callable[[], None]:
+        return lambda: create_exempt_submission(student)
+
+    while skipped_students:
+        # prompt student selection
+        student = helpers.prompt_selection_from_list(
+            list_data=skipped_students,
+            list_description="Skipped Students",
+            sort_key=lambda x: (x.last_name, x.first_name),
+            formatter=formatters.format_student_oneline,
+        )
+
+        if student is None:
+            return None
+
+        # action fork - add score, mark exempt, or skip
+        print(f"\nYou are viewing the following student:")
+        print(formatters.format_student_oneline(student))
+
+        title = "What would you like to do with this student?"
+        options = [
+            ("Record a submission", make_new_submission_fn(student)),
+            ("Mark this student exempt", make_mark_exempt_fn(student)),
+        ]
+        zero_option = "Return to Skipped Students list"
+
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response == MenuSignal.EXIT:
+            continue
+
+        if callable(menu_response):
+            menu_response()
 
 
 def handle_existing_submission(
@@ -420,7 +482,7 @@ def find_and_edit_submission(gradebook: Gradebook) -> None:
 
 
 def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
-    print("\nYou are viewing the following submission:")
+    print("\nYou are editing the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
@@ -455,7 +517,7 @@ def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
 
 
 def edit_queued_submission(submission: Submission, gradebook: Gradebook) -> None:
-    print("\nYou are viewing the following submission:")
+    print("\nYou are editing the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")

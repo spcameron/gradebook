@@ -103,6 +103,12 @@ def confirm_save_change() -> bool:
     return confirm_action("Do you want to save this change?")
 
 
+def confirm_unsaved_changes() -> bool:
+    return confirm_action(
+        "There are unsaved changes to the Gradebook. Do you want to save now?"
+    )
+
+
 def prompt_user_input(prompt: str) -> str:
     return input(f"\n{prompt}\n  >> ").strip()
 

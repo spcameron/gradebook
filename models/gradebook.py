@@ -20,6 +20,7 @@ class Gradebook:
         self.submissions = {}
         self._metadata = {}  # assumed to contain name, term, and created_at
         self._dir_path = save_dir_path
+        self._unsaved_changes = False
 
     @property
     def path(self) -> str:
@@ -39,6 +40,13 @@ class Gradebook:
 
     def toggle_uses_weighting(self) -> None:
         self._metadata["uses_weighting"] = False if self.uses_weighting else True
+
+    @property
+    def unsaved_changes(self) -> bool:
+        return self._unsaved_changes
+
+    def mark_dirty(self) -> None:
+        self._unsaved_changes = True
 
     @classmethod
     def create(cls, name: str, term: str, save_dir_path: str) -> "Gradebook":
@@ -95,6 +103,8 @@ class Gradebook:
         write_json("submissions.json", [s.to_dict() for s in self.submissions.values()])
 
         print("... save complete.")
+
+        self._unsaved_changes = False
 
     # === import methods ===
 

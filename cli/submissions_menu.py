@@ -246,9 +246,9 @@ def edit_batch_submissions(
         )
 
     def make_edit_fn(
-        assignment: Assignment, submission: Submission, gradebook: Gradebook
+        submission: Submission, gradebook: Gradebook
     ) -> Callable[[], None]:
-        return lambda: edit_queued_submission(assignment, submission, gradebook)
+        return lambda: edit_queued_submission(submission, gradebook)
 
     def make_delete_fn(
         queued_submissions: list[Submission],
@@ -284,7 +284,7 @@ def edit_batch_submissions(
         options = [
             (
                 "Edit Submission Fields",
-                make_edit_fn(assignment, submission, gradebook),
+                make_edit_fn(submission, gradebook),
             ),
             (
                 "Delete Submission",
@@ -405,9 +405,7 @@ def prompt_score_with_bailout(
 # === edit submission ===
 
 
-def get_editable_fields() -> (
-    list[tuple[str, Callable[[Submission, Gradebook], Optional[MenuSignal]]]]
-):
+def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], bool]]]:
     return [
         ("Score", edit_score_and_confirm),
         ("Late Status", edit_late_and_confirm),
@@ -422,14 +420,49 @@ def find_and_edit_submission(gradebook: Gradebook) -> None:
 
 
 def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
+    print("\nYou are viewing the following submission:")
+    print(formatters.format_submission_multiline(submission, gradebook))
+
+    title = formatters.format_banner_text("Editable Fields")
+    options = get_editable_fields()
+    zero_option = "Return without changes"
+
+    unsaved_changes = False
+
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response == MenuSignal.EXIT:
+            helpers.returning_without_changes()
+            return None
+
+        if callable(menu_response):
+            if menu_response(submission, gradebook):
+                unsaved_changes = True
+
+        if not helpers.confirm_action(
+            "Would you like to continue editing this submission?"
+        ):
+            break
+
+    if unsaved_changes:
+        if helpers.confirm_unsaved_changes():
+            gradebook.save(gradebook.path)
+        else:
+            gradebook.mark_dirty()
+
+    print("\nReturning to Manage Submissions menu")
+
+
+def edit_queued_submission(submission: Submission, gradebook: Gradebook) -> None:
+    print("\nYou are viewing the following submission:")
+    print(formatters.format_submission_multiline(submission, gradebook))
+
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
     zero_option = "Return without changes"
 
     while True:
-        print("\nYou are viewing the following submission:")
-        print(formatters.format_submission_multiline(submission, gradebook))
-
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response == MenuSignal.EXIT:
@@ -442,15 +475,16 @@ def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
         if not helpers.confirm_action(
             "Would you like to continue editing this submission?"
         ):
-            print("\nReturning to Manage Submissions menu")
-            return None
+            break
+
+    print("\nReturning to Queued Submissions list")
 
 
-def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
+def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool:
     linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
 
     if linked_assignment is None:
-        return None
+        return False
 
     current_points_earned = submission.points_earned
     new_points_earned_str = prompt_score_input()
@@ -458,7 +492,7 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None
 
     if new_points_earned_str == MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return None
+        return False
     else:
         new_points_earned = cast(str, new_points_earned_str)
 
@@ -468,107 +502,56 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None
 
     if not helpers.confirm_save_change():
         helpers.returning_without_changes()
-        return None
+        return False
 
     try:
         new_points_earned = float(new_points_earned)
         submission.points_earned = new_points_earned
-        gradebook.save(gradebook.path)
         print("\nScore successfully updated.")
+        return True
     except (TypeError, ValueError) as e:
         print(f"\nError: Could not update submission ... {e}:")
+        return False
 
 
-def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
+def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> bool:
     print(
         f"\nSubmission current late status: {'Late' if submission.is_late else 'Not Late'}"
     )
 
     if not helpers.confirm_action("Would you like to edit the late status?"):
         helpers.returning_without_changes()
-        return None
+        return False
 
-    submission.toggle_late_status()
-    gradebook.save(gradebook.path)
-    print(
-        f"\nSubmission late status successfully updated to: {'Late' if submission.is_late else 'Not Late'}"
-    )
+    try:
+        submission.toggle_late_status()
+        print(
+            f"\nSubmission late status successfully updated to: {'Late' if submission.is_late else 'Not Late'}"
+        )
+        return True
+    except Exception as e:
+        print(f"\nError: Could not update submission ... {e}")
+        return False
 
 
-def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
+def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> bool:
     print(
         f"\nSubmission current exempt status: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
     )
 
     if not helpers.confirm_action("Would you like to edit the exempt status?"):
         helpers.returning_without_changes()
-        return None
+        return False
 
-    submission.toggle_exempt_status()
-    gradebook.save(gradebook.path)
-    print(
-        f"\nSubmission exempt status successfully updated to: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
-    )
-
-
-# === edit queued submission ===
-
-
-def get_editable_fields_queued() -> (
-    list[
-        tuple[str, Callable[[Assignment, Submission, Gradebook], Optional[MenuSignal]]]
-    ]
-):
-    return [
-        ("Score", edit_score_queued),
-        ("Late Status", edit_late_queued),
-        ("Exempt Status", edit_exempt_queued),
-    ]
-
-
-def edit_queued_submission(
-    assignment: Assignment, submission: Submission, gradebook: Gradebook
-) -> None:
-    title = "Editable Fields"
-    options = get_editable_fields_queued()
-    zero_option = "Return without changes"
-
-    while True:
-        menu_response = helpers.display_menu(title, options, zero_option)
-
-        if menu_response == MenuSignal.EXIT:
-            helpers.returning_without_changes()
-            return None
-
-        if callable(menu_response):
-            menu_response(assignment, submission, gradebook)
-
-        if not helpers.confirm_action(
-            "Would you like to continue editing this submission?"
-        ):
-            print("\nReturning to Queued Submissions list")
-            return None
-
-
-# TODO:
-def edit_score_queued(
-    assignment: Assignment, submission: Submission, gradebook: Gradebook
-) -> None:
-    pass
-
-
-# TODO:
-def edit_late_queued(
-    assignment: Assignment, submission: Submission, gradebook: Gradebook
-) -> None:
-    pass
-
-
-# TODO:
-def edit_exempt_queued(
-    assignment: Assignment, submission: Submission, gradebook: Gradebook
-) -> None:
-    pass
+    try:
+        submission.toggle_exempt_status()
+        print(
+            f"\nSubmission exempt status successfully updated to: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
+        )
+        return True
+    except Exception as e:
+        print(f"\nError: Could not update submission ... {e}")
+        return False
 
 
 # === remove submission ===

@@ -110,6 +110,11 @@ def confirm_unsaved_changes() -> bool:
     )
 
 
+def prompt_if_dirty(gradebook: Gradebook) -> None:
+    if gradebook.unsaved_changes and confirm_unsaved_changes():
+        gradebook.save(gradebook.path)
+
+
 def prompt_user_input(prompt: str) -> str:
     return input(f"\n{prompt}\n  >> ").strip()
 
@@ -261,23 +266,12 @@ def prompt_assignment_selection_from_list(
     )
 
 
-def get_assignment_and_student(
-    submission: Submission, gradebook: Gradebook
-) -> tuple[Assignment, Student]:
-    linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
-    linked_student = gradebook.find_student_by_uuid(submission.student_id)
-
-    if linked_assignment is None:
-        raise KeyError("No linked assignment could be found.")
-
-    if linked_student is None:
-        raise KeyError("No linked student could be found.")
-
-    return (linked_assignment, linked_student)
-
-
 # === often used messages ===
 
 
 def returning_without_changes() -> None:
     print("\nReturning without changes.")
+
+
+def returning_to(destination: str) -> None:
+    print(f"\nReturning to {destination}.")

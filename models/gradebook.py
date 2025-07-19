@@ -253,6 +253,20 @@ class Gradebook:
             return [record for record in dictionary.values() if predicate(record)]
         return list(dictionary.values())
 
+    def get_assignment_and_student(
+        self, submission: Submission
+    ) -> tuple[Assignment, Student]:
+        linked_assignment = self.find_assignment_by_uuid(submission.assignment_id)
+        linked_student = self.find_student_by_uuid(submission.student_id)
+
+        if linked_assignment is None:
+            raise KeyError("No linked assignment could be found.")
+
+        if linked_student is None:
+            raise KeyError("No linked student could be found.")
+
+        return (linked_assignment, linked_student)
+
     # === unique record validators ===
 
     def _normalize(self, input: str) -> str:

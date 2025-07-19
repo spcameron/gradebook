@@ -62,7 +62,7 @@ def format_assignment_oneline(assignment: Assignment) -> str:
 
 def format_submission_oneline(submission: Submission, gradebook: Gradebook) -> str:
     try:
-        assignment, student = helpers.get_assignment_and_student(submission, gradebook)
+        assignment, student = gradebook.get_assignment_and_student(submission)
     except KeyError as e:
         return f"\nFormatter error: {e}"
 
@@ -78,7 +78,7 @@ def format_submission_oneline(submission: Submission, gradebook: Gradebook) -> s
 
 def format_submission_multiline(submission: Submission, gradebook: Gradebook) -> str:
     try:
-        assignment, student = helpers.get_assignment_and_student(submission, gradebook)
+        assignment, student = gradebook.get_assignment_and_student(submission)
     except KeyError as e:
         return f"\nFormatter error: {e}"
 

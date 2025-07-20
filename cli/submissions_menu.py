@@ -722,13 +722,13 @@ def prompt_score_with_bailout(
 # === edit submission ===
 
 
-# TODO: resume proofreading from here
-# change == to is for MenuSignals
-# RunTimeError for bad menu_responses (see top-level method)
-# returning_to() from helpers
-# carefully consider where to mark gradebook dirty
-# standardize confirmation prompts
 def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], bool]]]:
+    """
+    Helper method to organize the list of editable fields and their related functions.
+
+    Returns:
+        A list of tuples - pairs of strings and callables.
+    """
     return [
         ("Score", edit_score_and_confirm),
         ("Late Status", edit_late_and_confirm),
@@ -737,31 +737,50 @@ def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], b
 
 
 def find_and_edit_submission(gradebook: Gradebook) -> None:
+    """
+    Prompts user to search for a submission and then passes the result to edit_submission().
+
+    Args:
+        gradebook: the active Gradebook.
+    """
     submission = find_submission(gradebook)
+
     if submission is not None:
         edit_submission(submission, gradebook)
 
 
 def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
+    """
+    Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
+
+    Args:
+        submission: the Submission record being edited.
+        gradebook: the active Gradebook.
+
+    Notes:
+        Uses a function scoped variable to flag whether the dispatch methods have manipulated the Submission at all.
+        If so, the user is prompted to either save changes now, or defer saving and mark the Gradebook dirty for saving upstream.
+    """
     print("\nYou are editing the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
-    zero_option = "Return without changes"
+    zero_option = "Finish editing and return"
 
     unsaved_changes = False
 
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
-        if menu_response == MenuSignal.EXIT:
+        if menu_response is MenuSignal.EXIT:
             helpers.returning_without_changes()
-            return None
-
-        if callable(menu_response):
+            break
+        elif callable(menu_response):
             if menu_response(submission, gradebook):
                 unsaved_changes = True
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
         if not helpers.confirm_action(
             "Would you like to continue editing this submission?"
@@ -774,47 +793,60 @@ def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
         else:
             gradebook.mark_dirty()
 
-    print("\nReturning to Manage Submissions menu")
+    helpers.returning_to("Manage Submissions menu")
 
 
 def edit_queued_submission(submission: Submission, gradebook: Gradebook) -> None:
+    """
+    Dispatch method for the edit menu that does not track changes, since the edited Submission has not yet been added to the Gradebook.
+
+    Args:
+        submission: a Submission record not yet added to Gradebook and targeted for editing
+        gradebook: the active Gradebook
+    """
     print("\nYou are editing the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
-    zero_option = "Return without changes"
+    zero_option = "Finish editing and return"
 
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
-        if menu_response == MenuSignal.EXIT:
+        if menu_response is MenuSignal.EXIT:
             helpers.returning_without_changes()
-            return None
-
-        if callable(menu_response):
+            break
+        elif callable(menu_response):
             menu_response(submission, gradebook)
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
         if not helpers.confirm_action(
             "Would you like to continue editing this submission?"
         ):
             break
 
-    # TODO: confirm that all call sites are preview methods
     helpers.returning_to("Submission preview")
 
 
 def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool:
-    linked_assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+    """
+    Edits the points_earned field of a Submission record.
 
-    if linked_assignment is None:
+    Returns:
+        True if the score was changed, and False otherwise.
+    """
+    assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+
+    if assignment is None:
         return False
 
     current_points_earned = submission.points_earned
     new_points_earned = prompt_score_input_or_cancel()
-    points_possible = linked_assignment.points_possible
+    points_possible = assignment.points_possible
 
-    if new_points_earned == MenuSignal.CANCEL:
+    if new_points_earned is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return False
     else:
@@ -824,14 +856,14 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool
         f"Current score: {current_points_earned} / {points_possible} ... New score: {new_points_earned} / {points_possible}"
     )
 
-    if not helpers.confirm_save_change():
+    if not helpers.confirm_make_change():
         helpers.returning_without_changes()
         return False
 
     try:
         submission.points_earned = new_points_earned
         print(
-            f"\nSubmission score successfully updated to {str(new_points_earned)} / {points_possible}."
+            f"\nSubmission score successfully updated to {new_points_earned} / {points_possible}."
         )
         return True
     except (TypeError, ValueError) as e:
@@ -840,8 +872,14 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool
 
 
 def edit_late_and_confirm(submission: Submission, _: Gradebook) -> bool:
+    """
+    Toggles the is_late field of a Submission record.
+
+    Returns:
+        True if the late status was changed, and False otherwise.
+    """
     print(
-        f"\nSubmission current late status: {'Late' if submission.is_late else 'Not Late'}"
+        f"\nSubmission current late status: {'Late' if submission.is_late else 'Not Late'}."
     )
 
     if not helpers.confirm_action("Would you like to edit the late status?"):
@@ -851,17 +889,24 @@ def edit_late_and_confirm(submission: Submission, _: Gradebook) -> bool:
     try:
         submission.toggle_late_status()
         print(
-            f"\nSubmission late status successfully updated to {'Late' if submission.is_late else 'Not Late'}"
+            f"\nSubmission late status successfully updated to {'Late' if submission.is_late else 'Not Late'}."
         )
         return True
+    # TODO: narrow Exception type
     except Exception as e:
         print(f"\nError: Could not update submission ... {e}")
         return False
 
 
 def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
+    """
+    Toggles the is_exempt field of a Submission record.
+
+    Returns:
+        True is the exempt status was changed, and False otherwise.
+    """
     print(
-        f"\nSubmission current exempt status: {'Exempt' if submission.is_exempt else 'Not Exempt'}"
+        f"\nSubmission current exempt status: {'Exempt' if submission.is_exempt else 'Not Exempt'}."
     )
 
     if not helpers.confirm_action("Would you like to edit the exempt status?"):
@@ -871,9 +916,10 @@ def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
     try:
         submission.toggle_exempt_status()
         print(
-            f"\nSubmission exempt status successfully updated to {'Exempt' if submission.is_exempt else 'Not Exempt'}"
+            f"\nSubmission exempt status successfully updated to {'Exempt' if submission.is_exempt else 'Not Exempt'}."
         )
         return True
+    # TODO: narrow Exception type
     except Exception as e:
         print(f"\nError: Could not update submission ... {e}")
         return False
@@ -882,6 +928,12 @@ def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
 # === remove submission ===
 
 
+# TODO: resume proofreading from here
+# change == to is for MenuSignals
+# RunTimeError for bad menu_responses (see top-level method)
+# returning_to() from helpers
+# carefully consider where to mark gradebook dirty
+# standardize confirmation prompts
 def find_and_remove_submission(gradebook: Gradebook) -> None:
     submission = find_submission(gradebook)
     if submission is not None:

@@ -66,7 +66,7 @@ def display_submission_results(
     results: Iterable[Submission],
     gradebook: Gradebook,
     show_index: bool = False,
-    formatter: Callable[[Submission, Gradebook], str] = lambda s, g: str(s),
+    formatter: Callable[[Submission, Gradebook], str] = lambda s, _: str(s),
 ) -> None:
     for i, result in enumerate(results, 1):
         prefix = f"{i:>2}. " if show_index else ""
@@ -77,7 +77,7 @@ def sort_and_display_submissions(
     submissions: Iterable[Submission],
     gradebook: Gradebook,
     show_index: bool = False,
-    formatter: Callable[[Submission, Gradebook], str] = lambda s, g: str(s),
+    formatter: Callable[[Submission, Gradebook], str] = lambda s, _: str(s),
     sort_key: Callable[[Submission], Any] = lambda x: x,
 ) -> None:
     sorted_submissions = sorted(submissions, key=sort_key)
@@ -99,9 +99,8 @@ def confirm_action(prompt: str) -> bool:
             print("Invalid selection. Please try again.")
 
 
-# TODO: rename confirm_make_change after the submissions menu edit/save pattern has been duly exported
-def confirm_save_change() -> bool:
-    return confirm_action("Do you want to save this change?")
+def confirm_make_change() -> bool:
+    return confirm_action("Do you want to make this change?")
 
 
 def confirm_unsaved_changes() -> bool:

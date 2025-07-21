@@ -273,17 +273,17 @@ class Gradebook:
         return input.strip().lower()
 
     def require_unique_student_email(self, email: str) -> None:
-        normalized = email.strip().lower()
+        normalized = self._normalize(email)
         if any(self._normalize(s.email) == normalized for s in self.students.values()):
             raise ValueError(f"A student with the email '{email}' already exists.")
 
     def require_unique_category_name(self, name: str) -> None:
-        normalized = name.strip().lower()
+        normalized = self._normalize(name)
         if any(self._normalize(c.name) == normalized for c in self.categories.values()):
             raise ValueError(f"A category with the name '{name}' already exists.")
 
     def require_unique_assignment_name(self, name: str) -> None:
-        normalized = name.strip().lower()
+        normalized = self._normalize(name)
         if any(
             self._normalize(a.name) == normalized for a in self.assignments.values()
         ):

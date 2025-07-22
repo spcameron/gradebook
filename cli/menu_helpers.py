@@ -228,7 +228,7 @@ def find_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
     Wrapper method to compose searching and selecting a Student into one call.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Student, or MenuSignal.CANCEL if the search returns None.
@@ -243,7 +243,7 @@ def find_active_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
     Wrapper method to compose generating a list of active Students and then choosing one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
@@ -258,7 +258,7 @@ def find_inactive_student_from_list(gradebook: Gradebook) -> Student | MenuSigna
     Wrapper method to compose generating a list of inactive Students and then choosing one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
@@ -302,7 +302,7 @@ def find_category_by_search(gradebook: Gradebook) -> Category | MenuSignal:
     Wrapper method to compose searching and selecting a Category into one call.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Category, or MenuSignal.CANCEL if the search yields no hits.
@@ -317,7 +317,7 @@ def find_active_category_from_list(gradebook: Gradebook) -> Category | MenuSigna
     Wrapper method to compose generating a list of active Categories and selecting one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Category, or MenuSignal.CANCEL if the list is empty or the user cancels.
@@ -336,7 +336,7 @@ def find_inactive_category_from_list(gradebook: Gradebook) -> Category | MenuSig
     Wrapper method to compose generating a list of inactive Categories and selecting one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Category, or MenuSignal.CANCEL if the list is empty or the user cancels.
@@ -384,7 +384,7 @@ def find_assignment_by_search(
     Wrapper method to compose searching and selecting an Assignment into one call.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Assignment, or MenuSignal.CANCEL if the search returns None.
@@ -401,7 +401,7 @@ def find_active_assignment_from_list(
     Wrapper method to compose generating a list of active Assignments and selecting one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Assignment, or MenuSignal.CANCEL if the list is empty or the user cancels.
@@ -422,7 +422,7 @@ def find_inactive_assignment_from_list(
     Wrapper method to compose generating a list of inactive Assignments and selecting one from the list.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         Either the selected Assignment, or MenuSignal.CANCEL if the list is empty or the user cancels.

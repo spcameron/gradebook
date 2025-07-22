@@ -3,7 +3,7 @@
 """
 Manage Assignments menu for the Gradebook CLI.
 
-Provides functions for addings, editing, removing, and viewing Assignments.
+Provides functions for adding, editing, removing, and viewing Assignments.
 """
 
 from datetime import datetime
@@ -23,7 +23,7 @@ def run(gradebook: Gradebook) -> None:
     Top-level loop with dispatch for the Manage Assignments menu.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -64,10 +64,10 @@ def add_assignment(gradebook: Gradebook) -> None:
     Loops a prompt to create a new Assignment and add to the Gradebook.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Notes:
-        New assignments are added to the Gradebook but not saved. Gradebook is marked dirty instead.
+        New Assignments are added to the Gradebook but not saved. Gradebook is marked dirty instead.
     """
     while True:
         new_assignment = prompt_new_assignment(gradebook)
@@ -92,7 +92,7 @@ def prompt_new_assignment(gradebook: Gradebook) -> Optional[Assignment]:
     Creates a new Assignment.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         A new Assignment object, or None.
@@ -143,8 +143,8 @@ def preview_and_confirm_assignment(
     Previews Assignment details, offers opportunity to edit details, and prompts user for confirmation.
 
     Args:
-        assignment: the Assignment under review.
-        gradebook: the active Gradebook.
+        assignment: The Assignment under review.
+        gradebook: The active Gradebook.
 
     Notes:
         Uses edit_queued_assignment() since this Submission object has not yet been added to the Gradebook.
@@ -172,7 +172,7 @@ def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
     Solicits user input for Assignment name, validates uniqueness, and treats blank input as 'cancel'.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         User input, or MenuSignal.CANCEL if input is "".
@@ -293,7 +293,7 @@ def find_and_edit_assignment(gradebook: Gradebook) -> None:
     Prompts user to search for an Assignment and then passes the result to edit_assignment().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     assignment = prompt_find_assignment(gradebook)
 
@@ -306,11 +306,11 @@ def find_and_edit_assignment(gradebook: Gradebook) -> None:
 
 def edit_assignment(assignment: Assignment, gradebook: Gradebook) -> None:
     """
-    Dispatch method for selecting and editable field and using boolean return values to monitor whether changes have been made.
+    Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
 
     Args:
-        assignment: the Assignment being edited.
-        gradebook: the active Gradebook.
+        assignment: The Assignment being edited.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -360,13 +360,13 @@ def edit_queued_assignment(assignment: Assignment, gradebook: Gradebook) -> None
     Dispatch method for the edit menu that does not track changes, since the edited Assignment has not yet been added to the Gradebook.
 
     Args:
-        assignment: an Assignment not yet added to the Gradebook and targeted for editing.
-        gradebook: the active Gradebook.
+        assignment: An Assignment not yet added to the Gradebook and targeted for editing.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
     """
-    print("\nYou are editing the folllowing assignment:")
+    print("\nYou are editing the following assignment:")
     print(formatters.format_assignment_multiline(assignment, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
@@ -396,8 +396,8 @@ def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> bool:
     Edit the name field of an Assignment.
 
     Args:
-        assignment: the Assignment targeted for editing.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for editing.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the name was changed, and False otherwise.
@@ -436,8 +436,8 @@ def edit_linked_category_and_confirm(
     Edit the linked Category of an Assignment.
 
     Args:
-        assignment: the Assignment targeted for editing.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for editing.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the linked Category was changed, and False otherwise.
@@ -483,8 +483,8 @@ def edit_due_date_and_confirm(assignment: Assignment, _: Gradebook) -> bool:
     Edit the due date of an Assignment.
 
     Args:
-        assignment: the Assignment targeted for editing.
-        _: the active Gradebook (unused).
+        assignment: The Assignment targeted for editing.
+        _: The active Gradebook (unused).
 
     Returns:
         True if the due date was changed, and False otherwise.
@@ -522,8 +522,8 @@ def edit_points_possible_and_confirm(assignment: Assignment, _: Gradebook) -> bo
     Edit the points possible of an Assignment.
 
     Args:
-        assignment: the Assignment targeted for editing.
-        _: the active Gradebook (unused).
+        assignment: The Assignment targeted for editing.
+        _: The active Gradebook (unused).
 
     Returns:
         True if the points possible was changed, and False otherwise.
@@ -564,8 +564,8 @@ def edit_active_status_and_confirm(
     Toggles the is_active field of an Assignment via calls to confirm_and_archive() or confirm_and_reactivate().
 
     Args:
-        assignment: the Assignment targeted for editing.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for editing.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -590,7 +590,7 @@ def find_and_remove_assignment(gradebook: Gradebook) -> None:
     Prompts user to search for an Assignment and then passes the result to remove_assignment().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     assignment = prompt_find_assignment(gradebook)
 
@@ -606,8 +606,8 @@ def remove_assignment(assignment: Assignment, gradebook: Gradebook) -> None:
     Dispatch method to either delete, archive, or edit the Assignment, or return without changes.
 
     Args:
-        assignment: the Assignment targeted for deleting/archiving.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for deleting/archiving.
+        gradebook: The active Gradebook.
 
     Raise:
         RuntimeError: If the menu response is unrecognized.
@@ -660,8 +660,8 @@ def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> bool:
     Deletes the Assignment from the Gradebook after preview and confirmation.
 
     Args:
-        assignment: the Assignment targeted for deletion.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for deletion.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the Assignment was removed, and False otherwise.
@@ -695,8 +695,8 @@ def confirm_and_archive(assignment: Assignment, gradebook: Gradebook) -> bool:
     Toggles the is_active field of an active Assignment, after preview and confirmation.
 
     Args:
-        assignment: the Assignment targeted for archiving.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for archiving.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -736,8 +736,8 @@ def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> bool
     Toggle the is_active field of an inactive Assignment, after preview and confirmation.
 
     Args:
-        assignment: the Assignment targeted for reactivation.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted for reactivation.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -775,7 +775,7 @@ def view_assignments_menu(gradebook: Gradebook) -> None:
     Dispatch method for the various view options (individual, active, inactive, all).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -804,7 +804,7 @@ def view_individual_assignment(gradebook: Gradebook) -> None:
     Calls find_assignment() and then displays a one-line view of that Assignment, followed by a prompt to view the multi-line view or return.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     assignment = prompt_find_assignment(gradebook)
 
@@ -827,7 +827,7 @@ def view_active_assignments(gradebook: Gradebook) -> None:
     Displays a list of active Assignments.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("Active Assignments")
     print(f"\n{banner}")
@@ -852,7 +852,7 @@ def view_inactive_assignments(gradebook: Gradebook) -> None:
     Displays a list of inactive Assignments.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("Inactive Assignments")
     print(f"\n{banner}")
@@ -877,7 +877,7 @@ def view_all_assignments(gradebook: Gradebook) -> None:
     Displays a list of all Assignments.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("All Assignments")
     print(f"\n{banner}")
@@ -900,7 +900,7 @@ def make_assignment_sort_key(gradebook: Gradebook) -> Callable[[Assignment], tup
     Helper method to return a sort key function for sorting Assignments.
 
     Args:
-        gradebook: the Active gradebook.
+        gradebook: The Active gradebook.
 
     Returns:
         sort_key function.
@@ -911,7 +911,7 @@ def make_assignment_sort_key(gradebook: Gradebook) -> Callable[[Assignment], tup
         Sort key function to organize Assignments, first by Category, then by due date, and lastly by name.
 
         Args:
-            assignment: the Assignment being sorted.
+            assignment: The Assignment being sorted.
 
         Returns:
             Tuple - (category name, due date, assignment name).
@@ -940,7 +940,7 @@ def prompt_find_category_or_none(
     Menu dispatch for either finding a Category by search or from a list of Categories (separate lists for active and inactive).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Category, None to indicate 'Uncategorized', or MenuSignal.CANCEL if either the user cancels or the search yields no hits.
@@ -969,10 +969,10 @@ def prompt_find_category_or_none(
 
 def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
     """
-    Menu dispatch for either finding an Assignment by search or from a list of Assignments (separate lists for active and inactive.)
+    Menu dispatch for either finding an Assignment by search or from a list of Assignments (separate lists for active and inactive).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Assignment, or MenuSignal.CANCEL if either the user cancels or the search yields no hits.

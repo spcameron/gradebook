@@ -98,6 +98,7 @@ class Assignment:
             "points_possible": self._points_possible,
             "due_date": self.due_date_iso,
             "extra_credit": self._is_extra_credit,
+            "active": self._is_active,
         }
 
     @classmethod
@@ -112,6 +113,7 @@ class Assignment:
             points_possible=data["points_possible"],
             due_date=due_date,
             is_extra_credit=data["extra_credit"],
+            active=data["active"],
         )
 
     def __repr__(self) -> str:

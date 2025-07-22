@@ -1,5 +1,7 @@
 # models/student.py
 
+import re
+
 
 class Student:
 
@@ -47,7 +49,7 @@ class Student:
 
     @email.setter
     def email(self, email: str) -> None:
-        self._email = email
+        self._email = self.validate_email_format(email)
 
     @property
     def is_active(self) -> bool:
@@ -84,3 +86,28 @@ class Student:
 
     def __str__(self) -> str:
         return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self._id}"
+
+    @staticmethod
+    def validate_email_format(email: str) -> str:
+        """
+        Validates and normalizes a student's email address.
+
+        Normalizes the input by stripping whitespace and converting to lowercase.
+        Ensure the email:
+            - Contains exactly one '@' symbol
+            - Has non-whitespace characters on both sides of the '@'
+            - Contains at least one '.' after the '@' to spearate the domain and TLD
+
+        Args:
+            email: The input email string to validate.
+
+        Returns:
+            A normalized, lowercase version of the email if valid.
+
+        Raises:
+            ValueError: If the email does not confrom to the expected format.
+        """
+        email = email.strip().lower()
+        if not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise ValueError("Email must be a valid address with one @ and a domain.")
+        return email

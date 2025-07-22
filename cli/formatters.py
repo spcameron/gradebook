@@ -28,6 +28,17 @@ def format_student_oneline(student: Student) -> str:
     return f"{student.full_name:<20} {status} | {student.email}"
 
 
+def format_student_multiline(student: Student, gradebook: Gradebook) -> str:
+    return dedent(
+        f"""\
+        Student in {gradebook.name}:
+        ... Name: {student.full_name}
+        ... Email: {student.email}
+        ... Status: {student.status}
+        """
+    )
+
+
 # === Category formatters ===
 
 

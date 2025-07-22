@@ -22,7 +22,7 @@ def run(gradebook: Gradebook) -> None:
     Top-level loop with dispatch for the Manage Categories menu.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -64,7 +64,7 @@ def add_category(gradebook: Gradebook) -> None:
     Loops a prompt to create a new Category and add to the Gradebook.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Notes:
         New Categories are added to the Gradebook but not saved. Gradebook is marked dirty instead.
@@ -92,7 +92,7 @@ def prompt_new_category(gradebook: Gradebook) -> Optional[Category]:
     Creates a new Category.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         A new Category object, or None.
@@ -121,8 +121,8 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
     Previews Category details, offers opportunity to edit details, and prompts user for confirmation.
 
     Args:
-        category: the Category under review.
-        gradebook: the active Gradebook.
+        category: The Category under review.
+        gradebook: The active Gradebook.
 
     Returns:
         True if user confirm the Category details, and False otherwise.
@@ -153,7 +153,7 @@ def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
     Solicits user input for Category name, validates uniqueness, and treats a blank input as 'cancel'.
 
     Args:
-        gradebook: the active Gradebook, required for the unique-name check.
+        gradebook: The active Gradebook, required for the unique-name check.
 
     Returns:
         User input, or MenuSignal.CANCEL if input is "".
@@ -197,7 +197,7 @@ def find_and_edit_category(gradebook: Gradebook) -> None:
     Prompts user to search for a Category and then passes the result to edit_category().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     category = prompt_find_category(gradebook)
 
@@ -213,8 +213,8 @@ def edit_category(category: Category, gradebook: Gradebook) -> None:
     Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
 
     Args:
-        category: the Category being edited.
-        gradebook: the active Gradebook.
+        category: The Category being edited.
+        gradebook: The active Gradebook.
 
     Raise:
         RuntimeError: If the menu response is unrecognized.
@@ -264,8 +264,8 @@ def edit_queued_category(category: Category, gradebook: Gradebook) -> None:
     Dispatch method for the edit menu that does not track changes, since the edited Category has not yet been added to the Gradebook.
 
     Args:
-        category: a Category not yet added to the Gradebook and targeted for editing.
-        gradebook: the active Gradebook.
+        category: A Category not yet added to the Gradebook and targeted for editing.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -300,8 +300,8 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> bool:
     Edit the name field of a Category.
 
     Args:
-        category: the Category targeted for editing.
-        gradebook: the active Gradebook.
+        category: The Category targeted for editing.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the name was changed, and False otherwise.
@@ -336,8 +336,8 @@ def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> 
     Toggles the is_active field of a Category via calls to confirm_and_archive() or confirm_and_reactivate().
 
     Args:
-        category: the Category targeted for editing.
-        gradebook: the active Gradebook.
+        category: The Category targeted for editing.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -362,7 +362,7 @@ def find_and_remove_category(gradebook: Gradebook) -> None:
     Prompts user to search for a Category and then passes the result to remove_category().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     category = prompt_find_category(gradebook)
 
@@ -378,8 +378,8 @@ def remove_category(category: Category, gradebook: Gradebook) -> None:
     Dispatch method to either delete, archive, or edit the Category, or return without changes.
 
     Args:
-        category: the Category targeted for deletion/archiving.
-        gradebook: the active Gradebook.
+        category: The Category targeted for deletion/archiving.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -435,8 +435,8 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> bool:
     Deletes the Category from the Gradebook after preview and confirmation.
 
     Args:
-        category: the Category targeted for deletion.
-        gradebook: the active Gradebook.
+        category: The Category targeted for deletion.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the Category was removed, and False otherwise.
@@ -470,8 +470,8 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> bool:
     Toggles the is_active field of an active Category, after preview and confirmation.
 
     Args:
-        category: the Category targeted for archiving.
-        gradebook: the active Gradebook.
+        category: The Category targeted for archiving.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -508,11 +508,11 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> bool:
 
 def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> bool:
     """
-    Toggle the is_active field of an inactive Category, after preview and confirmation.
+    Toggles the is_active field of an inactive Category, after preview and confirmation.
 
     Args:
-        category: the Category targeted for reactivation.
-        gradebook: the active Gradebook.
+        category: The Category targeted for reactivation.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the active status was changed, and False otherwise.
@@ -550,7 +550,7 @@ def view_categories_menu(gradebook: Gradebook) -> None:
     Dispatch method for the various view options (individual, active, inactive, all).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -579,7 +579,7 @@ def view_individual_category(gradebook: Gradebook) -> None:
     Calls find_category() and then displays a one-line view of that Category, followed by a prompt to view the multi-line view or return.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     category = prompt_find_category(gradebook)
 
@@ -602,7 +602,7 @@ def view_active_categories(gradebook: Gradebook) -> None:
     Displays a list of active Categories.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("Active Categories")
     print(f"\n{banner}")
@@ -627,7 +627,7 @@ def view_inactive_categories(gradebook: Gradebook) -> None:
     Displays a list of inactive Categories.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("Inactive Categories")
     print(f"\n{banner}")
@@ -652,7 +652,7 @@ def view_all_categories(gradebook: Gradebook) -> None:
     Displays a list of all Categories.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     banner = formatters.format_banner_text("All Categories")
     print(f"\n{banner}")
@@ -678,7 +678,7 @@ def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
     Menu dispatch for either finding a Category by search or from a list of Categories (separate lists for active and inactive).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Category, or MenuSignal.CANCEL if either the user cancels or the search yields no hits.

@@ -217,9 +217,9 @@ def prompt_new_submission(
     Creates a new Submission for the Assignment and Student passed as argument.
 
     Args:
-        linked_assignment: Assignment object to associate with this Submission.
-        linked_student: Student object to associate with this Submission.
-        gradebook: the active Gradebook.
+        linked_assignment: The Assignment object to associate with this Submission.
+        linked_student: The Student object to associate with this Submission.
+        gradebook: The active Gradebook.
 
     Returns:
         A new Submission object, or None.
@@ -263,8 +263,8 @@ def preview_and_confirm_submission(
     Previews Submission details, offers opportunity to edit details, and prompts user for confirmation.
 
     Args:
-        submission: the Submission under review.
-        gradebook: the active Gradebook.
+        submission: The Submission under review.
+        gradebook: The active Gradebook.
 
     Returns:
         True if user confirms the Submission details, and False otherwise.
@@ -294,9 +294,9 @@ def preview_batch_submissions(
     Previews the queued Submissions from batch entry using a modified one-line formatting.
 
     Args:
-        assignment: the linked Assignment.
-        submissions: the list of queued Submissions populated during batch entry.
-        gradebook: the active Gradebook.
+        assignment: The linked Assignment.
+        submissions: The list of queued Submissions populated during batch entry.
+        gradebook: The active Gradebook.
 
     Notes:
         Includes a safeguard check for an empty submissions list for coverage, but callers will typically check for populated list first.
@@ -326,10 +326,10 @@ def edit_batch_submissions(
     Initiates a loop prompting user to select a queued submission and either edit or delete it.
 
     Args:
-        assignment: the Assignment targeted by the batch entry.
-        skipped_students: the list of Students who were skipped during batch entry.
-        queued_submission: the list of Submissions created and queued during batch entry.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted by the batch entry.
+        skipped_students: The list of Students who were skipped during batch entry.
+        queued_submission: The list of Submissions created and queued during batch entry.
+        gradebook: The active Gradebook.
     """
 
     def sort_key_student_name(submission: Submission) -> Optional[tuple[str, str]]:
@@ -337,7 +337,7 @@ def edit_batch_submissions(
         Sort key method for organizing submissions by student name (last, first).
 
         Args:
-            submission: the Submission being sorted.
+            submission: The Submission being sorted.
 
         Returns:
             A tuple (last name, first name), or None if the Student could not be found.
@@ -350,7 +350,7 @@ def edit_batch_submissions(
         Formatter method for previewing a queued submission.
 
         Args:
-            submission: the Submission being previewed.
+            submission: The Submission being previewed.
 
         Returns:
             A string representing the Submission preview.
@@ -375,8 +375,8 @@ def edit_batch_submissions(
         Helper method necessary for narrowing submission variable.
 
         Args:
-            submission: the Submission being narrowed from Optional[Submission] to Submission type.
-            gradebook: the active Gradebook.
+            submission: The Submission being narrowed from Optional[Submission] to Submission type.
+            gradebook: The active Gradebook.
 
         Returns:
             Lambda expression that calls edit_queued_submission().
@@ -393,8 +393,8 @@ def edit_batch_submissions(
         Helper method necessary for narrowing submission variable.
 
         Args:
-            submission: the Submission being narrowed from Optional[Submission] to Submission type.
-            gradebook: the Active Gradebook.
+            submission: The Submission being narrowed from Optional[Submission] to Submission type.
+            gradebook: The Active Gradebook.
 
         Returns:
             Lambda expression that calls delete_queued_submission().
@@ -461,10 +461,10 @@ def review_skipped_students(
     Initiates a loop prompting user to select a skipped student and either add a submission or mark them exempt from this assignment.
 
     Args:
-        assignment: the Assignment targeted by the batch entry.
-        skipped_students: the list of Students who were skipped during batch entry.
-        queued_submissions: the list of Submissions created and queued during batch entry.
-        gradebook: the active Gradebook.
+        assignment: The Assignment targeted by the batch entry.
+        skipped_students: The list of Students who were skipped during batch entry.
+        queued_submissions: The list of Submissions created and queued during batch entry.
+        gradebook: The active Gradebook.
     """
 
     def prompt_score_skipped_student(student: Student) -> None:
@@ -472,7 +472,7 @@ def review_skipped_students(
         Wrapper method to solicit a new score, then update the queued submissions and skipped students lists.
 
         Args:
-            student: the Student selected from the skipped students list.
+            student: The Student selected from the skipped students list.
         """
         new_submission = prompt_new_submission(assignment, student, gradebook)
 
@@ -490,7 +490,7 @@ def review_skipped_students(
         Wrapper method to create an 'Exempt' Submission, then update the queued submissions and skipped students lists.
 
         Args:
-            student: the Student selected from the skipped students list.
+            student: The Student selected from the skipped students list.
         """
         new_submission = Submission(
             id=generate_uuid(),
@@ -512,7 +512,7 @@ def review_skipped_students(
         Helper method necessary for narrowing student variable.
 
         Args:
-            student: the Student being narrowed from Optional[Student] to Student type.
+            student: The Student being narrowed from Optional[Student] to Student type.
 
         Returns:
             Lambda expression that calls prompt_score_skipped_student().
@@ -524,7 +524,7 @@ def review_skipped_students(
         Helper method necessary for narrowing student variable.
 
         Args:
-            student: the Student being narrowed from Optional[Student] to Student type.
+            student: The Student being narrowed from Optional[Student] to Student type.
 
         Returns:
             Lambda expression that calls create_exempt_submission().
@@ -574,9 +574,9 @@ def handle_existing_submission(
     If an existing Submission is found, the user may edit the Submission or delete and replace it.
 
     Args:
-        linked_assignment: Assignment object associated with the existing submission
-        linked_student: Student object associated with the existing submission
-        gradebook: the active Gradebook
+        linked_assignment: The Assignment object associated with the existing submission
+        linked_student: The Student object associated with the existing submission
+        gradebook: The active Gradebook
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -615,8 +615,8 @@ def delete_and_create_new_submission(
     Allows the user to delete the existing submission and create a new one.
 
     Args:
-        existing_submission: the Submission targeted for deletion and replacement.
-        gradebook: the active Gradebook.
+        existing_submission: The Submission targeted for deletion and replacement.
+        gradebook: The active Gradebook.
 
     Notes:
         It is permissible for the user to delete the existing Submission but not create a new submission.
@@ -698,8 +698,8 @@ def prompt_score_with_bailout(
     Input prompt for use during the batch entry process. Accepts a float, treats a blank input as 'skip', and 'q' as 'cancel'.
 
     Args:
-        assignment: the Assignment associated with this submission.
-        student: the Student associated with this submission.
+        assignment: The Assignment associated with this submission.
+        student: The Student associated with this submission.
 
     Returns:
         One of three return values: float value, None if input is "", and MenuSignal.CANCEL if input is "q" or ":exit".
@@ -749,7 +749,7 @@ def find_and_edit_submission(gradebook: Gradebook) -> None:
     Prompts user to search for a Submission and then passes the result to edit_submission().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     submission = prompt_find_submission(gradebook)
 
@@ -762,8 +762,8 @@ def edit_submission(submission: Submission, gradebook: Gradebook) -> None:
     Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
 
     Args:
-        submission: the Submission being edited.
-        gradebook: the active Gradebook.
+        submission: The Submission being edited.
+        gradebook: The active Gradebook.
 
     Notes:
         Uses a function scoped variable to flag whether the edit_* methods have manipulated the Submission at all.
@@ -813,8 +813,8 @@ def edit_queued_submission(submission: Submission, gradebook: Gradebook) -> None
     Dispatch method for the edit menu that does not track changes, since the edited Submission has not yet been added to the Gradebook.
 
     Args:
-        submission: a Submission not yet added to the Gradebook and targeted for editing.
-        gradebook: the active Gradebook.
+        submission: A Submission not yet added to the Gradebook and targeted for editing.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -948,7 +948,7 @@ def find_and_remove_submission(gradebook: Gradebook) -> None:
     Prompts user to search for a Submission and then passes the result to remove_submission().
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     submission = prompt_find_submission(gradebook)
 
@@ -961,8 +961,8 @@ def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
     Dispatch method to either delete or edit the Submission, or return without changes.
 
     Args:
-        submission: the Submission targeted for deletion/editing.
-        gradebook: the active Gradebook.
+        submission: The Submission targeted for deletion/editing.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response if unrecognized.
@@ -1014,8 +1014,8 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> bool:
     Deletes the Submission from the Gradebook after preview and confirmation.
 
     Args:
-        submission: the Submission targeted for deletion.
-        gradebook: the active Gradebook.
+        submission: The Submission targeted for deletion.
+        gradebook: The active Gradebook.
 
     Returns:
         True if the Submission was removed, and False otherwise.
@@ -1053,10 +1053,10 @@ def delete_queued_submission(
     Deletes the user queued submission and adds the student to skipped students after preview and confirmation.
 
     Args:
-        queued_submissions: the queued Submissions generated during batch entry.
-        skipped_students: the Students skipped during batch entry.
-        submission: the queued Submission targeted for deletion.
-        gradebook: the active Gradebook.
+        queued_submissions: The queued Submissions generated during batch entry.
+        skipped_students: The Students skipped during batch entry.
+        submission: The queued Submission targeted for deletion.
+        gradebook: The active Gradebook.
 
     Notes:
         No save prompt or gradebook.mark_dirty() since these Submissions have not yet been added to the Gradebook.
@@ -1094,7 +1094,7 @@ def view_submissions_menu(gradebook: Gradebook) -> None:
     Dispatch method for the various view options (individual, all by student, all by assignment).
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -1122,7 +1122,7 @@ def view_individual_submission(gradebook: Gradebook) -> None:
     Calls find_submission() and then displays a one-line view of that Submission, followed by a prompt to view the multi-line view or return.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
     submission = prompt_find_submission(gradebook)
 
@@ -1143,7 +1143,7 @@ def view_submissions_by_assignment(gradebook: Gradebook) -> None:
     Searches for an Assigment and then displays a list of linked Submissions.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
 
     def sort_key_student_name(submission: Submission) -> Optional[tuple[str, str]]:
@@ -1151,7 +1151,7 @@ def view_submissions_by_assignment(gradebook: Gradebook) -> None:
         Sort key method to organize the Submissions in order of Student name (last, first).
 
         Args:
-            submission: the Submission being sorted.
+            submission: The Submission being sorted.
 
         Returns:
             Either a tuple (last name, firstname) or None if the Student cannot be found.
@@ -1190,7 +1190,7 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
     Searches for a Student and then displays a list of linked Submissions.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
     """
 
     def sort_key_assignment_due_date(submission: Submission) -> str:
@@ -1198,7 +1198,7 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
         Sort key method to order the Submissions in order of Assignment due date.
 
         Args:
-            submission: the Submission being sorted.
+            submission: The Submission being sorted.
 
         Returns:
             The due date in iso format as a string, or "" if the due date cannot be found.
@@ -1241,7 +1241,7 @@ def prompt_find_submission(gradebook: Gradebook) -> Optional[Submission]:
     Prompts search for linked Assignment and Student, and then returns the associated Submission.
 
     Args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The linked Submission, or None if no matching Submission exists.
@@ -1270,7 +1270,7 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
     Menu dispatch for either finding an Assignment by search or from a list of active Assignments.
 
     args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Assignment, or MenuSignal.CANCEL if the user bails out.
@@ -1304,7 +1304,7 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     Menu dispatch for either finding a Student by search or from a list of active Students.
 
     args:
-        gradebook: the active Gradebook.
+        gradebook: The active Gradebook.
 
     Returns:
         The selected Student, or MenuSignal.CANCEL if the user bails out.

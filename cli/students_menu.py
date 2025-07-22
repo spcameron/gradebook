@@ -1,14 +1,16 @@
 # cli/students_menu.py
 
+from typing import Callable, Optional, cast
+
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
 from cli.menu_helpers import MenuSignal
 from models.gradebook import Gradebook
 from models.student import Student
-from typing import cast, Callable, Optional
 from utils.utils import generate_uuid
 
 
+# TODO: resume review from here
 def run(gradebook: Gradebook) -> None:
     title = formatters.format_banner_text("Manage Students")
     options = [

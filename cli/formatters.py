@@ -1,14 +1,17 @@
 # cli/formatters.py
 
 
+from datetime import datetime
+from textwrap import dedent
+from typing import Optional
+
 import menu_helpers as helpers
+
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
 from models.student import Student
 from models.submission import Submission
-from textwrap import dedent
-from typing import Optional
 
 
 def format_banner_text(title: str, width: int = 40) -> str:
@@ -50,23 +53,52 @@ def format_category_multiline(category: Category, gradebook: Gradebook) -> str:
 # === Assignment formatters ===
 
 
-def format_assignment_due_date(
+def format_due_date_from_datetime(due_date_dt: Optional[datetime]) -> str:
+    due_date_str = due_date_dt.strftime("%Y-%m-%d") if due_date_dt else None
+    due_time_str = due_date_dt.strftime("%H:%M") if due_date_dt else None
+    return format_due_date_from_strings(due_date_str, due_time_str)
+
+
+def format_due_date_from_strings(
     due_date_str: Optional[str], due_time_str: Optional[str]
 ) -> str:
     return (
         f"{due_date_str} at {due_time_str}"
         if due_date_str and due_time_str
-        else "No due date"
+        else "[NO DUE DATE]"
     )
 
 
 def format_assignment_oneline(assignment: Assignment) -> str:
     status = "[ARCHIVED]" if not assignment.is_active else ""
-    due_date = format_assignment_due_date(
+    due_date = format_due_date_from_strings(
         assignment.due_date_str,
         assignment.due_time_str,
     )
     return f"{assignment.name:<20} {status}| Due: {due_date}"
+
+
+def format_assignment_multiline(assignment: Assignment, gradebook: Gradebook) -> str:
+    category = (
+        gradebook.find_category_by_uuid(assignment.category_id)
+        if assignment.category_id
+        else None
+    )
+    due_date = format_due_date_from_strings(
+        assignment.due_date_str, assignment.due_time_str
+    )
+    extra_credit = " [EXTRA CREDIT]" if assignment.is_extra_credit else ""
+
+    return dedent(
+        f"""\
+        Assignment in {gradebook.name}:
+        ... Name: {assignment.name}
+        ... Category: {category.name if category else '[UNCATEGORIZED]'}
+        ... Points Possible: {assignment.points_possible}{extra_credit}
+        ... Due: {due_date}
+        ... Status: {assignment.status}
+        """
+    )
 
 
 # === Submission formatters ===

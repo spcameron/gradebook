@@ -1,14 +1,15 @@
 # cli/menu_helpers.py
 
-import cli.formatters as formatters
 from enum import Enum, auto
+from typing import Any, Callable, Iterable, Optional
+
+import cli.formatters as formatters
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
 from models.student import Student
 from models.submission import Submission
 from models.types import RecordType
-from typing import Any, Callable, Iterable, Optional
 
 
 class MenuSignal(Enum):
@@ -133,7 +134,9 @@ def prompt_user_input_or_none(prompt: str) -> str | None:
     return None if response == "" else response
 
 
-# === search and select methods ===
+# === finder, search, and select methods ===
+
+# --- abstractions ---
 
 
 def prompt_selection_from_list(
@@ -191,6 +194,9 @@ def prompt_selection_from_search(
             print("\nInvalid selection. Please try again.")
 
 
+# --- students ---
+
+
 def search_students(gradebook: Gradebook) -> list[Student]:
     query = prompt_user_input("Search for a student by name or email:").lower()
     return gradebook.find_student_by_query(query)
@@ -217,6 +223,56 @@ def prompt_student_selection_from_list(
     )
 
 
+def find_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
+    """
+    Wrapper method to compose searching and selecting a Student into one call.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Student, or MenuSignal.CANCEL if the search returns None.
+    """
+    search_results = search_students(gradebook)
+    student = prompt_student_selection_from_search(search_results)
+    return MenuSignal.CANCEL if student is None else student
+
+
+def find_active_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
+    """
+    Wrapper method to compose generating a list of active Students and then choosing one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+    student = prompt_student_selection_from_list(active_students, "Active Students")
+    return MenuSignal.CANCEL if student is None else student
+
+
+def find_inactive_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
+    """
+    Wrapper method to compose generating a list of inactive Students and then choosing one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    inactive_students = gradebook.get_records(
+        gradebook.students, lambda x: not x.is_active
+    )
+    student = prompt_student_selection_from_list(inactive_students, "Inactive Students")
+    return MenuSignal.CANCEL if student is None else student
+
+
+# --- categories ---
+
+
 def search_categories(gradebook: Gradebook) -> list[Category]:
     query = prompt_user_input("Search for a category by name:").lower()
     return gradebook.find_category_by_query(query)
@@ -241,6 +297,62 @@ def prompt_category_selection_from_list(
     )
 
 
+def find_category_by_search(gradebook: Gradebook) -> Category | MenuSignal:
+    """
+    Wrapper method to compose searching and selecting a Category into one call.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        The selected Category, or MenuSignal.CANCEL if the search yields no hits.
+    """
+    search_results = search_categories(gradebook)
+    category = prompt_category_selection_from_search(search_results)
+    return MenuSignal.CANCEL if category is None else category
+
+
+def find_active_category_from_list(gradebook: Gradebook) -> Category | MenuSignal:
+    """
+    Wrapper method to compose generating a list of active Categories and selecting one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Category, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    active_categories = gradebook.get_records(
+        gradebook.categories, lambda x: x.is_active
+    )
+    category = prompt_category_selection_from_list(
+        active_categories, "Active Categories"
+    )
+    return MenuSignal.CANCEL if category is None else category
+
+
+def find_inactive_category_from_list(gradebook: Gradebook) -> Category | MenuSignal:
+    """
+    Wrapper method to compose generating a list of inactive Categories and selecting one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Category, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    inactive_categories = gradebook.get_records(
+        gradebook.categories, lambda x: not x.is_active
+    )
+    category = prompt_category_selection_from_list(
+        inactive_categories, "Inactive Categories"
+    )
+    return MenuSignal.CANCEL if category is None else category
+
+
+# --- assignments ---
+
+
 def search_assignments(gradebook: Gradebook) -> list[Assignment]:
     query = prompt_user_input("Search for an assignment by name:").lower()
     return gradebook.find_assignment_by_query(query)
@@ -263,6 +375,65 @@ def prompt_assignment_selection_from_list(
         lambda x: (x.category_id, x.due_date_iso),
         formatters.format_assignment_oneline,
     )
+
+
+def find_assignment_by_search(
+    gradebook: Gradebook,
+) -> Assignment | MenuSignal:
+    """
+    Wrapper method to compose searching and selecting an Assignment into one call.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Assignment, or MenuSignal.CANCEL if the search returns None.
+    """
+    search_results = search_assignments(gradebook)
+    assignment = prompt_assignment_selection_from_search(search_results)
+    return MenuSignal.CANCEL if assignment is None else assignment
+
+
+def find_active_assignment_from_list(
+    gradebook: Gradebook,
+) -> Assignment | MenuSignal:
+    """
+    Wrapper method to compose generating a list of active Assignments and selecting one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Assignment, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    active_assignments = gradebook.get_records(
+        gradebook.assignments, lambda x: x.is_active
+    )
+    assignment = prompt_assignment_selection_from_list(
+        active_assignments, "Active Assignments"
+    )
+    return MenuSignal.CANCEL if assignment is None else assignment
+
+
+def find_inactive_assignment_from_list(
+    gradebook: Gradebook,
+) -> Assignment | MenuSignal:
+    """
+    Wrapper method to compose generating a list of inactive Assignments and selecting one from the list.
+
+    Args:
+        gradebook: the active Gradebook.
+
+    Returns:
+        Either the selected Assignment, or MenuSignal.CANCEL if the list is empty or the user cancels.
+    """
+    inactive_assignments = gradebook.get_records(
+        gradebook.assignments, lambda x: not x.is_active
+    )
+    assignment = prompt_assignment_selection_from_list(
+        inactive_assignments, "Inactive Assignments"
+    )
+    return MenuSignal.CANCEL if assignment is None else assignment
 
 
 # === often used messages ===

@@ -199,9 +199,12 @@ def find_and_edit_category(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    category = find_category(gradebook)
+    category = prompt_find_category(gradebook)
 
-    if category is not None:
+    if category is MenuSignal.CANCEL:
+        return None
+    else:
+        category = cast(Category, category)
         edit_category(category, gradebook)
 
 
@@ -213,12 +216,12 @@ def edit_category(category: Category, gradebook: Gradebook) -> None:
         category: the Category being edited.
         gradebook: the active Gradebook.
 
+    Raise:
+        RuntimeError: If the menu response is unrecognized.
+
     Notes:
         Uses a function scoped variable to flag whether the edit_* methods have manipulated the Category at all.
         If so, the user is prompted to either save changes now, or defer and mark the Gradebook dirty for saving upstream.
-
-    Raises:
-        RuntimeError: If the menu response is unrecognized.
     """
     print("\nYou are editing the following category:")
     print(formatters.format_category_multiline(category, gradebook))
@@ -262,7 +265,7 @@ def edit_queued_category(category: Category, gradebook: Gradebook) -> None:
 
     Args:
         category: a Category not yet added to the Gradebook and targeted for editing.
-        gradebook: the active Gradbook.
+        gradebook: the active Gradebook.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -292,21 +295,19 @@ def edit_queued_category(category: Category, gradebook: Gradebook) -> None:
     helpers.returning_to("Category creation")
 
 
-def edit_name_and_confirm(category: Category, _: Gradebook) -> bool:
+def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> bool:
     """
     Edit the name field of a Category.
 
     Args:
         category: the Category targeted for editing.
-        _: the active Gradebook (unused).
+        gradebook: the active Gradebook.
 
     Returns:
         True if the name was changed, and False otherwise.
     """
     current_name = category.name
-    new_name = helpers.prompt_user_input_or_cancel(
-        "Enter a new name (leave blank to cancel):"
-    )
+    new_name = prompt_name_input_or_cancel(gradebook)
 
     if new_name is MenuSignal.CANCEL:
         helpers.returning_without_changes()
@@ -326,6 +327,7 @@ def edit_name_and_confirm(category: Category, _: Gradebook) -> bool:
         return True
     except Exception as e:
         print(f"\nError: Could not update category ... {e}")
+        helpers.returning_without_changes()
         return False
 
 
@@ -362,9 +364,12 @@ def find_and_remove_category(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    category = find_category(gradebook)
+    category = prompt_find_category(gradebook)
 
-    if category is not None:
+    if category is MenuSignal.CANCEL:
+        return None
+    else:
+        category = cast(Category, category)
         remove_category(category, gradebook)
 
 
@@ -497,6 +502,7 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> bool:
         return True
     except Exception as e:
         print(f"\nError: Could not update category ... {e}")
+        helpers.returning_without_changes()
         return False
 
 
@@ -532,13 +538,13 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> bool:
         return True
     except Exception as e:
         print(f"\nError: Could not update category ... {e}")
+        helpers.returning_without_changes()
         return False
 
 
 # === view category ===
 
 
-# TODO: resume review from here
 def view_categories_menu(gradebook: Gradebook) -> None:
     """
     Dispatch method for the various view options (individual, active, inactive, all).
@@ -575,10 +581,12 @@ def view_individual_category(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    category = find_category(gradebook)
+    category = prompt_find_category(gradebook)
 
-    if category is None:
+    if category is MenuSignal.CANCEL:
         return None
+    else:
+        category = cast(Category, category)
 
     print("\nYou are viewing the following category:")
     print(formatters.format_category_oneline(category))
@@ -665,15 +673,32 @@ def view_all_categories(gradebook: Gradebook) -> None:
 # === finder methods ===
 
 
-def find_category(gradebook: Gradebook) -> Optional[Category]:
+def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
     """
-    Prompts search for Category by name.
+    Menu dispatch for either finding a Category by search or from a list of Categories (separate lists for active and inactive).
 
     Args:
         gradebook: the active Gradebook.
 
     Returns:
-        The selected Category, or None if the search yields no hits.
+        The selected Category, or MenuSignal.CANCEL if either the user cancels or the search yields no hits.
+
+    Raises:
+        RuntimeError: If the menu response is unrecognized.
     """
-    search_results = helpers.search_categories(gradebook)
-    return helpers.prompt_category_selection_from_search(search_results)
+    title = formatters.format_banner_text("Category Selection")
+    options = [
+        ("Search for a category", helpers.find_category_by_search),
+        ("Select from active categories", helpers.find_active_category_from_list),
+        ("Select from inactive categories", helpers.find_inactive_category_from_list),
+    ]
+    zero_option = "Return and cancel"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response is MenuSignal.EXIT:
+        return MenuSignal.CANCEL
+    elif callable(menu_response):
+        return menu_response(gradebook)
+    else:
+        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

@@ -235,7 +235,7 @@ def prompt_new_submission(
         f"\nYou are recording a submission from {linked_student.full_name} to {linked_assignment.name}."
     )
 
-    points_earned = prompt_score_input_or_cancel()
+    points_earned = prompt_points_earned_input_or_cancel()
 
     if points_earned is MenuSignal.CANCEL:
         return None
@@ -665,7 +665,7 @@ def delete_and_create_new_submission(
 # === data input helpers ===
 
 
-def prompt_score_input_or_cancel() -> float | MenuSignal:
+def prompt_points_earned_input_or_cancel() -> float | MenuSignal:
     """
     Solicits user input for points earned, casts it to float, and treats a blank input as 'cancel'.
 
@@ -751,7 +751,7 @@ def find_and_edit_submission(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    submission = find_submission(gradebook)
+    submission = prompt_find_submission(gradebook)
 
     if submission is not None:
         edit_submission(submission, gradebook)
@@ -857,7 +857,7 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool
         return False
 
     current_points_earned = submission.points_earned
-    new_points_earned = prompt_score_input_or_cancel()
+    new_points_earned = prompt_points_earned_input_or_cancel()
     points_possible = assignment.points_possible
 
     if new_points_earned is MenuSignal.CANCEL:
@@ -882,6 +882,7 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool
         return True
     except (TypeError, ValueError) as e:
         print(f"\nError: Could not update submission ... {e}:")
+        helpers.returning_without_changes()
         return False
 
 
@@ -908,6 +909,7 @@ def edit_late_and_confirm(submission: Submission, _: Gradebook) -> bool:
         return True
     except Exception as e:
         print(f"\nError: Could not update submission ... {e}")
+        helpers.returning_without_changes()
         return False
 
 
@@ -934,6 +936,7 @@ def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
         return True
     except Exception as e:
         print(f"\nError: Could not update submission ... {e}")
+        helpers.returning_without_changes()
         return False
 
 
@@ -947,7 +950,7 @@ def find_and_remove_submission(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    submission = find_submission(gradebook)
+    submission = prompt_find_submission(gradebook)
 
     if submission is not None:
         remove_submission(submission, gradebook)
@@ -1121,7 +1124,7 @@ def view_individual_submission(gradebook: Gradebook) -> None:
     Args:
         gradebook: the active Gradebook.
     """
-    submission = find_submission(gradebook)
+    submission = prompt_find_submission(gradebook)
 
     if submission is None:
         return None
@@ -1233,7 +1236,7 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
 # === finder methods ===
 
 
-def find_submission(gradebook: Gradebook) -> Optional[Submission]:
+def prompt_find_submission(gradebook: Gradebook) -> Optional[Submission]:
     """
     Prompts search for linked Assignment and Student, and then returns the associated Submission.
 
@@ -1277,8 +1280,12 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
     """
     title = formatters.format_banner_text("Assignment Selection")
     options = [
-        ("Search for an assignment", find_assignment_by_search),
-        ("Select from active assignments", find_assignment_from_list),
+        ("Search for an assignment", helpers.find_assignment_by_search),
+        ("Select from active assignments", helpers.find_active_assignment_from_list),
+        (
+            "Select from inactive assignments",
+            helpers.find_inactive_assignment_from_list,
+        ),
     ]
     zero_option = "Return and cancel"
 
@@ -1290,44 +1297,6 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
         return menu_response(gradebook)
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-
-def find_assignment_by_search(
-    gradebook: Gradebook,
-) -> Assignment | MenuSignal:
-    """
-    Wrapper method to compose searching and selecting an Assignment into one call.
-
-    Args:
-        gradebook: the active Gradebook.
-
-    Returns:
-        Either the selected Assignment, or MenuSignal.CANCEL if the search returns None.
-    """
-    search_results = helpers.search_assignments(gradebook)
-    assignment = helpers.prompt_assignment_selection_from_search(search_results)
-    return MenuSignal.CANCEL if assignment is None else assignment
-
-
-def find_assignment_from_list(
-    gradebook: Gradebook,
-) -> Assignment | MenuSignal:
-    """
-    Wrapper method to compose generating a list of active Assignments and then choosing one Assignment from the list.
-
-    Args:
-        gradebook: the active Gradebook.
-
-    Returns:
-        Either the selected Assignment, or MenuSignal.CANCEL if the search returns None.
-    """
-    active_assignments = gradebook.get_records(
-        gradebook.assignments, lambda x: x.is_active
-    )
-    assignment = helpers.prompt_assignment_selection_from_list(
-        active_assignments, "Active Assignments"
-    )
-    return MenuSignal.CANCEL if assignment is None else assignment
 
 
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
@@ -1345,8 +1314,9 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     """
     title = formatters.format_banner_text("Student Selection")
     options = [
-        ("Search for a student", find_student_by_search),
-        ("Select from active students", find_student_from_list),
+        ("Search for a student", helpers.find_student_by_search),
+        ("Select from active students", helpers.find_active_student_from_list),
+        ("Select from inactive students", helpers.find_inactive_student_from_list),
     ]
     zero_option = "Return and cancel"
 
@@ -1358,35 +1328,3 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
         return menu_response(gradebook)
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-
-def find_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
-    """
-    Wrapper method to compose searching and selecting a Student into one call.
-
-    Args:
-        gradebook: the active Gradebook.
-
-    Returns:
-        Either the selected Student, or MenuSignal.CANCEL if the search returns None.
-    """
-    search_results = helpers.search_students(gradebook)
-    student = helpers.prompt_student_selection_from_search(search_results)
-    return MenuSignal.CANCEL if student is None else student
-
-
-def find_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
-    """
-    Wrapper method to compose generating a list of active Students and then choosing one Student from the list.
-
-    Args:
-        gradebook: the active Gradebook.
-
-    Returns:
-        Either the selected Student, or MenuSignal.CANCEL if the search returns None.
-    """
-    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
-    student = helpers.prompt_student_selection_from_list(
-        active_students, "Active Students"
-    )
-    return MenuSignal.CANCEL if student is None else student

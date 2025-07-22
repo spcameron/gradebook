@@ -5,6 +5,7 @@ from models.assignment import Assignment
 
 def test_assignment_to_dict(sample_assignment):
     assert sample_assignment.to_dict() == {
+        "active": True,
         "id": "a001",
         "name": "test_assignment",
         "category_id": "c001",
@@ -17,6 +18,7 @@ def test_assignment_to_dict(sample_assignment):
 def test_assignment_from_dict():
     assignment = Assignment.from_dict(
         {
+            "active": True,
             "id": "a001",
             "name": "test_assignment",
             "category_id": "c001",

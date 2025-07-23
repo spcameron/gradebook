@@ -1,5 +1,9 @@
 # models/category.py
 
+"""
+The Category model represents a grouping of related Assignments, and may optionally be assigned a weighted percentage of the final grade.
+"""
+
 import math
 from typing import Optional
 
@@ -38,6 +42,13 @@ class Category:
 
     @weight.setter
     def weight(self, weight: Optional[float]) -> None:
+        """
+        The weight setter method includes several defensive checks before assigning a new value to the attribute.
+
+        Raises:
+            TypeError: If the input value is neither a float nor a None type value.
+            ValueError: If the input value is a non-finite number, or less than zero or greater than 100.
+        """
         if not (isinstance(weight, float) or weight is None):
             raise TypeError("Weight must be a float or None.")
 

@@ -1,5 +1,9 @@
 # models/assignment.py
 
+"""
+The Assignment model represents classroom assignments, assessments, attendance, or any other graded component.
+"""
+
 from datetime import datetime
 from typing import Optional
 
@@ -116,6 +120,7 @@ class Assignment:
             active=data["active"],
         )
 
+    # TODO: update with due_date_dt and is_active
     def __repr__(self) -> str:
         return f"Assignment({self._id}, {self._name}, {self._category_id}, {self._points_possible}, {self._is_extra_credit})"
 

@@ -1,36 +1,49 @@
 # cli/main.py
 
-import os
+"""
+Start Menu for the Gradebook CLI.
+
+Provides functions for creating or loading a Gradebook.
+"""
+
 import json
-from cli import course_menu
-import cli.formatters as formatters
-import cli.menu_helpers as helpers
-from cli.menu_helpers import MenuSignal
-from cli.path_utils import resolve_save_dir, dir_is_empty
-from models.gradebook import Gradebook
+import os
 from textwrap import dedent
 from typing import Optional
 
+import cli.formatters as formatters
+import cli.menu_helpers as helpers
+from cli import course_menu
+from cli.menu_helpers import MenuSignal
+from cli.path_utils import dir_is_empty, resolve_save_dir
+from models.gradebook import Gradebook
+
 
 def run_cli() -> None:
+    """
+    Top-level loop with dispatch for the Start menu.
+
+    Raises:
+        RuntimeError: If the menu response is unrecognized.
+    """
     title = formatters.format_banner_text("GRADEBOOK MANAGER")
     options = [
-        ("Create a new Gradebook", lambda: create_gradebook()),
-        ("Load an existing Gradebook", lambda: load_gradebook()),
+        ("Create a new Gradebook", create_gradebook),
+        ("Load an existing Gradebook", load_gradebook),
     ]
     zero_option = "Exit Program"
 
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
-        if menu_response == MenuSignal.EXIT:
+        if menu_response is MenuSignal.EXIT:
             exit_program()
-
-        if callable(menu_response):
+        elif callable(menu_response):
             gradebook = menu_response()
             course_menu.run(gradebook)
 
 
+# TODO: needs review and doc
 def create_gradebook() -> Gradebook:
     while True:
         name = helpers.prompt_user_input("Enter the course name (e.g. THTR 274A):")
@@ -64,6 +77,7 @@ def create_gradebook() -> Gradebook:
 
 
 # TODO: verify gradebook data (or at least metadata) exists before loading
+# TODO: needs review and doc
 def load_gradebook() -> Optional[Gradebook]:
     dir_path = helpers.prompt_user_input("Enter path to Gradebook directory:")
     dir_path = os.path.expanduser(dir_path)
@@ -80,6 +94,7 @@ def load_gradebook() -> Optional[Gradebook]:
         return None
 
 
+# TODO: needs review and doc
 def exit_program():
     exit_banner = formatters.format_banner_text("Exiting Program")
     print(f"\n{exit_banner}\n")

@@ -1,14 +1,25 @@
 # models/gradebook.py
 
+"""
+The Gradebook model is the central data object of the program and represents the "source of truth" for all data records.
+
+Linked Assignments, Categories, Students, and Submissions are stored in dictionaries and written to .json upon saving,
+along with a Gradebook.metadata that stores course specific information.
+
+Provides functions for loading a Gradebook from memory, and saving a Gradebook and all relevant linked data to memory.
+Includes attributes that are session-scoped like dir_path (current save location) and unsaved_changes (unsaved mutations to linked data).
+Provides functions for importing, adding, removing, and finding RecordTypes, as well as methods for verifying unique values before adding.
+"""
 import json
 import os
 from datetime import datetime
+from typing import Any, Callable, Optional
+
 from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
 from models.submission import Submission
 from models.types import RecordType
-from typing import Any, Callable, Optional
 
 
 class Gradebook:
@@ -78,6 +89,8 @@ class Gradebook:
             else:
                 import_fn(data)
 
+        print("\nLoading Gradebook ...")
+
         gradebook = cls(save_dir_path)
         gradebook._dir_path = save_dir_path
         gradebook._metadata = read_json("metadata.json")
@@ -86,6 +99,8 @@ class Gradebook:
         load_and_import("categories.json", gradebook.import_categories)
         load_and_import("assignments.json", gradebook.import_assignments)
         load_and_import("submissions.json", gradebook.import_submissions)
+
+        print("... load complete.")
 
         return gradebook
 
@@ -160,27 +175,64 @@ class Gradebook:
                 )
                 print(f" ... {record}")
 
-    # TODO: Should all submissions from this student be removed, too?
     def remove_student(self, student: Student) -> None:
+        """
+        Removes a Student from self.students.
+
+        Args:
+            student: The Student targeted for deletion.
+
+        Notes:
+            Recursively deletes all linked Submissions as well.
+        """
         self.remove_record(student, self.students)
+        linked_submissions = self.get_records(
+            self.submissions, lambda x: x.student_id == student.id
+        )
+        for submission in linked_submissions:
+            self.remove_submission(submission)
 
     def remove_category(self, category: Category) -> None:
+        """
+        Removes a Category from self.categories.
+
+        Args:
+            category: The Category targeted for deletion.
+
+        Notes:
+            Recursively deletes all linked Assignments (and therefore Submissions) as well.
+        """
         self.remove_record(category, self.categories)
-        linked_assignments = [
-            a for a in self.assignments if a.category_id == category.id
-        ]
+        linked_assignments = self.get_records(
+            self.assignments, lambda x: x.category_id == category.id
+        )
         for assignment in linked_assignments:
             self.remove_assignment(assignment)
 
     def remove_assignment(self, assignment: Assignment) -> None:
+        """
+        Removes an Assignment from self.assignments.
+
+        Args:
+            assignment: The Assignment targeted for deletion.
+
+        Notes:
+            Recursively deletes all linked Submissions as well.
+        """
         self.remove_record(assignment, self.assignments)
-        linked_submissions = [
-            s for s in self.submissions if s.assignment_id == assignment.id
-        ]
+        linked_submissions = self.get_records(
+            self.submissions, lambda x: x.assignment_id == assignment.id
+        )
         for submission in linked_submissions:
             self.remove_submission(submission)
 
     def remove_submission(self, submission: Submission) -> None:
+        """
+        Removes a Submission from self.submissions.
+
+        Args:
+            submission: The Submission targeted for deletion.
+        """
         self.remove_record(submission, self.submissions)
 
     # === find record by uuid ===

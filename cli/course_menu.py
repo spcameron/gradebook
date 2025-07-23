@@ -1,35 +1,54 @@
 # cli/course_menu.py
 
-from cli import (
-    assignments_menu,
-    categories_menu,
-    students_menu,
-)
+"""
+Course Manager menu for the Gradebook CLI.
+
+Provides calls to the top-level menus for managing Students, Categories, Assignments, and Submissions,
+as well as the Generate Reports menu and an option to save the gradebook.
+"""
+
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
+from cli import assignments_menu, categories_menu, students_menu, submissions_menu
 from cli.menu_helpers import MenuSignal
 from models.gradebook import Gradebook
 
 
 def run(gradebook: Gradebook) -> None:
+    """
+    Top-level loop with dispatch for the Course Manager menu.
+
+    Args:
+        gradebook: The active Gradebook.
+
+    Raises:
+        RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        The finally block guarantees a check for unsaved changes before returning.
+    """
     title = formatters.format_banner_text(f"{gradebook.name} - {gradebook.term}")
     options = [
         ("Manage Students", lambda: students_menu.run(gradebook)),
         ("Manage Categories", lambda: categories_menu.run(gradebook)),
         ("Manage Assignments", lambda: assignments_menu.run(gradebook)),
-        ("Record Submissions", lambda: print("STUB: Record Submissions")),
+        ("Record Submissions", lambda: submissions_menu.run(gradebook)),
         ("Generate Reports", lambda: print("STUB: Generate Reports")),
         ("Save Gradebook", lambda: gradebook.save(gradebook.path)),
     ]
     zero_option = "Return to Start Menu"
 
-    while True:
-        menu_response = helpers.display_menu(title, options, zero_option)
+    try:
+        while True:
+            menu_response = helpers.display_menu(title, options, zero_option)
 
-        if menu_response == MenuSignal.EXIT:
-            if helpers.confirm_action("Would you like save before returning?"):
-                gradebook.save(gradebook.path)
-            return None
+            if menu_response is MenuSignal.EXIT:
+                break
+            elif callable(menu_response):
+                menu_response()
+            else:
+                raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+    finally:
+        helpers.prompt_if_dirty(gradebook)
 
-        if callable(menu_response):
-            menu_response()
+    helpers.returning_to("Start Menu")

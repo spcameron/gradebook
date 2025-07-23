@@ -1,5 +1,9 @@
 # utils/utils.py
 
+"""
+Repository for program-wide utilities.
+"""
+
 import uuid
 
 

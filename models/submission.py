@@ -1,5 +1,11 @@
 # models/submission.py
 
+"""
+The Submission model represents submitted work and links it to a particular Assignment and Student.
+
+The model records the points earned as well as the status (late or exempt).
+"""
+
 
 class Submission:
 

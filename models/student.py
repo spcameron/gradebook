@@ -1,5 +1,11 @@
 # models/student.py
 
+"""
+The Student model represents the individual students enrolled in a class.
+
+Includes a method for validating email addresses.
+"""
+
 import re
 
 

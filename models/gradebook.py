@@ -46,11 +46,18 @@ class Gradebook:
         return self._metadata["term"]
 
     @property
-    def uses_weighting(self) -> bool:
+    def is_weighted(self) -> bool:
         return self._metadata["uses_weighting"]
 
-    def toggle_uses_weighting(self) -> None:
-        self._metadata["uses_weighting"] = False if self.uses_weighting else True
+    def weighting_status(self) -> str:
+        return "[ENABLED]" if self.is_weighted else "[DISABLED]"
+
+    def toggle_is_weighted(self) -> None:
+        if self.is_weighted:
+            self._metadata["uses_weighting"] = False
+            self.reset_category_weights()
+        else:
+            self._metadata["uses_weighting"] = True
 
     @property
     def unsaved_changes(self) -> bool:
@@ -347,3 +354,14 @@ class Gradebook:
             (s.assignment_id == assignment_id and s.student_id == student_id)
             for s in self.submissions.values()
         )
+
+    # === category weighting methods ===
+
+    def reset_category_weights(self) -> None:
+        active_categories = self.get_records(
+            self.categories,
+            lambda x: x.is_active,
+        )
+
+        for category in active_categories:
+            category.weight = None

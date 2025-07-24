@@ -42,15 +42,14 @@ def format_student_multiline(student: Student, gradebook: Gradebook) -> str:
 # === Category formatters ===
 
 
-# TODO: handle weighted and unweighted gracefully
 def format_category_oneline(category: Category) -> str:
     status = "[ARCHIVED]" if not category.is_active else ""
-    weight = f"{category.weight} %" if category.weight else "[UNWEIGHTED]"
+    weight = f"{category.weight:>5.1f} %" if category.weight else "[UNWEIGHTED]"
     return f"{category.name:<20} {status} | {weight}"
 
 
 def format_category_multiline(category: Category, gradebook: Gradebook) -> str:
-    weight = f"{category.weight} %" if category.weight else "[UNWEIGHTED]"
+    weight = f"{category.weight:>5.1f} %" if category.weight else "[UNWEIGHTED]"
     return dedent(
         f"""\
         Category in {gradebook.name}:

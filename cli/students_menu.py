@@ -181,7 +181,7 @@ def prompt_email_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
             return user_input
 
         try:
-            email = Student.validate_email_format(user_input)
+            email = Student.validate_email_input(user_input)
             gradebook.require_unique_student_email(email)
             return email
         except ValueError as e:

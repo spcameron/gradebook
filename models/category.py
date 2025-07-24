@@ -5,7 +5,7 @@ The Category model represents a grouping of related Assignments, and may optiona
 """
 
 import math
-from typing import Optional
+from typing import Any, Optional
 
 
 class Category:
@@ -42,25 +42,7 @@ class Category:
 
     @weight.setter
     def weight(self, weight: Optional[float]) -> None:
-        """
-        The weight setter method includes several defensive checks before assigning a new value to the attribute.
-
-        Raises:
-            TypeError: If the input value is neither a float nor a None type value.
-            ValueError: If the input value is a non-finite number, or less than zero or greater than 100.
-        """
-        if not (isinstance(weight, float) or weight is None):
-            raise TypeError("Weight must be a float or None.")
-
-        if weight is not None and not math.isfinite(weight):
-            raise ValueError("Weight must be a finite number.")
-
-        if weight is None:
-            self._weight = None
-        elif weight < 0 or weight > 100:
-            raise ValueError("Error: Weight must be between 0 and 100.")
-        else:
-            self._weight = weight
+        self._weight = Category.validate_weight_input(weight)
 
     @property
     def is_active(self) -> bool:
@@ -100,3 +82,50 @@ class Category:
 
     def __str__(self) -> str:
         return f"CATEGORY: name: {self._name}, weight: {self._weight}, id: {self._id}"
+
+    # === data validators ===
+    @staticmethod
+    def validate_weight_input(weight: Any) -> Optional[float]:
+        """
+        Validates and normalizes input for a Category weight.
+
+        Accepts None as a valid input, otherwise:
+            - Casts to float,
+            - Ensures the number is finite
+            - Ensures it is between 0 and 100, inclusive
+
+        Args:
+            weight: The input value to validate.
+
+        Returns:
+            The normalized weight value (float or None).
+
+        Raises:
+            TypeError: If the input is not None or cannot be cast to float.
+            ValueError: If the input is non-finite or out of bounds.
+        """
+        if weight is None:
+            return None
+
+        try:
+            weight = float(weight)
+        except (TypeError, ValueError):
+            raise TypeError("Weight must be a number or None.")
+
+        if not math.isfinite(weight):
+            raise ValueError("Weight must be a finite number.")
+
+        if weight < 0 or weight > 100:
+            raise ValueError("Weight must be between 0 and 100.")
+
+        return weight
+
+    # === data manipulators ===
+    # these are groundwork for refactoring towards a GUI or API layer
+
+    def update_category_weight(self, weight: Any) -> bool:
+        try:
+            self.weight = weight
+            return True
+        except Exception:
+            return False

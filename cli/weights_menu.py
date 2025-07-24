@@ -8,6 +8,9 @@ assigning and validating weights across active categories, displaying the curren
 resetting all weights to start fresh or disable weighting safely, and explaining how weighting works.
 """
 
+import math
+from typing import cast
+
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
 from cli.menu_helpers import MenuSignal
@@ -34,7 +37,7 @@ def run(gradebook: Gradebook) -> None:
         ("Assign Weights", assign_weights),
         ("View Current Weights", view_current_weights),
         ("Validate Weights", validate_weights),
-        ("Reset All Weights", reset_weights),
+        ("Reset All Weights", confirm_and_reset_weights),
         ("Explain Weighting Policy", weighting_help),
     ]
     zero_option = "Return to Manage Categories menu"
@@ -83,9 +86,119 @@ def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
         helpers.returning_without_changes()
 
 
-# TODO:
-def assign_weights():
-    pass
+def assign_weights(gradebook: Gradebook) -> bool:
+    active_categories = gradebook.get_records(
+        gradebook.categories, lambda x: x.is_active
+    )
+
+    if not active_categories:
+        print("\nThere are no active categories yet.")
+        return False
+
+    banner = formatters.format_banner_text("Current Category Weights")
+    print(f"\n{banner}")
+    for category in active_categories:
+        print(f"... {formatters.format_category_oneline(category)}")
+
+    if not helpers.confirm_action(
+        "Would you like to erase these values and reassign weights for all categories?"
+    ):
+        helpers.returning_without_changes()
+        return False
+
+    pending_weights = prompt_weights_input_or_cancel(active_categories)
+
+    if pending_weights is MenuSignal.CANCEL:
+        return False
+    else:
+        pending_weights = cast(list[tuple[Category, float]], pending_weights)
+
+    print(
+        "\nYou are about to update the Gradebook to use the following weighting assignments:"
+    )
+    for category, weight in pending_weights:
+        print(f"... {category.name:<20} | {weight:>5.1f} %")
+
+    if not helpers.confirm_make_change():
+        helpers.returning_without_changes()
+        return False
+
+    gradebook.reset_category_weights()
+
+    for category, weight in pending_weights:
+        success = category.update_category_weight(weight)
+        if not success:
+            print(f"\nError: Could not update {category.name}.")
+            gradebook.reset_category_weights()
+            return False
+
+    print("\nAll categories successfully updated.")
+
+    if helpers.confirm_unsaved_changes():
+        gradebook.save(gradebook.path)
+    else:
+        gradebook.mark_dirty()
+
+    return True
+
+
+def prompt_weights_input_or_cancel(
+    active_categories: list[Category],
+) -> list[tuple[Category, float]] | MenuSignal:
+    while True:
+        pending_weights = []
+        remaining_percentage = 100.0
+
+        for category in active_categories:
+            if pending_weights:
+                banner = formatters.format_banner_text("Assigned Weights")
+                print(f"\n{banner}")
+            for category, weight in pending_weights:
+                print(f"... {category.name:<20} | {weight:>5.1f} %")
+
+            print(f"\nRemaining percentage to allocate: {remaining_percentage:.1f} %")
+
+            while True:
+                user_input = helpers.prompt_user_input_or_cancel(
+                    f"Enter a weight for {category.name} (leave blank to cancel):"
+                )
+
+                if isinstance(user_input, MenuSignal):
+                    helpers.returning_without_changes()
+                    return user_input
+
+                try:
+                    weight = Category.validate_weight_input(user_input)
+                except (TypeError, ValueError) as e:
+                    print(f"\nInvalid input - please try again ... {e}")
+                    continue
+
+                if weight is None:
+                    print(
+                        f"\nInvalid input - please try again ... Weight cannot be None."
+                    )
+                    continue
+
+                if weight > remaining_percentage:
+                    print(
+                        f"\nThat weight exceeds the remaining {remaining_percentage:1.f} %. Try a smaller value."
+                    )
+                    continue
+
+                break
+
+            pending_weights.append((category, weight))
+            remaining_percentage -= weight
+
+        if abs(remaining_percentage) > 0.01:
+            print("\nThe total weights do not add up to 100%.")
+            if helpers.confirm_action("Would you like to try again?"):
+                continue
+            else:
+                helpers.returning_without_changes()
+                return MenuSignal.CANCEL
+
+        return pending_weights
 
 
 # TODO:
@@ -93,58 +206,121 @@ def view_current_weights():
     pass
 
 
-# TODO:
 def validate_weights(gradebook: Gradebook) -> bool:
-    # 1. aggregate active categories only
+    print("\nBeginning weighting validation check ...")
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
     )
 
-    # 2. detect missing weights (None) and divert
+    if not active_categories:
+        print("\nThere are no active categories yet.")
+        return False
+
     if any(category.weight is None for category in active_categories):
-        return handle_missing_weights(active_categories, gradebook)
+        if handle_missing_weights(active_categories, gradebook):
+            return validate_weights(gradebook)
+        else:
+            return False
 
-    # 3. detect invalid weights (mostly redundant)
+    weights_total = 0.0
 
-    # 4. verify total weight == 100.0
+    for category in active_categories:
+        weights_total += category.weight
 
-    # 5. flag 0.0 weights (informational)
+    if not math.isclose(weights_total, 100.0, abs_tol=0.01):
+        print(
+            f"\nThe total of all active category weights is {weights_total:.2f}, which does not equal 100.0"
+        )
 
-    # 6. success / ready to enable
+        print(
+            "You can resolve this and continue the validation process by reassigning weights for all categories."
+        )
+
+        if not helpers.confirm_action(
+            "Would you like to reassign weights for all categories?"
+        ):
+            print("\nValidation canceled.")
+            return False
+
+        if assign_weights(gradebook):
+            return validate_weights(gradebook)
+        else:
+            return False
+
+    zero_weights = [c for c in active_categories if c.weight == 0.0]
+
+    if zero_weights:
+        print("\nActive categories with a '0.0' weight will still show up in reports,")
+        print("but will not have any impact on final grade calculations.")
+        print("You can assign new weights by selecting 'Assign Weights' from the menu.")
+
+        print("\nThe following categories have a '0.0' weight.")
+        for category in zero_weights:
+            print(formatters.format_category_oneline(category))
+
+    print("\nValidation check completed successfully.")
+    return True
 
 
-# TODO:
 def handle_missing_weights(
     active_categories: list[Category], gradebook: Gradebook
 ) -> bool:
     def set_to_zero(category: Category) -> None:
-        # TODO: include messaging
+        print(f"\nSetting '{category.name}' to 0.0% will keep it visible in reports,")
+        print("but it will have no effect on final grade calculations.")
+
+        if not helpers.confirm_action(
+            "Do you want to proceed with assigning a weight of 0.0%?"
+        ):
+            helpers.returning_without_changes()
+            return None
+
         try:
             category.weight = 0.0
+            nonlocal unsaved_changes
+            unsaved_changes = True
             print(f"\nCategory weight successfully updated to: {category.weight}")
         except Exception as e:
             print(f"\nError: Could not update category ... {e}")
 
     def confirm_and_archive(category: Category) -> None:
-        # TODO: include messaging
+        print(
+            f"\nArchiving '{category.name}' is a safe way to deactivate a category without losing data."
+        )
+        print(
+            "It will exclude it from most reports and final grade calculations, but can be reactivated later."
+        )
+
+        if not helpers.confirm_action(
+            "Do you want to proceed with archiving this category?"
+        ):
+            helpers.returning_without_changes()
+            return None
+
         try:
             category.toggle_archived_status()
+            nonlocal unsaved_changes
+            unsaved_changes = True
             print(f"\nCategory status successfully updated to: {category.status}")
             if not category.is_active:
                 active_categories.remove(category)
         except Exception as e:
             print(f"\nError: Could not update category ... {e}")
 
+    unsaved_changes = False
+
     categories_missing_weights = [
         c for c in active_categories if c.weight is None and c.is_active
     ]
-    # 1. intro and context
+
     print("\nThe following active categories are missing assigned weights:")
     for category in categories_missing_weights:
         print(formatters.format_category_oneline(category))
     print("\nAll active categories must have a defined weight to proceed.")
 
-    # 2. iterate over missing categories
+    banner = "Resolving Missing Weights"
+    print(f"\n{banner}")
+
     while categories_missing_weights:
         category = categories_missing_weights[0]
 
@@ -152,30 +328,42 @@ def handle_missing_weights(
         options = [
             ("Set weight to 0.0", lambda: set_to_zero(category)),
             ("Archive this category", lambda: confirm_and_archive(category)),
-            ("Reassign weights for all", assign_weights),
+            ("Reassign weights for all", lambda: assign_weights(gradebook)),
         ]
         zero_option = "Cancel validation and return"
 
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response is MenuSignal.EXIT:
+            if unsaved_changes:
+                print("\nValidation canceled, but changes have been made.")
+                if helpers.confirm_unsaved_changes():
+                    gradebook.save(gradebook.path)
+                else:
+                    gradebook.mark_dirty()
+            else:
+                print("\nValidation canceled. No changes were made.")
             return False
         elif callable(menu_response):
-            result = menu_response()
+            assign_weights_result = menu_response()
+            if assign_weights_result is True:
+                return True
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
-        # TODO: revisit after writing assign_weights(), needs to guarantee no None weights, a current assumption
-        if result is True:
-            return True
-
         categories_missing_weights = [c for c in active_categories if c.weight is None]
+
+    if unsaved_changes:
+        if helpers.confirm_unsaved_changes():
+            gradebook.save(gradebook.path)
+        else:
+            gradebook.mark_dirty()
 
     return True
 
 
 # TODO:
-def reset_weights():
+def confirm_and_reset_weights():
     pass
 
 

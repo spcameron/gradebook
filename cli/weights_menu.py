@@ -351,6 +351,15 @@ def handle_missing_weights(
     """
 
     def set_to_zero(category: Category) -> None:
+        """
+        Assigns a weight of 0.0 to the given Category after user confirmation.
+
+        Args:
+            category: The Category targeted for zero-weighting.
+
+        Notes:
+            This keeps the Category active and visible in reports, but it will not affect final grade calculations.
+        """
         print(f"\nSetting '{category.name}' to 0.0% will keep it visible in reports,")
         print("but it will have no effect on final grade calculations.")
 
@@ -369,6 +378,15 @@ def handle_missing_weights(
             print(f"\nError: Could not update category ... {e}")
 
     def confirm_and_archive(category: Category) -> None:
+        """
+        Archives the given category after user confirmation.
+
+        Args:
+            category: The Category targeted for archiving.
+
+        Notes:
+            This removes the Category from active lists and grade calculations, but preserves its data for later use.
+        """
         print(
             f"\nArchiving '{category.name}' is a safe way to deactivate a category without losing data."
         )

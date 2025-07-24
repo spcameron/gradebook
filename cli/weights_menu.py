@@ -60,7 +60,7 @@ def run(gradebook: Gradebook) -> None:
 
 def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
     """
-    Method to guide the activation/deactivation of weighted categories.
+    Activates or deactivates weighted categories for the Gradebook, depending on current status.
 
     Args:
         gradebook: The active Gradebook.
@@ -196,8 +196,8 @@ def prompt_weights_input_or_cancel(
             if pending_weights:
                 banner = formatters.format_banner_text("Assigned Weights")
                 print(f"\n{banner}")
-            for category, weight in pending_weights:
-                print(f"... {category.name:<20} | {weight:>5.1f} %")
+            for c, w in pending_weights:
+                print(f"... {c.name:<20} | {w:>5.1f} %")
 
             print(f"\nRemaining percentage to allocate: {remaining_percentage:.1f} %")
 
@@ -224,7 +224,7 @@ def prompt_weights_input_or_cancel(
 
                 if weight > remaining_percentage:
                     print(
-                        f"\nThat weight exceeds the remaining {remaining_percentage:1.f} %. Try a smaller value."
+                        f"\nThat weight exceeds the remaining {remaining_percentage:.1f} %. Try a smaller value."
                     )
                     continue
 
@@ -258,6 +258,8 @@ def view_current_weights(gradebook: Gradebook) -> None:
     if not active_categories:
         print("\nThere are no active categories yet.")
         return None
+
+    active_categories = sorted(active_categories, key=lambda x: x.name)
 
     banner = formatters.format_banner_text("Category Weights")
     print(f"\n{banner}")

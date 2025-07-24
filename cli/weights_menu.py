@@ -59,6 +59,16 @@ def run(gradebook: Gradebook) -> None:
 
 
 def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
+    """
+    Method to guide the activation/deactivation of weighted categories.
+
+    Args:
+        gradebook: The active Gradebook.
+
+    Notes:
+        If activating, calls validate_weights() before toggling.
+        If deactivating, calls confirm_and_reset_weights() before toggling.
+    """
     action = "deactivate" if gradebook.is_weighted else "activate"
 
     print(
@@ -71,22 +81,45 @@ def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
         helpers.returning_without_changes()
         return None
 
-    # TODO:
-    # action fork: validate and activate, or reset and deactivate
+    if gradebook.is_weighted:
+        reset_success = confirm_and_reset_weights(gradebook)
+        if not reset_success:
+            print(
+                "\nCategory Weights must be reset in order to proceed. Deactivation canceled."
+            )
+            return None
+    else:
+        validate_success = validate_weights(gradebook)
+        if not validate_success:
+            print(
+                "\nCategory Weights must be validated in order to proceed. Activation canceled."
+            )
+            return None
 
     try:
-        # TODO: validation check goes here
         gradebook.toggle_is_weighted()
-        gradebook.mark_dirty()
         print(
             f"Gradebook successfully updated. Weighted categories are currently: {gradebook.weighting_status}."
         )
     except Exception as e:
-        print(f"\nError: Could not update Gradebook ... {e}")
-        helpers.returning_without_changes()
+        print(f"\nError: Could not update Gradebook weighting status ... {e}")
+
+    if helpers.confirm_unsaved_changes():
+        gradebook.save(gradebook.path)
+    else:
+        gradebook.mark_dirty()
 
 
 def assign_weights(gradebook: Gradebook) -> bool:
+    """
+    Prompts the user to reset and assign new weights to all active Categories.
+
+    Args:
+        gradebook: The active Gradebook.
+
+    Returns:
+        True if the weights were successfully assigned and confirmed, and False otherwise.
+    """
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
     )
@@ -101,7 +134,7 @@ def assign_weights(gradebook: Gradebook) -> bool:
         print(f"... {formatters.format_category_oneline(category)}")
 
     if not helpers.confirm_action(
-        "Would you like to erase these values and reassign weights for all categories?"
+        "Would you like to remove these values and reassign weights for all categories?"
     ):
         helpers.returning_without_changes()
         return False
@@ -145,6 +178,16 @@ def assign_weights(gradebook: Gradebook) -> bool:
 def prompt_weights_input_or_cancel(
     active_categories: list[Category],
 ) -> list[tuple[Category, float]] | MenuSignal:
+    """
+    Prompts the user to assign weights to all active categories, ensuring the total equals 100.0.
+
+    Args:
+        active_categories: The list of active Categories to be assigned weights.
+
+    Returns:
+        A list of (Category, float) tuples representing the new weight assignments,
+        or MenuSignal.CANCEL if the user cancels during input.
+    """
     while True:
         pending_weights = []
         remaining_percentage = 100.0
@@ -201,12 +244,43 @@ def prompt_weights_input_or_cancel(
         return pending_weights
 
 
-# TODO:
-def view_current_weights():
-    pass
+def view_current_weights(gradebook: Gradebook) -> None:
+    """
+    Displays the current weights for all active categories in the Gradebook.
+
+    Args:
+        gradebook: The active Gradebook.
+    """
+    active_categories = gradebook.get_records(
+        gradebook.categories, lambda x: x.is_active
+    )
+
+    if not active_categories:
+        print("\nThere are no active categories yet.")
+        return None
+
+    banner = formatters.format_banner_text("Category Weights")
+    print(f"\n{banner}")
+
+    for category in active_categories:
+        print(formatters.format_category_oneline(category))
 
 
 def validate_weights(gradebook: Gradebook) -> bool:
+    """
+    Validates that all active categories have assigned weights and that the total weight equals 100.0.
+
+    Args:
+        gradebook: The active Gradebook.
+
+    Returns:
+        True if validation passes, and False otherwise.
+
+    Notes:
+        - Weights of 0.0 are allowed, but None is not.
+        - If handle_missing_weights() or assign_weights() is invoked and succeeds,
+          validate_weights() is called again to complete validation.
+    """
     print("\nBeginning weighting validation check ...")
     active_categories = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
@@ -265,6 +339,17 @@ def validate_weights(gradebook: Gradebook) -> bool:
 def handle_missing_weights(
     active_categories: list[Category], gradebook: Gradebook
 ) -> bool:
+    """
+    Resolves missing weights by prompting the user to assign 0.0, archive the category, or reassign all weights.
+
+    Args:
+        active_categories: The list of active Categories with unresolved weights.
+        gradebook: The active Gradebook.
+
+    Returns:
+        True if all missing weights are handled correctly, and False otherwise.
+    """
+
     def set_to_zero(category: Category) -> None:
         print(f"\nSetting '{category.name}' to 0.0% will keep it visible in reports,")
         print("but it will have no effect on final grade calculations.")
@@ -362,11 +447,47 @@ def handle_missing_weights(
     return True
 
 
-# TODO:
-def confirm_and_reset_weights():
-    pass
+def confirm_and_reset_weights(gradebook: Gradebook) -> bool:
+    """
+    Prompts the user to reset all active Category weights to None.
+
+    Args:
+        gradebook: The active Gradebook.
+
+    Returns:
+        True if the reset succeeds, and False otherwise.
+    """
+    banner = formatters.format_banner_text("Reset Category Weights")
+    print(f"\n{banner}")
+
+    print(
+        "\nThis will remove the weights currently assigned to your active categories."
+    )
+    print(
+        "You can assign new weights later by selecting 'Assign Weights' from the menu."
+    )
+
+    if not helpers.confirm_action(
+        "Do you want to proceed with resetting the category weights?"
+    ):
+        helpers.returning_without_changes()
+        return False
+
+    try:
+        gradebook.reset_category_weights()
+        print("\nAll category weights successfully reset.")
+    except Exception as e:
+        print(f"\nError: Could not reset all categories ... {e}")
+        return False
+
+    if helpers.confirm_unsaved_changes():
+        gradebook.save(gradebook.path)
+    else:
+        gradebook.mark_dirty()
+
+    return True
 
 
 # TODO:
 def weighting_help():
-    pass
+    print("STUB: User-facing help for Category Weights menu")

@@ -1,11 +1,9 @@
 # cli/formatters.py
 
 
-from datetime import datetime
+import datetime
 from textwrap import dedent
 from typing import Optional
-
-import menu_helpers as helpers
 
 from models.assignment import Assignment
 from models.category import Category
@@ -20,7 +18,7 @@ def format_banner_text(title: str, width: int = 40) -> str:
     return f"{line}\n{centered_title}\n{line}"
 
 
-# === Student formatters ===
+# === student formatters ===
 
 
 def format_student_oneline(student: Student) -> str:
@@ -39,7 +37,7 @@ def format_student_multiline(student: Student, gradebook: Gradebook) -> str:
     )
 
 
-# === Category formatters ===
+# === category formatters ===
 
 
 def format_category_oneline(category: Category) -> str:
@@ -60,10 +58,10 @@ def format_category_multiline(category: Category, gradebook: Gradebook) -> str:
     )
 
 
-# === Assignment formatters ===
+# === assignment formatters ===
 
 
-def format_due_date_from_datetime(due_date_dt: Optional[datetime]) -> str:
+def format_due_date_from_datetime(due_date_dt: Optional[datetime.datetime]) -> str:
     due_date_str = due_date_dt.strftime("%Y-%m-%d") if due_date_dt else None
     due_time_str = due_date_dt.strftime("%H:%M") if due_date_dt else None
     return format_due_date_from_strings(due_date_str, due_time_str)
@@ -111,7 +109,7 @@ def format_assignment_multiline(assignment: Assignment, gradebook: Gradebook) ->
     )
 
 
-# === Submission formatters ===
+# === submission formatters ===
 
 
 def format_submission_oneline(submission: Submission, gradebook: Gradebook) -> str:
@@ -144,3 +142,16 @@ def format_submission_multiline(submission: Submission, gradebook: Gradebook) ->
         ... Exempt: {'Yes' if submission.is_exempt else 'No'}
         """
     )
+
+
+# === attendance formatters ===
+
+
+def format_class_date(class_date: datetime.date) -> str:
+    return f"{class_date.strftime('%A, %b %d')}"
+
+
+def format_month_and_year(class_date: datetime.date) -> str:
+    line = "-" * 20
+    month_and_year = class_date.strftime("%B %Y")
+    return f"{line}\n{month_and_year}\n{line}"

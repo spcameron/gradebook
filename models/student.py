@@ -80,6 +80,10 @@ class Student:
     def toggle_archived_status(self) -> None:
         self._is_active = False if self._is_active else True
 
+    @property
+    def absences(self) -> set[datetime.date]:
+        return self._absences
+
     def was_absent_on(self, date: datetime.date) -> bool:
         return date in self._absences
 

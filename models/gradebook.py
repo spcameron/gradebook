@@ -34,6 +34,10 @@ class Gradebook:
         self._dir_path = save_dir_path
         self._unsaved_changes = False
 
+    # === properties ===
+
+    # --- core data structures ---
+
     @property
     def students(self) -> dict[str, Student]:
         return self._students
@@ -54,9 +58,7 @@ class Gradebook:
     def class_dates(self) -> set[datetime.date]:
         return self._class_dates
 
-    @property
-    def path(self) -> str:
-        return self._dir_path
+    # --- metadata fields ---
 
     @property
     def name(self) -> str:
@@ -70,22 +72,20 @@ class Gradebook:
     def is_weighted(self) -> bool:
         return self._metadata["uses_weighting"]
 
-    def weighting_status(self) -> str:
-        return "[ENABLED]" if self.is_weighted else "[DISABLED]"
+    @property
+    def path(self) -> str:
+        return self._dir_path
 
-    def toggle_is_weighted(self) -> None:
-        if self.is_weighted:
-            self._metadata["uses_weighting"] = False
-            self.reset_category_weights()
-        else:
-            self._metadata["uses_weighting"] = True
+    # --- status markers ---
 
     @property
     def unsaved_changes(self) -> bool:
         return self._unsaved_changes
 
-    def mark_dirty(self) -> None:
-        self._unsaved_changes = True
+    def weighting_status(self) -> str:
+        return "[ENABLED]" if self.is_weighted else "[DISABLED]"
+
+    # === public classmethods ===
 
     @classmethod
     def create(cls, name: str, term: str, save_dir_path: str) -> "Gradebook":
@@ -100,8 +100,6 @@ class Gradebook:
         gradebook.save(save_dir_path)
 
         return gradebook
-
-    # === serialization methods ===
 
     @classmethod
     def load(cls, save_dir_path: str) -> "Gradebook":
@@ -133,6 +131,8 @@ class Gradebook:
 
         return gradebook
 
+    # === persistence and import ===
+
     def save(self, save_dir_path: str) -> None:
         def write_json(filename: str, data: list | dict) -> None:
             with open(os.path.join(save_dir_path, filename), "w") as f:
@@ -150,8 +150,6 @@ class Gradebook:
         print("... save complete.")
 
         self._unsaved_changes = False
-
-    # === import methods ===
 
     def import_metadata(self, dir_path: str) -> None:
         def read_json(filename: str) -> list[Any] | dict[str, Any]:
@@ -197,7 +195,143 @@ class Gradebook:
             submission = Submission.from_dict(submission_dict)
             self.add_submission(submission)
 
-    # === add methods ===
+    # === data accessors ===
+
+    def get_records(
+        self,
+        dictionary: dict[str, RecordType],
+        predicate: Optional[Callable[[RecordType], bool]] = None,
+    ) -> list[RecordType]:
+        if predicate:
+            return [record for record in dictionary.values() if predicate(record)]
+        return list(dictionary.values())
+
+    # --- attendance records ---
+
+    def get_assignment_and_student(
+        self, submission: Submission
+    ) -> tuple[Assignment, Student]:
+        linked_assignment = self.find_assignment_by_uuid(submission.assignment_id)
+        linked_student = self.find_student_by_uuid(submission.student_id)
+
+        if linked_assignment is None:
+            raise KeyError("No linked assignment could be found.")
+
+        if linked_student is None:
+            raise KeyError("No linked student could be found.")
+
+        return (linked_assignment, linked_student)
+
+    def get_attendance_for_date(self, class_date: datetime.date) -> dict[str, str]:
+        attendance_report = {}
+
+        active_students = self.get_records(self.students, lambda x: x.is_active)
+
+        for student in active_students:
+            attendance_report[student.id] = (
+                "Absent" if student.was_absent_on(class_date) else "Present"
+            )
+
+        return attendance_report
+
+    def get_attendance_for_student(self, student: Student) -> dict[str, str]:
+
+        attendance_report = {}
+
+        for class_date in self.class_dates:
+            attendance_report[class_date.isoformat()] = (
+                "Absent" if student.was_absent_on(class_date) else "Present"
+            )
+
+        return attendance_report
+
+    def get_total_absences_for_student(self, student: Student) -> int:
+        return sum(1 for absence in student.absences if absence in self.class_dates)
+
+    # --- find record by uuid ---
+
+    def find_record_by_uuid(
+        self, uuid: str, dictionary: dict[str, RecordType]
+    ) -> Optional[RecordType]:
+        return dictionary.get(uuid)
+
+    def find_student_by_uuid(self, uuid: str) -> Optional[Student]:
+        return self.find_record_by_uuid(uuid, self.students)
+
+    def find_category_by_uuid(self, uuid: str) -> Optional[Category]:
+        return self.find_record_by_uuid(uuid, self.categories)
+
+    def find_assignment_by_uuid(self, uuid: str) -> Optional[Assignment]:
+        return self.find_record_by_uuid(uuid, self.assignments)
+
+    def find_submission_by_uuid(self, uuid: str) -> Optional[Submission]:
+        return self.find_record_by_uuid(uuid, self.submissions)
+
+    def find_submission_by_assignment_and_student(
+        self, assignment_id: str, student_id: str
+    ) -> Optional[Submission]:
+        for submission in self.submissions.values():
+            if (
+                submission.assignment_id == assignment_id
+                and submission.student_id == student_id
+            ):
+                return submission
+        return None
+
+    # --- find record by query ---
+
+    def find_student_by_query(self, query: str) -> list[Student]:
+        matches = [
+            student
+            for student in self.students.values()
+            if query in student.full_name.lower() or query in student.email.lower()
+        ]
+
+        return matches
+
+    def find_category_by_query(self, query: str) -> list[Category]:
+        matches = [
+            category
+            for category in self.categories.values()
+            if query in category.name.lower()
+        ]
+
+        return matches
+
+    def find_assignment_by_query(self, query: str) -> list[Assignment]:
+        matches = [
+            assignment
+            for assignment in self.assignments.values()
+            if query in assignment.name.lower()
+        ]
+
+        return matches
+
+    # === data manipulators ===
+
+    def mark_dirty(self) -> None:
+        self._unsaved_changes = True
+
+    # --- category weighting methods ---
+
+    def toggle_is_weighted(self) -> None:
+        if self.is_weighted:
+            self._metadata["uses_weighting"] = False
+            self.reset_category_weights()
+        else:
+            self._metadata["uses_weighting"] = True
+
+    # TODO: update w/ boolean return values
+    def reset_category_weights(self) -> None:
+        active_categories = self.get_records(
+            self.categories,
+            lambda x: x.is_active,
+        )
+
+        for category in active_categories:
+            category.weight = None
+
+    # --- add records ---
 
     def add_record(self, record: RecordType, dictionary: dict) -> None:
         dictionary[record.id] = record
@@ -214,7 +348,7 @@ class Gradebook:
     def add_submission(self, submission: Submission) -> None:
         self.add_record(submission, self.submissions)
 
-    # === remove methods ===
+    # --- remove records ---
 
     def remove_record(self, record: RecordType, dictionary: dict) -> None:
         try:
@@ -289,131 +423,7 @@ class Gradebook:
         """
         self.remove_record(submission, self.submissions)
 
-    # === find record by uuid ===
-
-    def find_record_by_uuid(
-        self, uuid: str, dictionary: dict[str, RecordType]
-    ) -> Optional[RecordType]:
-        return dictionary.get(uuid)
-
-    def find_student_by_uuid(self, uuid: str) -> Optional[Student]:
-        return self.find_record_by_uuid(uuid, self.students)
-
-    def find_category_by_uuid(self, uuid: str) -> Optional[Category]:
-        return self.find_record_by_uuid(uuid, self.categories)
-
-    def find_assignment_by_uuid(self, uuid: str) -> Optional[Assignment]:
-        return self.find_record_by_uuid(uuid, self.assignments)
-
-    def find_submission_by_uuid(self, uuid: str) -> Optional[Submission]:
-        return self.find_record_by_uuid(uuid, self.submissions)
-
-    def find_submission_by_assignment_and_student(
-        self, assignment_id: str, student_id: str
-    ) -> Optional[Submission]:
-        for submission in self.submissions.values():
-            if (
-                submission.assignment_id == assignment_id
-                and submission.student_id == student_id
-            ):
-                return submission
-        return None
-
-    # === find record by query ===
-
-    def find_student_by_query(self, query: str) -> list[Student]:
-        matches = [
-            student
-            for student in self.students.values()
-            if query in student.full_name.lower() or query in student.email.lower()
-        ]
-
-        return matches
-
-    def find_category_by_query(self, query: str) -> list[Category]:
-        matches = [
-            category
-            for category in self.categories.values()
-            if query in category.name.lower()
-        ]
-
-        return matches
-
-    def find_assignment_by_query(self, query: str) -> list[Assignment]:
-        matches = [
-            assignment
-            for assignment in self.assignments.values()
-            if query in assignment.name.lower()
-        ]
-
-        return matches
-
-    # === get records ===
-
-    def get_records(
-        self,
-        dictionary: dict[str, RecordType],
-        predicate: Optional[Callable[[RecordType], bool]] = None,
-    ) -> list[RecordType]:
-        if predicate:
-            return [record for record in dictionary.values() if predicate(record)]
-        return list(dictionary.values())
-
-    def get_assignment_and_student(
-        self, submission: Submission
-    ) -> tuple[Assignment, Student]:
-        linked_assignment = self.find_assignment_by_uuid(submission.assignment_id)
-        linked_student = self.find_student_by_uuid(submission.student_id)
-
-        if linked_assignment is None:
-            raise KeyError("No linked assignment could be found.")
-
-        if linked_student is None:
-            raise KeyError("No linked student could be found.")
-
-        return (linked_assignment, linked_student)
-
-    # === unique record validators ===
-
-    def _normalize(self, input: str) -> str:
-        return input.strip().lower()
-
-    def require_unique_student_email(self, email: str) -> None:
-        normalized = self._normalize(email)
-        if any(self._normalize(s.email) == normalized for s in self.students.values()):
-            raise ValueError(f"A student with the email '{email}' already exists.")
-
-    def require_unique_category_name(self, name: str) -> None:
-        normalized = self._normalize(name)
-        if any(self._normalize(c.name) == normalized for c in self.categories.values()):
-            raise ValueError(f"A category with the name '{name}' already exists.")
-
-    def require_unique_assignment_name(self, name: str) -> None:
-        normalized = self._normalize(name)
-        if any(
-            self._normalize(a.name) == normalized for a in self.assignments.values()
-        ):
-            raise ValueError(f"An assignment with the name '{name}' already exists.")
-
-    # TODO: create secondary submissions index with (s_id, a_id) tuple as key
-    def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
-        return any(
-            (s.assignment_id == assignment_id and s.student_id == student_id)
-            for s in self.submissions.values()
-        )
-
-    # === category weighting methods ===
-
-    def reset_category_weights(self) -> None:
-        active_categories = self.get_records(
-            self.categories,
-            lambda x: x.is_active,
-        )
-
-        for category in active_categories:
-            category.weight = None
-
-    # === attendance methods ===
+    # --- attendance methods ---
 
     def add_class_date(self, class_date: datetime.date) -> bool:
         if class_date in self.class_dates:
@@ -470,3 +480,32 @@ class Gradebook:
             return True
 
         return False
+
+    # === data validators ===
+
+    def _normalize(self, input: str) -> str:
+        return input.strip().lower()
+
+    def require_unique_student_email(self, email: str) -> None:
+        normalized = self._normalize(email)
+        if any(self._normalize(s.email) == normalized for s in self.students.values()):
+            raise ValueError(f"A student with the email '{email}' already exists.")
+
+    def require_unique_category_name(self, name: str) -> None:
+        normalized = self._normalize(name)
+        if any(self._normalize(c.name) == normalized for c in self.categories.values()):
+            raise ValueError(f"A category with the name '{name}' already exists.")
+
+    def require_unique_assignment_name(self, name: str) -> None:
+        normalized = self._normalize(name)
+        if any(
+            self._normalize(a.name) == normalized for a in self.assignments.values()
+        ):
+            raise ValueError(f"An assignment with the name '{name}' already exists.")
+
+    # TODO: create secondary submissions index with (s_id, a_id) tuple as key
+    def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
+        return any(
+            (s.assignment_id == assignment_id and s.student_id == student_id)
+            for s in self.submissions.values()
+        )

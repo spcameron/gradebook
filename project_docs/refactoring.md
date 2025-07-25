@@ -2,3 +2,4 @@
     - Extract update_* wrappers for clean state changes, return bool
     - Update edit_* methods (and similar manipulators) to print messaging based on bool values
 
+- [ ] Refactor classes to access property getters rather than private attributes directly

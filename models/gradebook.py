@@ -10,9 +10,9 @@ Provides functions for loading a Gradebook from memory, and saving a Gradebook a
 Includes attributes that are session-scoped like dir_path (current save location) and unsaved_changes (unsaved mutations to linked data).
 Provides functions for importing, adding, removing, and finding RecordTypes, as well as methods for verifying unique values before adding.
 """
+import datetime
 import json
 import os
-from datetime import datetime
 from typing import Any, Callable, Optional
 
 from models.assignment import Assignment
@@ -25,13 +25,34 @@ from models.types import RecordType
 class Gradebook:
 
     def __init__(self, save_dir_path: str):
-        self.students = {}
-        self.categories = {}
-        self.assignments = {}
-        self.submissions = {}
         self._metadata = {}  # assumed to contain name, term, and created_at
+        self._students = {}
+        self._categories = {}
+        self._assignments = {}
+        self._submissions = {}
+        self._class_dates = set()
         self._dir_path = save_dir_path
         self._unsaved_changes = False
+
+    @property
+    def students(self) -> dict[str, Student]:
+        return self._students
+
+    @property
+    def categories(self) -> dict[str, Category]:
+        return self._categories
+
+    @property
+    def assignments(self) -> dict[str, Assignment]:
+        return self._assignments
+
+    @property
+    def submissions(self) -> dict[str, Submission]:
+        return self._submissions
+
+    @property
+    def class_dates(self) -> set[datetime.date]:
+        return self._class_dates
 
     @property
     def path(self) -> str:
@@ -74,12 +95,13 @@ class Gradebook:
             "name": name,
             "term": term,
             "uses_weighting": False,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.datetime.now().isoformat(),
         }
-
         gradebook.save(save_dir_path)
 
         return gradebook
+
+    # === serialization methods ===
 
     @classmethod
     def load(cls, save_dir_path: str) -> "Gradebook":
@@ -100,7 +122,7 @@ class Gradebook:
 
         gradebook = cls(save_dir_path)
         gradebook._dir_path = save_dir_path
-        gradebook._metadata = read_json("metadata.json")
+        gradebook.import_metadata(save_dir_path)
 
         load_and_import("students.json", gradebook.import_students)
         load_and_import("categories.json", gradebook.import_categories)
@@ -123,12 +145,37 @@ class Gradebook:
         write_json("categories.json", [c.to_dict() for c in self.categories.values()])
         write_json("assignments.json", [a.to_dict() for a in self.assignments.values()])
         write_json("submissions.json", [s.to_dict() for s in self.submissions.values()])
+        write_json("class_dates.json", [d.isoformat() for d in self.class_dates])
 
         print("... save complete.")
 
         self._unsaved_changes = False
 
     # === import methods ===
+
+    def import_metadata(self, dir_path: str) -> None:
+        def read_json(filename: str) -> list[Any] | dict[str, Any]:
+            with open(os.path.join(dir_path, filename), "r") as f:
+                return json.load(f)
+
+        # Load metadata
+        raw_metadata = read_json("metadata.json")
+        if not isinstance(raw_metadata, dict):
+            raise ValueError("metadata.json must contain a dictionary.")
+        self._metadata = raw_metadata
+
+        # Load class_dates (optional)
+        try:
+            class_dates_raw = read_json("class_dates.json")
+            if not isinstance(class_dates_raw, list):
+                raise ValueError(
+                    "class_dates.json must contain a list of date strings."
+                )
+            self._class_dates = set(
+                datetime.date.fromisoformat(d) for d in class_dates_raw
+            )
+        except FileNotFoundError:
+            self._class_dates = set()
 
     def import_students(self, student_data: list) -> None:
         for student_dict in student_data:
@@ -365,3 +412,61 @@ class Gradebook:
 
         for category in active_categories:
             category.weight = None
+
+    # === attendance methods ===
+
+    def add_class_date(self, class_date: datetime.date) -> bool:
+        if class_date in self.class_dates:
+            return False
+
+        self.class_dates.add(class_date)
+        self.mark_dirty()
+        return True
+
+    def remove_class_date(self, class_date: datetime.date) -> bool:
+        if class_date not in self.class_dates:
+            return False
+
+        self.class_dates.discard(class_date)
+
+        for student in self.students.values():
+            student.remove_absence(class_date)
+
+        self.mark_dirty()
+        return True
+
+    def mark_student_absent(self, student: Student, class_date: datetime.date) -> bool:
+        if student.id not in self.students:
+            raise ValueError(
+                f"Cannot mark absence: {student.full_name} is not enrolled in this course."
+            )
+
+        if class_date not in self.class_dates:
+            raise ValueError(
+                f"Cannot mark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+            )
+
+        if student.mark_absent(class_date):
+            self.mark_dirty()
+            return True
+
+        return False
+
+    def unmark_student_absent(
+        self, student: Student, class_date: datetime.date
+    ) -> bool:
+        if student.id not in self.students:
+            raise ValueError(
+                f"Cannot unmark absence: {student.full_name} is not enrolled in this course."
+            )
+
+        if class_date not in self.class_dates:
+            raise ValueError(
+                f"Cannot unmark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+            )
+
+        if student.remove_absence(class_date):
+            self.mark_dirty()
+            return True
+
+        return False

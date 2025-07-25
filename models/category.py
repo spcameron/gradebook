@@ -121,7 +121,6 @@ class Category:
         return weight
 
     # === data manipulators ===
-    # these are groundwork for refactoring towards a GUI or API layer
 
     def update_category_weight(self, weight: Any) -> bool:
         try:

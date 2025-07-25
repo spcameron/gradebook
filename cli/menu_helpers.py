@@ -248,7 +248,7 @@ def find_active_student_from_list(gradebook: Gradebook) -> Student | MenuSignal:
     Returns:
         Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
     """
-    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+    active_students = gradebook.get_records(gradebook._students, lambda x: x.is_active)
     student = prompt_student_selection_from_list(active_students, "Active Students")
     return MenuSignal.CANCEL if student is None else student
 
@@ -264,7 +264,7 @@ def find_inactive_student_from_list(gradebook: Gradebook) -> Student | MenuSigna
         Either the selected Student, or MenuSignal.CANCEL if the list is empty or the user cancels.
     """
     inactive_students = gradebook.get_records(
-        gradebook.students, lambda x: not x.is_active
+        gradebook._students, lambda x: not x.is_active
     )
     student = prompt_student_selection_from_list(inactive_students, "Inactive Students")
     return MenuSignal.CANCEL if student is None else student

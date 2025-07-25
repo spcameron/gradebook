@@ -3,7 +3,7 @@
 
 import datetime
 from textwrap import dedent
-from typing import Optional
+from typing import Any, Optional
 
 from models.assignment import Assignment
 from models.category import Category
@@ -16,6 +16,19 @@ def format_banner_text(title: str, width: int = 40) -> str:
     line = "=" * width
     centered_title = f"{title:^{width}}"
     return f"{line}\n{centered_title}\n{line}"
+
+
+def format_list_with_and(items: list[Any]) -> str:
+    if not items:
+        return ""
+
+    if len(items) == 1:
+        return items[0]
+
+    if len(items) == 2:
+        return " and ".join(items)
+
+    return ", ".join(items[:-1]) + ", and " + items[-1]
 
 
 # === student formatters ===
@@ -147,8 +160,12 @@ def format_submission_multiline(submission: Submission, gradebook: Gradebook) ->
 # === attendance formatters ===
 
 
-def format_class_date(class_date: datetime.date) -> str:
-    return f"{class_date.strftime('%A, %b %d')}"
+def format_class_date_short(class_date: datetime.date) -> str:
+    return f"{class_date.strftime('%a, %b %d')}"
+
+
+def format_class_date_long(class_date: datetime.date) -> str:
+    return f"{class_date.strftime('%A, %B %d, %Y')}"
 
 
 def format_month_and_year(class_date: datetime.date) -> str:

@@ -1,5 +1,6 @@
 # cli/menu_helpers.py
 
+import datetime
 from enum import Enum, auto
 from typing import Any, Callable, Iterable, Optional
 
@@ -83,6 +84,25 @@ def sort_and_display_submissions(
 ) -> None:
     sorted_submissions = sorted(submissions, key=sort_key)
     display_submission_results(sorted_submissions, gradebook, show_index, formatter)
+
+
+def sort_and_display_course_dates(
+    calendar_dates: set[datetime.date] | list[datetime.date],
+    calendar_name: str = "Calendar View",
+) -> None:
+    banner = formatters.format_banner_text(calendar_name)
+    print(f"\n{banner}")
+
+    last_month_printed = (None, None)
+
+    for current_date in sorted(calendar_dates):
+        current_month_and_year = (current_date.month, current_date.year)
+        if current_month_and_year != last_month_printed:
+            formatted_month = formatters.format_month_and_year(current_date)
+            print(f"\n{formatted_month}\n")
+            last_month_printed = current_month_and_year
+
+        print(f"   {formatters.format_class_date_short(current_date)}")
 
 
 # === prompt user input methods ===
@@ -445,3 +465,8 @@ def returning_without_changes() -> None:
 
 def returning_to(destination: str) -> None:
     print(f"\nReturning to {destination}.")
+
+
+def caution_banner() -> None:
+    caution_banner = formatters.format_banner_text("CAUTION!")
+    print(f"\n{caution_banner}")

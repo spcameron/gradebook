@@ -445,6 +445,15 @@ class Gradebook:
         self.mark_dirty()
         return True
 
+    def remove_all_class_dates(self) -> bool:
+        for class_date in list(self.class_dates):
+            self.remove_class_date(class_date)
+
+        if len(self.class_dates) > 0:
+            return False
+
+        return True
+
     def mark_student_absent(self, student: Student, class_date: datetime.date) -> bool:
         if student.id not in self.students:
             raise ValueError(

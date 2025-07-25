@@ -301,7 +301,7 @@ def validate_weights(gradebook: Gradebook) -> bool:
     weights_total = 0.0
 
     for category in active_categories:
-        weights_total += category.weight
+        weights_total += category.weight if category.weight else 0.0
 
     if not math.isclose(weights_total, 100.0, abs_tol=0.01):
         print(

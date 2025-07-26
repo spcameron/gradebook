@@ -11,9 +11,9 @@ from typing import Callable, Optional, cast
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
 from cli.menu_helpers import MenuSignal
+from core.utils import generate_uuid
 from models.gradebook import Gradebook
 from models.student import Student
-from utils.utils import generate_uuid
 
 
 def run(gradebook: Gradebook) -> None:

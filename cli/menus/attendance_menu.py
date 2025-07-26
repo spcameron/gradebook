@@ -327,7 +327,47 @@ def preview_and_confirm_course_schedule(
 
 # TODO:
 def record_attendance(gradebook: Gradebook):
-    pass
+    class_date = prompt_class_date_or_cancel()
+
+    if class_date is MenuSignal.CANCEL:
+        return None
+    else:
+        class_date = cast(datetime.date, class_date)
+
+    print(
+        f"\nYou are logging attendance for {formatters.format_class_date_short(class_date)}."
+    )
+
+    if class_date not in gradebook.class_dates:
+        print(
+            f"\n{formatters.format_class_date_long(class_date)} is not in the course schedule yet."
+        )
+
+        if not helpers.confirm_action(
+            "Do you want to add it to the schedule and proceed with recording attendance?"
+        ):
+            helpers.returning_without_changes()
+            return None
+
+        success = gradebook.add_class_date(class_date)
+
+        if success:
+            print(
+                f"\n{formatters.format_class_date_short(class_date)} successfully added."
+            )
+        else:
+            print(f"\nError: Could not add date to course schedule ...")
+            return None
+
+    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+
+    for student in sorted(active_students, key=lambda x: (x.last_name, x.first_name)):
+        if not helpers.confirm_action(
+            f"{student.full_name}: 'y' for present, 'n' for absent:"
+        ):
+            gradebook.mark_student_absent(student, class_date)
+
+    helpers.display_attendance_summary(class_date, gradebook)
 
 
 # === edit attendance ===

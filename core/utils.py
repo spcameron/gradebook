@@ -1,4 +1,4 @@
-# utils/utils.py
+# core/utils.py
 
 """
 Repository for program-wide utilities.

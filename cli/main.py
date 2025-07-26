@@ -13,8 +13,8 @@ from typing import Optional
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
-from cli import course_menu
 from cli.menu_helpers import MenuSignal
+from cli.menus import course_menu
 from cli.path_utils import dir_is_empty, resolve_save_dir
 from models.gradebook import Gradebook
 

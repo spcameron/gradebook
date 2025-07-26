@@ -105,6 +105,28 @@ def sort_and_display_course_dates(
         print(f"   {formatters.format_class_date_short(current_date)}")
 
 
+def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) -> None:
+    attendance_summary = gradebook.get_attendance_for_date(class_date)
+
+    print(f"\nAttendance summary for {formatters.format_class_date_long(class_date)}:")
+
+    if class_date not in gradebook.class_dates:
+        print(
+            f"Error: {formatters.format_class_date_short(class_date)} is not in the course schedule."
+        )
+        return None
+
+    if attendance_summary == {}:
+        print(
+            f"Error: Attendance has not been recorded for {formatters.format_class_date_short(class_date)}."
+        )
+
+    for id, attendance in attendance_summary:
+        student = gradebook.find_student_by_uuid(id)
+        if student is not None:
+            print(f"... {student.full_name:<20} | {attendance}")
+
+
 # === prompt user input methods ===
 
 

@@ -227,7 +227,9 @@ class Gradebook:
 
         active_students = self.get_records(self.students, lambda x: x.is_active)
 
-        for student in active_students:
+        for student in sorted(
+            active_students, key=lambda x: (x.last_name, x.first_name)
+        ):
             attendance_report[student.id] = (
                 "Absent" if student.was_absent_on(class_date) else "Present"
             )

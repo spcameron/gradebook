@@ -4,6 +4,16 @@
 
 - [ ] Refactor classes to access property getters rather than private attributes directly
 
+- [ ] Standardize Type Annotations 
+    - Add `from __future__ import annotations` to all module files that define or return self-referential types (e.g. Gradebook, Category, etc.)
+    - Remove quote-wrapped type hints like "Gradebook" in favor of direct reference
+    - This modernizes type checking and simplifies methods signatures
+
+- [ ] Update Type Hint Syntax
+    - Replace `Optional[T]` with `T | None` throughout all modules
+    - Requires Python 3.10+
+    - Preferred style for clarity and modern readability
+
 # Data Manipulation Method Conventions (MVP Phase)
 
 This document defines the behavior of Gradebook's data manipulation methods (e.g. `mark_student_absent`, `remove_category`, `add_class_date`, etc.) during the MVP development phase.

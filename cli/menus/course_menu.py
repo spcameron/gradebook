@@ -9,8 +9,8 @@ as well as the Generate Reports menu and an option to save the gradebook.
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
-from cli import assignments_menu, categories_menu, students_menu, submissions_menu
 from cli.menu_helpers import MenuSignal
+from cli.menus import assignments_menu, categories_menu, students_menu, submissions_menu
 from models.gradebook import Gradebook
 
 

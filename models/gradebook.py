@@ -15,6 +15,7 @@ import json
 import os
 from typing import Any, Callable, Optional
 
+from core.response import ErrorCode, Response
 from models.assignment import Assignment
 from models.category import Category
 from models.student import Student
@@ -25,7 +26,7 @@ from models.types import RecordType
 class Gradebook:
 
     def __init__(self, save_dir_path: str):
-        self._metadata = {}  # assumed to contain name, term, and created_at
+        self._metadata = {}
         self._students = {}
         self._categories = {}
         self._assignments = {}
@@ -197,14 +198,51 @@ class Gradebook:
 
     # === data accessors ===
 
+    # def get_records(
+    #     self,
+    #     dictionary: dict[str, RecordType],
+    #     predicate: Optional[Callable[[RecordType], bool]] = None,
+    # ) -> list[RecordType]:
+    #     if predicate:
+    #         return [record for record in dictionary.values() if predicate(record)]
+    #     return list(dictionary.values())
+
     def get_records(
         self,
         dictionary: dict[str, RecordType],
-        predicate: Optional[Callable[[RecordType], bool]] = None,
-    ) -> list[RecordType]:
+        predicate: Callable[[RecordType], bool] | None = None,
+    ) -> Response:
+        """
+        Fetches a list of records matching the optional predicate within a given dictionary.
+
+        Args:
+            dictionary (dict[str, RecordType]): A mapping of record IDs to record objects.
+            predicate (Callable[[RecordType], bool]): Optional filter function. If omitted, all records are returned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool): Always True.
+                - detail (str | None): Not used for this method.
+                - error (ErrorCode | str | None): Always None.
+                - status_code (int | None): Always 200.
+                - data (dict):
+                    - "records" (list[RecordType]): The matching records.
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The "records" key is always included in the response, even if the result is empty.
+        """
         if predicate:
-            return [record for record in dictionary.values() if predicate(record)]
-        return list(dictionary.values())
+            records = [record for record in dictionary.values() if predicate(record)]
+        else:
+            records = list(dictionary.values())
+
+        return Response.succeed(
+            detail=None,
+            data={
+                "records": records,
+            },
+        )
 
     # --- attendance records ---
 
@@ -252,10 +290,53 @@ class Gradebook:
 
     # --- find record by uuid ---
 
+    # def find_record_by_uuid(
+    #     self, uuid: str, dictionary: dict[str, RecordType]
+    # ) -> Optional[RecordType]:
+    #     return dictionary.get(uuid)
+
     def find_record_by_uuid(
-        self, uuid: str, dictionary: dict[str, RecordType]
-    ) -> Optional[RecordType]:
-        return dictionary.get(uuid)
+        self,
+        uuid: str,
+        dictionary: dict[str, RecordType],
+    ) -> Response:
+        """
+        Finds a record by UUID within a given dictionary.
+
+        Args:
+            uuid (str): The unique ID of the record.
+            dictionary (dict[str, RecordType]): The dictionary of records to search.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool): True if the record was found.
+                - detail (str | None): Human-readable message of the result.
+                - error (ErrorCode | str | None): `ErrorCode.NOT_FOUND` if no match is found; None on success.
+                - status_code (int | None): 200 on success, 404 if not found.
+                - data (dict):
+                    - "record" (RecordType): The matched record object. Included only if found.
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The "record" key is only included in the response on success.
+            - The caller is responsible for extracting and casting the record from `response.data["record"]`.
+        """
+        record = dictionary.get(uuid)
+
+        if record is None:
+            return Response.fail(
+                detail=f"No matching record found for {uuid}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
+        return Response.succeed(
+            detail="A matching record was found.",
+            data={
+                "record": record,
+            },
+            status_code=200,
+        )
 
     def find_student_by_uuid(self, uuid: str) -> Optional[Student]:
         return self.find_record_by_uuid(uuid, self.students)
@@ -529,3 +610,34 @@ class Gradebook:
             (s.assignment_id == assignment_id and s.student_id == student_id)
             for s in self.submissions.values()
         )
+
+
+# docstring template for methods that return Response objects
+
+
+"""
+<One-sentence summary of what this method does.>
+
+Args:
+    <param1> (<type>): <description>.
+    <param2> (<type>): <description>.
+    ...
+
+Returns:
+    Response: A structured response with the following fields:
+        - success (bool): True if the operation was successful.
+        - detail (str | None): Description of the result for display or logging.
+        - error (ErrorCode | str | None): A machine-readable error code, if any.
+        - status_code (int | None): HTTP-style status code (e.g., 200, 404). Optional in CLI.
+        - data (dict): Payload with the following keys:
+            - "<key1>" (<type>): <description of value>.
+            - "<key2>" (<type>): <description of value>.
+            ...
+
+Notes:
+    - <State if method is read-only or mutates gradebook state>.
+    - <Mention any expected preconditions or invariants>.
+    - <What does success/failure look like, if not clear from above?>
+    - <What assumptions must the caller uphold?>
+    - <Does this touch or cascade to other objects?>
+"""

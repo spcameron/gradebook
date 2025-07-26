@@ -197,7 +197,6 @@ def confirm_and_clear_schedule(gradebook: Gradebook) -> None:
     helpers.returning_to("Manage Class Schedule menu")
 
 
-# TODO:
 def generate_recurring_schedule(gradebook: Gradebook) -> None:
     while True:
         start_date = prompt_class_date_or_cancel()
@@ -226,25 +225,32 @@ def generate_recurring_schedule(gradebook: Gradebook) -> None:
 
     weekdays = prompt_weekdays_or_cancel()
 
-    if weekdays is MenuSignal.CANCEL:
+    if weekdays is MenuSignal.CANCEL or weekdays == []:
         return None
     else:
         weekdays = cast(list[int], weekdays)
 
     candidate_schedule = populate_candidate_schedule(start_date, end_date, weekdays)
 
-    # prompt for start date
-    # prompt for end date
-    # validate end is not before start
-    # prompt for weekdays
-    # generate full list of candidate days
-    # TODO:
-    # prompt to indicate any off-days (holidays, in-service days)
-    # preview candidate days
-    # add or remove days, final chance to edit schedule
-    # confirm and apply additions
+    no_classes_dates = []
 
-    pass
+    if helpers.confirm_action(
+        "Would you like to mark some of these dates as 'No Class' dates (holidays, etc.)?"
+    ):
+        no_classes_dates = prompt_no_classes_dates()
+
+    if no_classes_dates:
+        for off_day in no_classes_dates:
+            candidate_schedule.remove(off_day)
+
+    if preview_and_confirm_course_schedule(candidate_schedule, no_classes_dates):
+        success = gradebook.batch_add_class_dates(candidate_schedule)
+        if success:
+            print("\nAll dates successfully added to the course schedule.")
+        else:
+            print("\nError: Not all dates could be added to the course schedule ...")
+    else:
+        helpers.returning_without_changes()
 
 
 def populate_candidate_schedule(
@@ -259,6 +265,61 @@ def populate_candidate_schedule(
         pointer_date += datetime.timedelta(days=1)
 
     return candidate_schedule
+
+
+def preview_and_confirm_course_schedule(
+    course_schedule: list[datetime.date], off_days: list[datetime.date]
+) -> bool:
+    print("\nYou have generated the following recurring course schedule:")
+    helpers.sort_and_display_course_dates(course_schedule)
+
+    if off_days:
+        print("\nThe following dates have been marked as 'No Classes':")
+        helpers.sort_and_display_course_dates(off_days)
+
+    if helpers.confirm_action("Would you like to add any dates to this schedule?"):
+        while True:
+            new_date = prompt_class_date_or_cancel()
+
+            if new_date is MenuSignal.CANCEL:
+                break
+            elif new_date not in course_schedule:
+                course_schedule.append(cast(datetime.date, new_date))
+
+            if not helpers.confirm_action(
+                "Would you like to continue adding dates to the schedule?"
+            ):
+                break
+
+    if helpers.confirm_action("Would you like to remove any dates from this schedule?"):
+        while True:
+            remove_date = prompt_class_date_or_cancel()
+
+            if remove_date is MenuSignal.CANCEL:
+                break
+            elif remove_date in course_schedule:
+                course_schedule.remove(cast(datetime.date, remove_date))
+                off_days.append(cast(datetime.date, remove_date))
+
+            if not helpers.confirm_action(
+                "Would you like to continue removing dates from the schedule?"
+            ):
+                break
+
+    print("\nYou are about to add the following dates to the course schedule")
+    helpers.sort_and_display_course_dates(course_schedule)
+
+    if off_days:
+        print("\nThe following dates have been marked as 'No Classes':")
+        helpers.sort_and_display_course_dates(off_days)
+
+    if helpers.confirm_action(
+        "Would you like to add these dates to the course schedule?"
+    ):
+        return True
+    else:
+        print("Discarding schedule.")
+        return False
 
 
 # === record attendance ===
@@ -370,7 +431,7 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
             return MenuSignal.CANCEL
 
 
-def prompt_no_classes_dates() -> list[datetime.date] | None:
+def prompt_no_classes_dates() -> list[datetime.date]:
     print(
         "\nIf there are any days in your regular schedule where class is not scheduled,"
     )
@@ -410,7 +471,7 @@ def prompt_no_classes_dates() -> list[datetime.date] | None:
         ):
             continue
         else:
-            return None
+            return []
 
 
 # === finder methods ===

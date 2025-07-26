@@ -433,6 +433,15 @@ class Gradebook:
         self.mark_dirty()
         return True
 
+    def batch_add_class_dates(self, class_dates: list[datetime.date]) -> bool:
+        for class_date in class_dates:
+            self.add_class_date(class_date)
+
+        if any(date not in self.class_dates for date in class_dates):
+            return False
+
+        return True
+
     def remove_class_date(self, class_date: datetime.date) -> bool:
         if class_date not in self.class_dates:
             return False

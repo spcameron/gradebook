@@ -35,6 +35,7 @@ Here’s your post-MVP roadmap for the Gradebook CLI project, based on our earli
 * **Plugin system or hooks**: Allow limited user extensions without modifying core.
 * **CLI refactor**: Abstract menu structure to reduce boilerplate and increase flexibility.
 * **Error logging**: Optional debug mode or structured error output.
+* **Recent Gradebooks**: Persistent record of recently loaded gradebooks for smoother loading
 
 ---
 

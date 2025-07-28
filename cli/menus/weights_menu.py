@@ -69,7 +69,7 @@ def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
         If activating, calls validate_weights() before toggling.
         If deactivating, calls confirm_and_reset_weights() before toggling.
     """
-    action = "deactivate" if gradebook.is_weighted else "activate"
+    action = "deactivate" if gradebook.uses_weighting else "activate"
 
     print(
         f"\nWeighted categories for this Gradebook are currently: {gradebook.weighting_status}."
@@ -81,7 +81,7 @@ def edit_weighting_status_and_confirm(gradebook: Gradebook) -> None:
         helpers.returning_without_changes()
         return None
 
-    if gradebook.is_weighted:
+    if gradebook.uses_weighting:
         reset_success = confirm_and_reset_weights(gradebook)
         if not reset_success:
             print(

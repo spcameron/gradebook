@@ -1,93 +1,64 @@
-- [ ] CLI menu edit methods mix data changes and print statements
-    - Extract update_* wrappers for clean state changes, return bool
-    - Update edit_* methods (and similar manipulators) to print messaging based on bool values
+# Gradebook CLI Refactor Checklist
 
-- [ ] Refactor classes to access property getters rather than private attributes directly
+## ⬆️ Core Infrastructure
 
-- [ ] Standardize Type Annotations 
-    - Add `from __future__ import annotations` to all module files that define or return self-referential types (e.g. Gradebook, Category, etc.)
-    - Remove quote-wrapped type hints like "Gradebook" in favor of direct reference
-    - This modernizes type checking and simplifies methods signatures
+<!-- - [ ] Move `utils.py` to `core/utils.py` and update all import paths -->
+<!-- - [ ] Add `core/response.py` with `Response` and `ErrorCode` classes -->
+<!-- - [ ] Rename Response.message → Response.detail and add status_code -->
+- [ ] Update all manipulator methods to return `Response` objects
+- [ ] Ensure all raises from model methods are caught and wrapped by Gradebook methods
 
-- [ ] Update Type Hint Syntax
-    - Replace `Optional[T]` with `T | None` throughout all modules
-    - Requires Python 3.10+
-    - Preferred style for clarity and modern readability
+## 🧹 Standardization & Conventions
 
-# Data Manipulation Method Conventions (MVP Phase)
+- [ ] Use type annotations (not Optional[]) consistently
+- [ ] Use `from __future__ import annotations` across refactored files
+- [ ] Adopt `ErrorCode` enums where appropriate for `response.error`
+- [ ] Use string keys like `"record"`, `"student"`, `"assignment"` consistently in `response.data`
+- [ ] Document `response.data` return shape explicitly in each method's docstring
+- [ ] Adopt consistent backtick usage for code-like values in docstrings (see below)
 
-This document defines the behavior of Gradebook's data manipulation methods (e.g. `mark_student_absent`, `remove_category`, `add_class_date`, etc.) during the MVP development phase.
+## 🧪 CLI Updates
 
-## Return Values
+- [ ] Replace all calls to Gradebook mutator methods to expect `Response` objects
+- [ ] Update CLI menus to branch on `response.success`, `response.detail`, and optionally print `.error`
+- [ ] Migrate any direct model writes (e.g. `student.name = x`) to new `gradebook.update_*` methods
+- [ ] Ensure any CLI-side lookups that may fail now check `response.success` and handle fallback behavior
 
-All public data manipulation methods in `Gradebook` follow this return contract:
+## 📜 Docstring Conventions
 
-| Return Value | Meaning                                | Interface Response                     |
-|--------------|----------------------------------------|----------------------------------------|
-| `True`       | A change was successfully made         | Display success confirmation message   |
-| `False`      | No change occurred (e.g. redundant op) | Suppress message or show soft warning  |
-| `raise`      | Invalid input or precondition failure  | Display error message with exception   |
+- [ ] Add/update docstrings to all refactored Gradebook methods
+- [ ] Ensure each docstring includes:
+  - Args section with types
+  - Returns section outlining `Response` contract
+  - Notes section if behavior needs clarification (e.g. empty return, key presence)
 
-Example:
+## 🧪 Testing & Smoke Checks
 
-```python
-success = gradebook.mark_student_absent(student, class_date)
+- [ ] Run full manual flow through each menu after migration
+- [ ] Confirm that all CLI interfaces still display appropriate prompts and errors
+- [ ] Look for any uncaught exceptions or missing response handling
 
-if success:
-    print("Student marked absent.")
-else:
-    print("Student was already marked absent.")
-```
+## 💡 Optional (Post-MVP)
 
-## Exceptions
+- [ ] Introduce centralized `response_utils.py` for standard error/message helpers
+- [ ] Define a few reusable keys/constants for common `"record"` or `"records"` lookups
+- [ ] Prep Response class for JSON serialization if targeting REST API
 
-ValueError is raised in response to:
-- Invalid references (e.g. student not in course, date not in schedule)
-- Attempts to mutate non-editable records
-- Other business logic violations
 
-Do not catch these inside the Gradebook. The interface layer (CLI/GUI/API) is responsible for handling them.
+---
 
-# Future Plans
+### ✅ Backtick Usage Summary
 
-## Refactoring Plan: DataChangeResult Pattern
+| Context                                | Use Backticks?  | Example                                       | Notes                                           |
+| -------------------------------------- | --------------  | --------------------------------------------- | ----------------------------------------------- |
+| **Type hints in `Args:` / `Returns:`** | ❌ No           | `assignment (Assignment): ...`                | Types are already in the signature format.      |
+| **Inline prose (class/type names)**    | ✅ Yes          | “Returns a `Student` object.”                 | Use when referring to types in narrative text.  |
+| **Function or method names**           | ✅ Yes          | “See also: `find_student_by_uuid()`.”         | Helps distinguish symbols from prose.           |
+| **Field names / dict keys**            | ✅ Yes          | “Found in `response.data["record"]`.”         | Clarifies structure or syntax in narrative.     |
+| **Boolean literals** (`True`, `False`) | ❌ No           | “Returns True if...”                          | Considered part of natural language here.       |
+| **`None` as a return value**           | ❌ No           | “Returns None if...”                          | Not code context—no need to highlight.          |
+| **HTTP status codes**                  | ❌ No           | “Returns 404 if not found.”                   | These are standard numeric values, not symbols. |
+| **Literal values / examples in prose** | ✅ Optional     | “Call with `verbose=True` to enable logging.” | Use backticks if showing exact code usage.      |
 
-After MVP stabilization, we will replace the current `bool`-based return convention for data manipulation methods with a structured response object.
-
-## Motivation
-
-- Unify return behavior for interface layers (CLI, GUI, API)
-- Improve transparency of no-ops and failures
-- Decouple data mutation logic from presentation logic
-
-## Proposed Class
-
-```python
-class DataChangeResult:
-    def __init__(
-        self,
-        success: bool,
-        message: str = "",
-        error: Optional[Exception] = None,
-        metadata: Optional[dict[str, Any]] = None
-    ):
-        self.success = success
-        self.message = message
-        self.error = error
-        self.metadata = metadata or {}
-```
-## Migration Plan
-
-1. Update all methods returning `bool` to return `DataChangeResult`
-2. Replace `return True` -> `return DataChangeResults(success=True)`
-3. Replace `return False` -> `return DataChangeResults(success=False, message="...")`
-4. Refactor CLI layer to unpack and display `.message` or handle `.error`
-5. Introduce helper utilities to bridge bool-to-response behavior temporarily, if needed
-
-## Benefits
-
-- Clear success/failure status
-- Optional messages or error payloads
-- Compatible with GUI/API response models
-- Minimized tight coupling between data and interface logic
+---
 

@@ -4,9 +4,61 @@ from __future__ import annotations
 
 from enum import Enum
 
+"""
+TEMPLATE FOR DOCSTRINGS THAT RETURN A RESPONSE
+
+<One-sentence summary of what this method does.>
+
+Args:
+    <param1> (<type>): <description>.
+    <param2> (<type>): <description>.
+    ...
+
+Returns:
+    Response: A structured response with the following contract:
+        - success (bool): True if the operation was successful.
+        - detail (str | None): Description of the result for display or logging.
+        - error (ErrorCode | str | None): A machine-readable error code, if any.
+        - status_code (int | None): HTTP-style status code (e.g., 200, 404). Optional in CLI.
+        - data (dict | None): Payload with the following keys:
+            - "<key1>" (<type>): <description of value>.
+            - "<key2>" (<type>): <description of value>.
+            ...
+
+Notes:
+    - <State if method is read-only or mutates gradebook state>.
+    - <Mention any expected preconditions or invariants>.
+    - <What does success/failure look like, if not clear from above?>
+    - <What assumptions must the caller uphold?>
+    - <Does this touch or cascade to other objects?>
+"""
+
 
 class ErrorCode(Enum):
-    NOT_FOUND = "not_found"
+    # === Not Found ===
+    NOT_FOUND = "NOT_FOUND"
+    # STUDENT_NOT_FOUND, ASSIGNMENT_NOT FOUND, etc.
+
+    # === Constraint Violations ===
+    # DUPLICATE_NAME, DUPLICATE_EMAIL, etc.
+
+    # === Validation Failures ===
+    INVALID_FIELD_VALUE = "INVALID_FIELD_VALUE"
+    INVALID_INPUT = "INVALID_INPUT"
+    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
+    # INVALID_DATE_FORMAT
+    # INVALID_SCORE_VALUE
+    # MISSING_IDENTIFIER
+
+    # === State Restrictions ===
+    # ARCHIVED_RECORD
+    # SUBMISSION_EXEMPT
+    # ASSIGNMENT_UNGRADED
+
+    # === Internal Faults ===
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    LOGIC_ERROR = "LOGIC_ERROR"
+
     # add new error codes as needed during refactor
 
 

@@ -9,7 +9,7 @@ Provides functions for creating or loading a Gradebook.
 import json
 import os
 from textwrap import dedent
-from typing import Optional
+from typing import cast
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
@@ -40,19 +40,33 @@ def run_cli() -> None:
             exit_program()
         elif callable(menu_response):
             gradebook = menu_response()
-            course_menu.run(gradebook)
+            if gradebook is not None:
+                course_menu.run(gradebook)
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
-# TODO: needs review and doc
-def create_gradebook() -> Gradebook:
+def create_gradebook() -> Gradebook | None:
     while True:
-        name = helpers.prompt_user_input("Enter the course name (e.g. THTR 274A):")
-        term = helpers.prompt_user_input("Enter the course term (e.g. FALL 2025):")
-        dir_input = (
-            helpers.prompt_user_input(
-                "Enter directory to save the Gradebook (leave blank to use default):"
-            )
-            or None
+        name = helpers.prompt_user_input_or_cancel(
+            "Enter the course name (e.g. THTR 274A, leave blank to cancel):"
+        )
+
+        if name is MenuSignal.CANCEL:
+            return None
+        name = cast(str, name)
+
+        term = helpers.prompt_user_input_or_cancel(
+            "Enter the course term (e.g. FALL 2025, leave blank to cancel):"
+        )
+
+        if term is MenuSignal.CANCEL:
+            return None
+        term = cast(str, name)
+
+        # TODO: resume edit from here
+        dir_input = helpers.prompt_user_input_or_none(
+            "Enter directory to save the Gradebook (leave blank to use default):"
         )
 
         dir_path = resolve_save_dir(name, term, dir_input)
@@ -68,17 +82,16 @@ def create_gradebook() -> Gradebook:
                     Writing to this directory may result in the loss of existing data."""
                 )
             )
-            if helpers.confirm_action("\nDo you wish to continue?"):
-                return Gradebook.create(name, term, dir_path)
-            else:
+            if not helpers.confirm_action("\nDo you wish to continue?"):
                 continue
 
-        return Gradebook.create(name, term, dir_path)
+            # TODO: handle response
+            response = Gradebook.create(name, term, dir_path)
 
 
 # TODO: verify gradebook data (or at least metadata) exists before loading
 # TODO: needs review and doc
-def load_gradebook() -> Optional[Gradebook]:
+def load_gradebook() -> Gradebook | None:
     dir_path = helpers.prompt_user_input("Enter path to Gradebook directory:")
     dir_path = os.path.expanduser(dir_path)
     dir_path = os.path.abspath(dir_path)
@@ -88,7 +101,10 @@ def load_gradebook() -> Optional[Gradebook]:
         return None
 
     try:
-        return Gradebook.load(dir_path)
+        print("\nLoading Gradebook ...")
+        gradebook = Gradebook.load(dir_path)
+        print("... load complete.")
+        return gradebook
     except (json.JSONDecodeError, ValueError) as e:
         print(f"\nError: Failed to load Gradebook: {e}")
         return None

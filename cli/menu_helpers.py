@@ -14,9 +14,9 @@ from models.types import RecordType
 
 
 class MenuSignal(Enum):
-    CANCEL = auto()
-    DEFAULT = auto()
-    EXIT = auto()
+    CANCEL = "CANCEL"
+    DEFAULT = "DEFAULT"
+    EXIT = "EXIT"
 
 
 # === display methods ===
@@ -153,7 +153,7 @@ def confirm_unsaved_changes() -> bool:
 
 
 def prompt_if_dirty(gradebook: Gradebook) -> None:
-    if gradebook.unsaved_changes and confirm_unsaved_changes():
+    if gradebook.has_unsaved_changes and confirm_unsaved_changes():
         gradebook.save(gradebook.path)
 
 

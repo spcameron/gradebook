@@ -12,12 +12,24 @@ Includes functionality for:
 - Serializing to and from JSON-compatible dictionaries
 - Mutating individual student fields via property access
 
-Absences are internally tracked as a set of datetime.date objects,
-and exposed only through controlled methods such as mark_absent() and was_absent_on().
+Attendance is internally tracked as a dictionary mapping dates to status values.
+This allow for explicit representation of Present, Absent, Excused, and other states,
+as well as detection of unmarked records.
 """
+
+from __future__ import annotations
 
 import datetime
 import re
+from enum import Enum
+
+
+class AttendanceStatus(str, Enum):
+    PRESENT = "Present"
+    ABSENT = "Absent"
+    EXCUSED_ABSENCE = "Excused"
+    LATE = "Late"
+    UNMARKED = "Unmarked"
 
 
 class Student:
@@ -30,12 +42,14 @@ class Student:
         email: str,
         active: bool = True,
     ):
-        self._id = id
-        self._first_name = first_name
-        self._last_name = last_name
-        self._email = email
-        self._is_active = active
-        self._absences: set[datetime.date] = set()
+        self._id: str = id
+        self._first_name: str = first_name
+        self._last_name: str = last_name
+        self._email: str = email
+        self._is_active: bool = active
+        self._attendance: dict[datetime.date, AttendanceStatus] = {}
+
+    # === properties ===
 
     @property
     def id(self) -> str:
@@ -80,14 +94,7 @@ class Student:
     def toggle_archived_status(self) -> None:
         self._is_active = False if self._is_active else True
 
-    @property
-    def absences(self) -> set[datetime.date]:
-        return self._absences
-
-    def was_absent_on(self, date: datetime.date) -> bool:
-        return date in self._absences
-
-    # === serialization methods ===
+    # === persistence and import ===
 
     def to_dict(self) -> dict:
         return {
@@ -96,11 +103,14 @@ class Student:
             "last_name": self._last_name,
             "email": self._email,
             "active": self._is_active,
-            "absences": [d.isoformat() for d in self._absences],
+            "attendance": {
+                date.isoformat(): status.value
+                for date, status in self._attendance.items()
+            },
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Student":
+    def from_dict(cls, data: dict) -> Student:
         student = cls(
             id=data["id"],
             first_name=data["first_name"],
@@ -108,8 +118,12 @@ class Student:
             email=data["email"],
             active=data["active"],
         )
-        absences_raw = data.get("absences", [])
-        student._absences = set(datetime.date.fromisoformat(d) for d in absences_raw)
+
+        attendance_raw = data.get("attendance", {})
+        student._attendance = {
+            datetime.date.fromisoformat(date_str): AttendanceStatus(status_str)
+            for date_str, status_str in attendance_raw.items()
+        }
 
         return student
 
@@ -118,6 +132,41 @@ class Student:
 
     def __str__(self) -> str:
         return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self._id}"
+
+    # === data accessors ===
+
+    # --- attendance methods ---
+
+    def attendance_on(self, date: datetime.date) -> AttendanceStatus:
+        return self._attendance.get(date, AttendanceStatus.UNMARKED)
+
+    def was_present_on(self, date: datetime.date) -> bool:
+        return self.attendance_on(date) == AttendanceStatus.PRESENT
+
+    def was_absent_on(self, date: datetime.date) -> bool:
+        return self.attendance_on(date) == AttendanceStatus.ABSENT
+
+    def is_attendance_marked(self, date: datetime.date) -> bool:
+        return date in self._attendance
+
+    # === data manipulators ===
+
+    # --- attendance methods ---
+
+    def mark_present(self, date: datetime.date) -> None:
+        self._attendance[date] = AttendanceStatus.PRESENT
+
+    def mark_absent(self, date: datetime.date) -> None:
+        self._attendance[date] = AttendanceStatus.ABSENT
+
+    def mark_excused(self, date: datetime.date) -> None:
+        self._attendance[date] = AttendanceStatus.EXCUSED_ABSENCE
+
+    def mark_late(self, date: datetime.date) -> None:
+        self._attendance[date] = AttendanceStatus.LATE
+
+    def clear_attendance(self, date: datetime.date) -> None:
+        self._attendance.pop(date, None)
 
     # === data validators ===
 
@@ -145,17 +194,3 @@ class Student:
         if not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
             raise ValueError("Email must be a valid address with one @ and a domain.")
         return email
-
-    # === data manipulators ===
-
-    def mark_absent(self, date: datetime.date) -> bool:
-        if date in self._absences:
-            return False
-        self._absences.add(date)
-        return True
-
-    def remove_absence(self, date: datetime.date) -> bool:
-        if date not in self._absences:
-            return False
-        self._absences.discard(date)
-        return True

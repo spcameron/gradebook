@@ -20,7 +20,7 @@ from typing import Any, Callable
 from core.response import ErrorCode, Response
 from models.assignment import Assignment
 from models.category import Category
-from models.student import Student
+from models.student import AttendanceStatus, Student
 from models.submission import Submission
 from models.types import RecordType
 
@@ -108,16 +108,22 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the operation was successful.
-                - detail (str | None): Description of the error if the operation failed.
+                - success (bool):
+                    - True if the `Gradebook` object was created successfully.
+                    - False if invalid data is passed or there is missing input.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.INVALID_FIELD_VALUE` if ValueError raised.
                     - `ErrorCode.MISSING_REQUIRED_FIELD` if TypeError raised.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
-                - status_code (int | None): 200 on success, 400 on failure
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
                 - data (dict | None): Payload with the following keys:
                     - On success:
-                        - "gradebook": The newly created `Gradebook` object.
+                        - "gradebook" (Gradebook): The newly created `Gradebook` object.
                     - On failure:
                         - None
 
@@ -133,12 +139,6 @@ class Gradebook:
                 "created_at": datetime.datetime.now().isoformat(),
             }
             gradebook.save(save_dir_path)
-
-            return Response.succeed(
-                data={
-                    "gradebook": gradebook,
-                },
-            )
 
         except ValueError as e:
             return Response.fail(
@@ -158,6 +158,13 @@ class Gradebook:
                 error=ErrorCode.INTERNAL_ERROR,
             )
 
+        else:
+            return Response.succeed(
+                data={
+                    "gradebook": gradebook,
+                },
+            )
+
     @classmethod
     def load(cls, save_dir_path: str) -> Response:
         """
@@ -169,16 +176,22 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool): True if the load operation was successful.
-                - detail (str | None): Description of the error if the operation failed.
+                    - True if the load operation was successful and new `Gradebook` object was created successfully.
+                    - False for JSON deserialization issues, invalid input, or missing fields.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.INVALID_INPUT` if JSONDecodeError raised.
                     - `ErrorCode.INVALID_FIELD_VALUE` if ValueError raised.
                     - `ErrorCode.MISSING_REQUIRED_FIELD` if TypeError raised.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
-                - status_code (int | None): 200 on success, 400 on failure
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
                 - data (dict | None): Payload with the following keys:
                     - On success:
-                        - "gradebook": The newly created `Gradebook` object.
+                        - "gradebook" (Gradebook): The newly created `Gradebook` object.
                     - On failure:
                         - None
 
@@ -225,12 +238,6 @@ class Gradebook:
             load_and_import("assignments.json", gradebook.import_assignments)
             load_and_import("submissions.json", gradebook.import_submissions)
 
-            return Response.succeed(
-                data={
-                    "gradebook": gradebook,
-                },
-            )
-
         except json.JSONDecodeError as e:
             return Response.fail(
                 detail=f"Failed to parse JSON data: {e}",
@@ -255,6 +262,13 @@ class Gradebook:
                 error=ErrorCode.INTERNAL_ERROR,
             )
 
+        else:
+            return Response.succeed(
+                data={
+                    "gradebook": gradebook,
+                },
+            )
+
     # === persistence and import ===
 
     def save(self, save_dir_path: str | None = None) -> Response:
@@ -268,7 +282,9 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the save operation was successful.
+                - success (bool):
+                    - True if the gradebook data was saved successfully to disk.
+                    - False for JSON serialization issues, invalid input, or missing fields.
                 - detail (str | None):
                     - On success:
                         - "Gradebook successfully saved to disk."
@@ -277,7 +293,9 @@ class Gradebook:
                 - error (ErrorCode | str | None):
                     - `ErrorCode.INVALID_FIELD_VALUE` if ValueError or TypeError raised.
                     - `ErrorCode.INTERNAL_ERROR` if OSError raised or for unexpected errors.
-                - status_code (int | None): 200 on success, 400 on failure
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
                 - data (dict | None): Unused in this method.
 
 
@@ -319,10 +337,6 @@ class Gradebook:
 
             self._unsaved_changes = False
 
-            return Response.succeed(
-                detail="Gradebook successfully saved to disk.",
-            )
-
         except ValueError as e:
             return Response.fail(
                 detail=f"Invalid field value: {e}",
@@ -346,6 +360,9 @@ class Gradebook:
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
             )
+
+        else:
+            return Response.succeed(detail="Gradebook successfully saved to disk.")
 
     def import_metadata(self, dir_path: str) -> None:
         """
@@ -526,12 +543,18 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the operation succeeded, even if no records were found.
-                - detail (str | None): Description of the error if the operation failed.
+                - success (bool):
+                    - True if the operation succeeded, even if no records were found.
+                    - False for unexpected errors.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
-                - status_code (int | None): 200 on success, 400 on failure.
-                - data (dict): Payload with the following keys:
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "records" (list[RecordType]): The list of matching records (may be empty).
                     - On failure:
@@ -547,19 +570,20 @@ class Gradebook:
             else:
                 records = list(dictionary.values())
 
-            return Response.succeed(
-                data={
-                    "records": records,
-                },
-            )
-
         except Exception as e:
             return Response.fail(
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
             )
 
-    # --- attendance records ---
+        else:
+            return Response.succeed(
+                data={
+                    "records": records,
+                }
+            )
+
+    # --- submission methods ---
 
     def get_assignment_and_student(self, submission: Submission) -> Response:
         """
@@ -579,7 +603,7 @@ class Gradebook:
                     - 200 on success
                     - 404 if either record not found
                     - 400 on failure
-                - data (dict): Payload with the following keys:
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "assignment" (Assignment): The linked `Assignment` object.
                         - "student" (Student): The linked `Student` object.
@@ -613,34 +637,138 @@ class Gradebook:
             }
         )
 
-    # TODO: resume refactor from here
-    def get_attendance_for_date(self, class_date: datetime.date) -> dict[str, str]:
+    # --- attendance records ---
+
+    def get_attendance_for_date(self, class_date: datetime.date) -> Response:
+        """
+        Generates an attendance report for all active students on a given class date.
+
+        Args:
+            class_date (datetime.date): The date for which to generate the attendance report.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the attendance report was generated successfully.
+                    - False if the date is not in the course schedule or if no active students were found.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the date is not part of the course schedule or if the roster is empty.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors when retrieving student records.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if the date is invalid or no active students exist
+                    - 400 on internal failure
+                - data (dict[str, dict[str, str]] | None): Payload with the following keys:
+                    - On success:
+                        - "attendance" (dict[str, str]): A dictionary mapping student IDs to attendance status strings for the given date.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - Students are sorted by last name and then first name in the output.
+            - The return data dictionary always uses a named key ("attendance") to support consistent response unpacking and future extensibility.
+        """
+        if class_date not in self.class_dates:
+            return Response.fail(
+                detail=f"The selected date could not be found in the course schedule: {class_date.isoformat()}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
         attendance_report = {}
 
-        active_students = self.get_records(self.students, lambda x: x.is_active)
+        students_response = self.get_records(
+            self.students,
+            lambda x: x.is_active,
+        )
+
+        if not students_response.success:
+            return Response.fail(
+                detail=f"Could not populate the list of active students: {students_response.detail}",
+                error=students_response.error,
+                status_code=students_response.status_code,
+            )
+
+        active_students = students_response.data["records"]
+
+        if not active_students:
+            return Response.fail(
+                detail=f"No active students found to report attendance for {class_date.isoformat()}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
 
         for student in sorted(
             active_students, key=lambda x: (x.last_name, x.first_name)
         ):
+            status = student.attendance_on(class_date)
             attendance_report[student.id] = (
-                "Absent" if student.was_absent_on(class_date) else "Present"
+                "[UNMARKED]" if status == AttendanceStatus.UNMARKED else status.value
             )
 
-        return attendance_report
+        return Response.succeed(
+            data={
+                "attendance": attendance_report,
+            },
+        )
 
-    # TODO:
-    def get_attendance_for_student(self, student: Student) -> dict[str, str]:
+    def get_attendance_for_student(self, student: Student) -> Response:
+        """
+        Generates an attendance report for the given student across all scheduled class dates.
+
+        Args:
+            student (Student): The student for whom the attendance report is generated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the report was generated successfully.
+                    - False if the student is not in the roster.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the student is not found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if the student is not found
+                - data (dict | None):
+                    - On success:
+                        - "attendance" (dict[datetime.date, str]): A dictionary mapping `datetime.date` objects to attendance status strings.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The output dictionary is sorted by class date in ascending order.
+            - Dates are returned as `datetime.date` objects, not strings.
+        """
+        if student.id not in self.students:
+            return Response.fail(
+                detail=f"The selected student is not in the class roster: {student.full_name}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
 
         attendance_report = {}
 
-        for class_date in self.class_dates:
-            attendance_report[class_date.isoformat()] = (
-                "Absent" if student.was_absent_on(class_date) else "Present"
+        for class_date in sorted(self.class_dates):
+            status = student.attendance_on(class_date)
+            attendance_report[class_date] = (
+                "[UNMARKED]" if status == AttendanceStatus.UNMARKED else status.value
             )
 
-        return attendance_report
+        return Response.succeed(
+            data={
+                "attendance": attendance_report,
+            },
+        )
 
-    # TODO:
+    # TODO: resume refactor from here
     def get_total_absences_for_student(self, student: Student) -> int:
         return sum(1 for absence in student.absences if absence in self.class_dates)
 

@@ -26,3 +26,6 @@ def resolve_save_dir(course_name: str, course_term: str, dir_input: str | None) 
 
 def dir_is_empty(dir_path: str) -> bool:
     return os.path.isdir(dir_path) and not os.listdir(dir_path)
+
+
+# TODO: add auto-complete, readline, and completer enabled input

@@ -4,8 +4,10 @@
 The Category model represents a grouping of related Assignments, and may optionally be assigned a weighted percentage of the final grade.
 """
 
+from __future__ import annotations
+
 import math
-from typing import Any, Optional
+from typing import Any
 
 
 class Category:
@@ -41,7 +43,7 @@ class Category:
         return weight
 
     @weight.setter
-    def weight(self, weight: Optional[float]) -> None:
+    def weight(self, weight: float | str | None) -> None:
         self._weight = Category.validate_weight_input(weight)
 
     @property
@@ -69,7 +71,7 @@ class Category:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Category":
+    def from_dict(cls, data: dict) -> Category:
         return cls(
             id=data["id"],
             name=data["name"],
@@ -83,9 +85,21 @@ class Category:
     def __str__(self) -> str:
         return f"CATEGORY: name: {self._name}, weight: {self._weight}, id: {self._id}"
 
+    # === data manipulators ===
+
+    # TODO: deprecated, functionality moved to Gradebook
+
+    # def update_category_weight(self, weight: Any) -> bool:
+    #     try:
+    #         self.weight = weight
+    #         return True
+    #     except Exception:
+    #         return False
+
     # === data validators ===
+
     @staticmethod
-    def validate_weight_input(weight: Any) -> Optional[float]:
+    def validate_weight_input(weight: Any) -> float | None:
         """
         Validates and normalizes input for a Category weight.
 
@@ -119,12 +133,3 @@ class Category:
             raise ValueError("Weight must be between 0 and 100.")
 
         return weight
-
-    # === data manipulators ===
-
-    def update_category_weight(self, weight: Any) -> bool:
-        try:
-            self.weight = weight
-            return True
-        except Exception:
-            return False

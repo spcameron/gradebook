@@ -194,3 +194,5 @@ class Student:
         if not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
             raise ValueError("Email must be a valid address with one @ and a domain.")
         return email
+
+    # === dunder methods ===

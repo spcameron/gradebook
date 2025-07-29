@@ -37,20 +37,32 @@ Notes:
 class ErrorCode(Enum):
     # === Not Found ===
     NOT_FOUND = "NOT_FOUND"
+
     # STUDENT_NOT_FOUND, ASSIGNMENT_NOT FOUND, etc.
 
     # === Constraint Violations ===
+
     # DUPLICATE_NAME, DUPLICATE_EMAIL, etc.
 
     # === Validation Failures ===
-    INVALID_FIELD_VALUE = "INVALID_FIELD_VALUE"
-    INVALID_INPUT = "INVALID_INPUT"
+    # required argument or attribute is missing
     MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
+
+    # input structure is malformed or incomplete
+    INVALID_INPUT = "INVALID_INPUT"
+
+    # field value is out of bounds or incorrectly formatted
+    INVALID_FIELD_VALUE = "INVALID_FIELD_VALUE"
+
+    # the value is valid in isolation, but violates system rules
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
     # INVALID_DATE_FORMAT
     # INVALID_SCORE_VALUE
     # MISSING_IDENTIFIER
 
     # === State Restrictions ===
+
     # ARCHIVED_RECORD
     # SUBMISSION_EXEMPT
     # ASSIGNMENT_UNGRADED

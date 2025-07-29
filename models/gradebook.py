@@ -296,7 +296,8 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
-                - data (dict | None): Unused in this method.
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
 
 
         Notes:
@@ -335,8 +336,6 @@ class Gradebook:
             )
             write_json("class_dates.json", [d.isoformat() for d in self.class_dates])
 
-            self._unsaved_changes = False
-
         except ValueError as e:
             return Response.fail(
                 detail=f"Invalid field value: {e}",
@@ -362,6 +361,8 @@ class Gradebook:
             )
 
         else:
+            self._unsaved_changes = False
+
             return Response.succeed(detail="Gradebook successfully saved to disk.")
 
     def import_metadata(self, dir_path: str) -> None:
@@ -594,15 +595,19 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if both linked records were retrieved.
-                - detail (str | None): Description of the error if either record lookup fails.
+                - success (bool):
+                    - True if both linked records were retrieved.
+                    - False if a linked record is not found.
+                - detail (str | None):
+                    - On failure, human-readable explanation of the error.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if a linked record is not found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 404 if either record not found
-                    - 400 on failure
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict | None): Payload with the following keys:
                     - On success:
                         - "assignment" (Assignment): The linked `Assignment` object.
@@ -615,6 +620,7 @@ class Gradebook:
             - The caller is responsible for extracting and casting the records from `response.data["assignment"]` and `response.data["student"]`.
         """
         assignment_response = self.find_assignment_by_uuid(submission.assignment_id)
+
         if not assignment_response.success:
             return Response.fail(
                 detail=f"Could not resolve assignment for submission: {assignment_response.detail}",
@@ -623,6 +629,7 @@ class Gradebook:
             )
 
         student_response = self.find_student_by_uuid(submission.student_id)
+
         if not student_response.success:
             return Response.fail(
                 detail=f"Could not resolve student for submission: {student_response.detail}",
@@ -746,6 +753,7 @@ class Gradebook:
             - This method is read-only and does not raise.
             - The output dictionary is sorted by class date in ascending order.
             - Dates are returned as `datetime.date` objects, not strings.
+            - The return data dictionary always uses a named key ("attendance") to support consistent response unpacking and future extensibility.
         """
         if student.id not in self.students:
             return Response.fail(
@@ -768,9 +776,52 @@ class Gradebook:
             },
         )
 
-    # TODO: resume refactor from here
-    def get_total_absences_for_student(self, student: Student) -> int:
-        return sum(1 for absence in student.absences if absence in self.class_dates)
+    def get_total_absences_for_student(self, student: Student) -> Response:
+        """
+        Tallies the number of unexcused absences for the given student across all scheduled class dates.
+
+        Args:
+            student (Student): The student for whom the absence summary is generated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the total absences was calculated successfully.
+                    - False if the student is not in the roster.
+                - detail (str | None):
+                    - On failure, a human-readable description of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the student is not found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if the student is not found
+                - data (dict | None):
+                    - On success:
+                        - "total_absences" (int): The number of dates where the student has an `AttendanceStatus` of `ABSENT`. Excused absences are not included in the total.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The method returns a total number of absences, but does not indicate on which dates the student was absent.
+        """
+        if student.id not in self.students:
+            return Response.fail(
+                detail=f"The selected student is not in the class roster: {student.full_name}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
+        total_absences = sum(
+            1 for date in self.class_dates if student.was_absent_on(date)
+        )
+
+        return Response.succeed(
+            data={
+                "total_absences": total_absences,
+            },
+        )
 
     # --- find record by uuid ---
 
@@ -788,15 +839,19 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the record was found.
-                - detail (str | None): Description of the error if no match was found or the operation failed.
+                - success (bool):
+                    - True if the record was found.
+                    - False if no match is found or the lookup failed.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if no match is found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 404 if not found
-                    - 400 on failure
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict): Payload with the following keys:
                     - On success:
                         - "record" (RecordType): The matched record object. Included only if found.
@@ -818,15 +873,17 @@ class Gradebook:
                     status_code=404,
                 )
 
-            return Response.succeed(
-                data={
-                    "record": record,
-                },
-            )
         except Exception as e:
             return Response.fail(
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            return Response.succeed(
+                data={
+                    "record": record,
+                },
             )
 
     def find_student_by_uuid(self, uuid: str) -> Response:
@@ -838,20 +895,24 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the `Student` object was found.
-                - detail (str | None): Description of the error if no match was found or the operation failed.
+                - success (bool):
+                    - True if the `Student` object was found.
+                    - False if no match is found or the lookup failed.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if no match is found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 404 if no match is found
-                    - 400 on failure
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict): Payload with the following keys:
                     - On success:
                         - "record" (Student): The matched `Student` object. Included only if found.
                     - On failure:
-                        None
+                        - None
 
         Notes:
             - This method is read-only and does not raise.
@@ -869,20 +930,24 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the `Category` object was found.
-                - detail (str | None): Description of the error if no match was found or the operation failed.
+                - success (bool):
+                    - True if the `Category` object was found.
+                    - False if no match is found or the lookup failed.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if no match is found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 404 if no match is found
-                    - 400 on failure
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict): Payload with the following keys:
                     - On success:
                         - "record" (Category): The matched `Category` object. Included only if found.
                     - On failure:
-                        None
+                        - None
         Notes:
             - This method is read-only and does not raise.
             - The "record" key is only included in the response on success.
@@ -899,20 +964,24 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the `Assignment` object was found.
-                - detail (str | None): Description of the error if no match was found or the operation failed.
+                - success (bool):
+                    - True if the `Assignment` object was found.
+                    - False if no match is found or the lookup failed.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if no match is found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 404 if no match is found
-                    - 400 on failure
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict): Payload with the following keys:
                     - On success:
                         - "record" (Assignment): The matched `Assignment` object. Included only if found.
                     - On failure:
-                        None
+                        - None
 
         Notes:
             - This method is read-only and does not raise.
@@ -930,20 +999,24 @@ class Gradebook:
 
         Returns:
             Response: A structured response with the following contract:
-                - success (bool): True if the `Submission` object was found.
-                - detail (str | None): Description of the error if no match was found or the operation failed.
+                - success (bool):
+                    - True if the `Submission` object was found.
+                    - False if no match is found or the lookup failed.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if no match is found.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
-                    - 404 if no match if found
-                    - 400 on failure
+                    - 404 if no match is found
+                    - 400 for other failures (e.g., unexpected errors)
                 - data (dict): Payload with the following keys:
                     - On success:
                         - "record" (Submission): The matched `Submission` object. Included only if found.
                     - On failure:
-                        None
+                        - None
 
         Notes:
             - This method is read-only and does not raise.
@@ -952,120 +1025,737 @@ class Gradebook:
         """
         return self.find_record_by_uuid(uuid, self.submissions)
 
-    # TODO:
     def find_submission_by_assignment_and_student(
         self, assignment_id: str, student_id: str
-    ) -> Submission | None:
+    ) -> Response:
+        """
+        Finds a `Submission` object matching a given assignment id and student id.
+
+        Args:
+            assignment_id (str): The unique ID of an `Assignment` object.
+            student_id (str): The unique ID of a `Student` object.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if a matching `Submission` was found.
+                    - False if no match is found.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching record is found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if no match is found
+                - data (dict): Payload with the following keys:
+                    - On success:
+                        - "submission" (Submission): The matched `Submission` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The "submission" key is only included in the response on success.
+            - The caller is responsible for extracting and casting the `Submission` object from `response.data["submission"]`.
+        """
         for submission in self.submissions.values():
             if (
                 submission.assignment_id == assignment_id
                 and submission.student_id == student_id
             ):
-                return submission
-        return None
+                return Response.succeed(
+                    data={
+                        "submission": submission,
+                    },
+                )
+
+        return Response.fail(
+            detail=f"No matching submission could be found: assignment id {assignment_id}, student id {student_id}.",
+            error=ErrorCode.NOT_FOUND,
+            status_code=404,
+        )
 
     # --- find record by query ---
 
-    def find_student_by_query(self, query: str) -> list[Student]:
-        matches = [
+    def find_student_by_query(self, query: str) -> Response:
+        """
+        Generates a list of `Student` objects whose name or email contains the search query.
+
+        Args:
+            query (str): A search key to compare against student names and emails.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if at least one matching `Student` was found.
+                    - False if no matches were found.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching record is found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if no match is found
+                - data (dict): Payload with the following keys:
+                    - On success:
+                        - "matches" (list[Student]): Students whose full name or email contains the search query.
+                    - On failure:
+                        - None.
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The search query is normalized (leading and trailing whitespace stripped and lowercase) before searching.
+        """
+        query = self._normalize(query)
+
+        matching_students = [
             student
             for student in self.students.values()
             if query in student.full_name.lower() or query in student.email.lower()
         ]
 
-        return matches
+        if not matching_students:
+            return Response.fail(
+                detail=f"No students found with names or emails matching '{query}'.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
 
-    def find_category_by_query(self, query: str) -> list[Category]:
-        matches = [
+        return Response.succeed(
+            data={
+                "matches": matching_students,
+            },
+        )
+
+    def find_category_by_query(self, query: str) -> Response:
+        """
+        Generates a list of `Category` objects whose name contains the search query.
+
+        Args:
+            query (str): A search key to compare against category names.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if at least one matching `Category` was found.
+                    - False if no matches were found.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching record is found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if no match is found
+                - data (dict): Payload with the following keys:
+                    - On success:
+                        - "matches" (list[Category]): Categories whose name contains the search query.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The search query is normalized (lowercased, stripped of leading/trailing whitespace) before searching.
+        """
+        query = self._normalize(query)
+
+        matching_categories = [
             category
             for category in self.categories.values()
             if query in category.name.lower()
         ]
 
-        return matches
+        if not matching_categories:
+            return Response.fail(
+                detail=f"No categories found with names matching '{query}'.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
 
-    def find_assignment_by_query(self, query: str) -> list[Assignment]:
-        matches = [
+        return Response.succeed(
+            data={
+                "matches": matching_categories,
+            },
+        )
+
+    def find_assignment_by_query(self, query: str) -> Response:
+        """
+        Generates a list of `Assignment` objects whose name contains the search query.
+
+        Args:
+            query (str): A search key to compare against assignment names.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if at least one matching `Assignment` was found.
+                    - False if no matches were found.
+                - detail (str | None):
+                    - On failure, a human-readable explanation of the problem.
+                    - On success, None.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching record is found.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if no match is found
+                - data (dict): Payload with the following keys:
+                    - On success:
+                        - "matches" (list[Assignment]): Assignments whose name contains the search query.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method is read-only and does not raise.
+            - The search query is normalized (lowercased, stripped of leading/trailing whitespace) before searching.
+        """
+        query = self._normalize(query)
+
+        matching_assignments = [
             assignment
             for assignment in self.assignments.values()
             if query in assignment.name.lower()
         ]
 
-        return matches
+        if not matching_assignments:
+            return Response.fail(
+                detail=f"No assignments found with names matching '{query}'.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
+        return Response.succeed(
+            data={
+                "matches": matching_assignments,
+            },
+        )
 
     # === data manipulators ===
 
     def mark_dirty(self) -> None:
+        """
+        Helper method to indicate the presence of unsaved changes.
+        """
         self._unsaved_changes = True
+
+    # --- generalized record operations ---
+
+    def _add_record(self, record: RecordType, dictionary: dict) -> Response:
+        """
+        Adds a `RecordType` object to a given `Gradebook` attribute dictionary.
+
+        Args:
+            record (RecordType): The object to be added to the gradebook.
+            dictionary (dict): The dictionary in which to store the record.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the object was successfully added.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (RecordType): The successfully added record.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and does not call `mark_dirty()`; callers must handle that manually.
+            - This method is private and should only be called by `Gradebook`-level wrappers.
+        """
+        try:
+            dictionary[record.id] = record
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            return Response.succeed(
+                detail="Record successfully added to dictionary.",
+                data={
+                    "record": record,
+                },
+            )
+
+    def _remove_record(self, record: RecordType, dictionary: dict) -> Response:
+        """
+        Removes a `RecordType` object from a given `Gradebook` attribute dictionary.
+
+        Args:
+            record (RecordType): The object to be removed from the gradebook.
+            dictionary (dict): The dictionary from which to remove the record.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the object was successfully removed.
+                    - False if the record cannot be found in the dictionary or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the record cannot be found in the dictionary.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int |None):
+                    - 200 on success
+                    - 404 if the record cannot be found
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+
+        Notes:
+            - This method mutates `Gradebook` state and does not call `mark_dirty()`; callers must handle that manually.
+            - This method is private and should only be called by `Gradebook`-level wrappers.
+        """
+        try:
+            del dictionary[record.id]
+
+        except KeyError:
+            return Response.fail(
+                detail=f"No matching record could be found for deletion: {record}.",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            return Response.succeed(
+                detail="Record successfully removed from the gradebook.",
+            )
+
+    # --- student manipulation ---
+
+    def add_student(self, student: Student) -> Response:
+        """
+        Adds a `Student` object to the `gradebook.students` dictionary.
+
+        Args:
+            student (Student): The `Student` object to be added to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Student` object was successfully added.
+                    - False if another student with the same email already exists in the dictionary.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if the email is not unique.
+                    - `ErrorCode.INTERNAL_ERROR` if `_add_record` fails or unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Student): The added `Student` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            self.require_unique_student_email(student.email)
+
+            add_response = self._add_record(student, self.students)
+            if not add_response.success:
+                return Response.fail(
+                    detail=f"Failed to add student: {add_response.detail}",
+                    error=add_response.error,
+                    status_code=add_response.status_code,
+                )
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Student successfully added to the gradebook.",
+                data=add_response.data,
+            )
+
+    # TODO: fill in response arguments after writing remove_submission
+    def remove_student(self, student: Student) -> Response:
+        """
+        Removes a 'Student' object and all linked `Submission` objects from the gradebook.
+
+        Args:
+            student (Student): The `Student` object to be removed from the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Student` object and all linked `Submission` objects were successfully removed.
+                    - False if the student cannot be found, any linked submissions cannot be removed, or unexpected errors.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the student or any submission cannot be found in the gradebook.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if a record cannot be found
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+        Notes:
+            - This method mutates `Gradebook` state by removing the specified student and all their associated submissions.
+            - Linked submissions are removed first to maintain referential integrity.
+            - If any submission cannot be removed, the operation is aborted and the student remains in the Gradebook.
+            - This method calls `mark_dirty()` if and only if the operation succeeds.
+        """
+        # populate linked submissions
+        submissions_response = self.get_records(
+            self.submissions, lambda x: x.student_id == student.id
+        )
+
+        if not submissions_response.success:
+            return Response.fail()
+
+        linked_submissions = submissions_response.data["records"]
+
+        # for submission in linked submissions, remove submission
+        for submission in linked_submissions:
+            remove_response = self.remove_submission(submission)
+            if not remove_response.success:
+                return Response.fail()
+
+        # remove student
+        remove_response = self._remove_record(student, self.students)
+
+        if not remove_response.success:
+            return Response.fail()
+
+        return Response.succeed()
+
+    # --- category manipulation ---
+
+    def update_category_weight(
+        self, category: Category, weight: float | str | None
+    ) -> Response:
+        """
+        Updates the `weight` attribute of a given `Category` object.
+
+        Args:
+            category (Category): The category whose attribute is updated.
+            weight (float | None): The new weight value to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the weight attribute was successfully updated.
+                    - False if the new weight value is invalid or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INVALID_FIELD_VALUE` if weight validation fails.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failed weight validation or logic errors
+                - data (dict | None):
+                    - On success:
+                        - "record" (Category): The updated `Category` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - The `weight` value must be a finite float between 0 and 100 (inclusive), or None for unweighted. Validation failures raise `TypeError` or `ValueError`.
+        """
+        try:
+            category.weight = weight
+
+        except (TypeError, ValueError) as e:
+            return Response.fail(
+                detail=f"Weight validation failed: {e}",
+                error=ErrorCode.INVALID_FIELD_VALUE,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail=f"Category weight successfully updated to: {category.weight if category.weight is not None else '[UNWEIGHTED]'}.",
+                data={
+                    "record": category,
+                },
+            )
+
+    # --- assignment manipulation ---
+
+    # --- submission manipulation ---
+
+    def remove_submission(self, submission: Submission) -> Response:
+        """
+        Removes a `Submission` object from the `gradebook.submissions` dictionary.
+
+        Args:
+            submission (Submission): The `Submission` object to be removed from the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Submission` object was successfully removed.
+                    - False if the submission cannot be found or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the submission cannot be found in the gradebook.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if the submission cannot be found
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            remove_response = self._remove_record(submission, self.submissions)
+
+            if not remove_response.success:
+                return Response.fail(
+                    detail=f"Failed to remove submission: {remove_response.detail}",
+                    error=remove_response.error,
+                    status_code=remove_response.status_code,
+                )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Submission successfully removed from the gradebook."
+            )
 
     # --- category weighting methods ---
 
-    def toggle_is_weighted(self) -> None:
-        if self.uses_weighting:
-            self._metadata["uses_weighting"] = False
-            self.reset_category_weights()
+    def toggle_is_weighted(self) -> Response:
+        """
+        Toggles the boolean value of `uses_weighting` in the gradebook metadata.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the weighting status is successfully changed.
+                    - False if the weighting status does not change as expected, if category weights cannot reset when disabling weighting, or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a confirmation message displaying the current weighting status.
+                - error (ErrorCode | str | None):
+                    - TODO AFTER reset_category_weights
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors
+                - status_code (int | None):
+                    - TODO AFTER reset_category_weights
+                    - 200 on success
+                    - 400 on logic or validation failure
+                - data (dict | None):
+                    - On success:
+                        - "uses_weighting" (bool): The state of `uses_weighting` after the operation.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            prev_status = self.uses_weighting
+
+            if self.uses_weighting:
+                self._metadata["uses_weighting"] = False
+
+                reset_response = self.reset_category_weights()
+                if not reset_response.success:
+                    return Response.fail(
+                        detail=f"Failed to reset category weights: {reset_response.detail}",
+                        error=reset_response.error,
+                        status_code=reset_response.status_code,
+                    )
+
+            else:
+                self._metadata["uses_weighting"] = True
+
+            if prev_status == self.uses_weighting:
+                raise RuntimeError("Weighting toggle did not succeed as expected.")
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
         else:
-            self._metadata["uses_weighting"] = True
+            self.mark_dirty()
 
-    # TODO: update w/ boolean return values
-    def reset_category_weights(self) -> None:
-        active_categories = self.get_records(
-            self.categories,
-            lambda x: x.is_active,
-        )
+            return Response.succeed(
+                detail=f"Gradebook successfully updated. Weighting is {self.weighting_status}.",
+                data={
+                    "uses_weighting": self.uses_weighting,
+                },
+            )
 
-        for category in active_categories:
-            category.weight = None
+    def reset_category_weights(self) -> Response:
+        """
+        Resets the `weight` attribute of all active `Category` objects to None.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if all category weights are reset to None
+                    - False if the list of active categories fails to populate or any of the categories fails to set `weight` to None
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INVALID_FIELD_VALUE` if weight validation fails.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failed weight validation or logic errors
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+
+        Notes:
+            - This method mutates `Gradebook` and `Category` states and calls `mark_dirty()` if successful.
+        """
+        try:
+            categories_response = self.get_records(
+                self.categories,
+                lambda x: x.is_active,
+            )
+
+            if not categories_response.success:
+                return Response.fail(
+                    detail=f"Could not populate the list of active categories: {categories_response.detail}",
+                    error=categories_response.error,
+                    status_code=categories_response.status_code,
+                )
+
+            active_categories = categories_response.data["records"]
+
+            for category in active_categories:
+                response = self.update_category_weight(category, None)
+                if not response.success:
+                    return Response.fail(
+                        detail=f"Could not reset category weight to None: {category.name} - {response.detail}",
+                        error=response.error,
+                        status_code=response.status_code,
+                    )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="All active category weights successfully reset to None."
+            )
 
     # --- add records ---
 
-    def add_record(self, record: RecordType, dictionary: dict) -> None:
-        dictionary[record.id] = record
+    # this has been rewritten above, preserved while rewriting the wrappers below
 
+    # def add_record(self, record: RecordType, dictionary: dict) -> None:
+    #     dictionary[record.id] = record
+
+    # TODO: resume refactor from here
     # TODO: unique record validation
-    def add_student(self, student: Student) -> None:
-        self.add_record(student, self.students)
+
+    # def add_student(self, student: Student) -> None:
+    #     self._add_record(student, self.students)
 
     def add_category(self, category: Category) -> None:
-        self.add_record(category, self.categories)
+        self._add_record(category, self.categories)
 
     def add_assignment(self, assignment: Assignment) -> None:
-        self.add_record(assignment, self.assignments)
+        self._add_record(assignment, self.assignments)
 
     def add_submission(self, submission: Submission) -> None:
-        self.add_record(submission, self.submissions)
+        self._add_record(submission, self.submissions)
 
     # --- remove records ---
 
-    def remove_record(self, record: RecordType, dictionary: dict) -> None:
-        try:
-            del dictionary[record.id]
-        except KeyError:
-            print("\nERROR: No matching record could be found for deletion.")
-            from cli.menu_helpers import confirm_action
+    # this has been rewritten above, preserved while rewriting the wrappers below
 
-            if confirm_action("Would you like to display the faulty deletion request?"):
-                print(
-                    f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
-                )
-                print(f" ... {record}")
+    # def remove_record(self, record: RecordType, dictionary: dict) -> None:
+    #     try:
+    #         del dictionary[record.id]
+    #     except KeyError:
+    #         print("\nERROR: No matching record could be found for deletion.")
+    #         from cli.menu_helpers import confirm_action
+    #
+    #         if confirm_action("Would you like to display the faulty deletion request?"):
+    #             print(
+    #                 f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
+    #             )
+    #             print(f" ... {record}")
 
-    def remove_student(self, student: Student) -> None:
-        """
-        Removes a Student from self.students.
-
-        Args:
-            student: The Student targeted for deletion.
-
-        Notes:
-            Recursively deletes all linked Submissions as well.
-        """
-        self.remove_record(student, self.students)
-        linked_submissions = self.get_records(
-            self.submissions, lambda x: x.student_id == student.id
-        )
-        for submission in linked_submissions:
-            self.remove_submission(submission)
+    # def remove_student(self, student: Student) -> None:
+    #     """
+    #     Removes a Student from self.students.
+    #
+    #     Args:
+    #         student: The Student targeted for deletion.
+    #
+    #     Notes:
+    #         Recursively deletes all linked Submissions as well.
+    #     """
+    #     self._remove_record(student, self.students)
+    #     linked_submissions = self.get_records(
+    #         self.submissions, lambda x: x.student_id == student.id
+    #     )
+    #     for submission in linked_submissions:
+    #         self.remove_submission(submission)
 
     def remove_category(self, category: Category) -> None:
         """
@@ -1077,7 +1767,7 @@ class Gradebook:
         Notes:
             Recursively deletes all linked Assignments (and therefore Submissions) as well.
         """
-        self.remove_record(category, self.categories)
+        self._remove_record(category, self.categories)
         linked_assignments = self.get_records(
             self.assignments, lambda x: x.category_id == category.id
         )
@@ -1094,21 +1784,21 @@ class Gradebook:
         Notes:
             Recursively deletes all linked Submissions as well.
         """
-        self.remove_record(assignment, self.assignments)
+        self._remove_record(assignment, self.assignments)
         linked_submissions = self.get_records(
             self.submissions, lambda x: x.assignment_id == assignment.id
         )
         for submission in linked_submissions:
             self.remove_submission(submission)
 
-    def remove_submission(self, submission: Submission) -> None:
-        """
-        Removes a Submission from self.submissions.
-
-        Args:
-            submission: The Submission targeted for deletion.
-        """
-        self.remove_record(submission, self.submissions)
+    # def remove_submission(self, submission: Submission) -> None:
+    #     """
+    #     Removes a Submission from self.submissions.
+    #
+    #     Args:
+    #         submission: The Submission targeted for deletion.
+    #     """
+    #     self._remove_record(submission, self.submissions)
 
     # --- attendance methods ---
 
@@ -1188,9 +1878,6 @@ class Gradebook:
 
     # === data validators ===
 
-    def _normalize(self, input: str) -> str:
-        return input.strip().lower()
-
     def require_unique_student_email(self, email: str) -> None:
         normalized = self._normalize(email)
         if any(self._normalize(s.email) == normalized for s in self.students.values()):
@@ -1214,6 +1901,13 @@ class Gradebook:
             (s.assignment_id == assignment_id and s.student_id == student_id)
             for s in self.submissions.values()
         )
+
+    # === helper methods ===
+
+    def _normalize(self, input: str) -> str:
+        return input.strip().lower()
+
+    # === dunder methods ===
 
 
 # docstring template for methods that return Response objects

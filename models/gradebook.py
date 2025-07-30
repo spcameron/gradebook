@@ -501,13 +501,12 @@ class Gradebook:
             record_name="student",
         )
 
-    # TODO: refactor to match import_students
     def import_categories(self, category_data: list) -> None:
         """
         Imports a list of category records into the gradebook.
 
         Args:
-            category_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Category` objects.
+            category_data (list[dict[str, Any]]): A list of dictionaries, each representing serialized `Category` objects.
 
         Raises:
             - ValueError:
@@ -517,24 +516,26 @@ class Gradebook:
             - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
+            - RuntimeError:
+                - If unexpected errors occur during `add_category()`.
+
         Notes:
             - This method fails fast: if any `Category` object is invalid, the entire import is aborted.
             - Designed for internal use during gradebook loading.
         """
-        for category_dict in category_data:
-            try:
-                category = Category.from_dict(category_dict)
-                self.add_category(category)
-            except (ValueError, TypeError) as e:
-                raise ValueError(f"Failed to import category: {category_dict} - {e}")
+        self._import_records(
+            data=category_data,
+            from_dict_fn=Category.from_dict,
+            add_fn=self.add_category,
+            record_name="category",
+        )
 
-    # TODO: refactor to match import_students
     def import_assignments(self, assignment_data: list) -> None:
         """
         Imports a list of assignment records into the gradebook.
 
         Args:
-            assignment_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Assignment` objects.
+            assignment_data (list[dict[str, Any]]): A list of dictionaries, each representing serialized `Assignment` objects.
 
         Raises:
             - ValueError:
@@ -544,26 +545,26 @@ class Gradebook:
             - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
+            - RuntimeError:
+                - If unexpected errors occur during `add_assignment()`.
+
         Notes:
             - This method fails fast: if any `Assignment` object is invalid, the entire import is aborted.
             - Designed for internal use during gradebook loading.
         """
-        for assignment_dict in assignment_data:
-            try:
-                assignment = Assignment.from_dict(assignment_dict)
-                self.add_assignment(assignment)
-            except (ValueError, TypeError) as e:
-                raise ValueError(
-                    f"Failed to import assignment: {assignment_dict} - {e}"
-                )
+        self._import_records(
+            data=assignment_data,
+            from_dict_fn=Assignment.from_dict,
+            add_fn=self.add_assignment,
+            record_name="assignment",
+        )
 
-    # TODO: refactor to match import_students
     def import_submissions(self, submission_data: list) -> None:
         """
         Imports a list of submission records into the gradebook.
 
         Args:
-            submission_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Submissions` objects.
+            submission_data (list[dict[str, Any]]): A list of dictionaries, each representing serialized `Submissions` objects.
 
         Raises:
             - ValueError:
@@ -573,18 +574,19 @@ class Gradebook:
             - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
+            - RuntimeError:
+                - If unexpected errors occur during `add_submission()`.
+
         Notes:
             - This method fails fast: if any `Submission` object is invalid, the entire import is aborted.
             - Designed for internal use during gradebook loading.
         """
-        for submission_dict in submission_data:
-            try:
-                submission = Submission.from_dict(submission_dict)
-                self.add_submission(submission)
-            except (ValueError, TypeError) as e:
-                raise ValueError(
-                    f"Failed to import submission: {submission_dict} - {e}"
-                )
+        self._import_records(
+            data=submission_data,
+            from_dict_fn=Submission.from_dict,
+            add_fn=self.add_submission,
+            record_name="submission",
+        )
 
     # === data accessors ===
 
@@ -1320,7 +1322,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "record" (RecordType): The successfully added record.
                     - On failure:
@@ -1411,7 +1413,7 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if the `Student` object was successfully added.
-                    - False if another student with the same email already exists in the gradebook.
+                    - False if another student with the same email already exists in the gradebook or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
@@ -1421,7 +1423,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "record" (Student): The added `Student` object.
                     - On failure:
@@ -1489,7 +1491,7 @@ class Gradebook:
         Notes:
             - This method mutates `Gradebook` state by removing the specified student and all their associated submissions.
             - Linked submissions are removed first to maintain referential integrity.
-            - If any submission cannot be removed, the operation is aborted and the student remains in the Gradebook.
+            - If any submission cannot be removed, the operation is aborted and the student remains in the gradebook.
             - This method calls `mark_dirty()` if and only if the operation succeeds.
         """
         try:
@@ -1547,7 +1549,7 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if the `Category` object was successfully added.
-                    - False if another category with the same name already exists in the gradebook.
+                    - False if another category with the same name already exists in the gradebook or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
@@ -1557,7 +1559,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "record" (Category): The added `Category` object.
                     - On failure:
@@ -1598,9 +1600,78 @@ class Gradebook:
                 data=add_response.data,
             )
 
-    # TODO:
-    def remove_category() -> Response:
-        pass
+    def remove_category(self, category: Category) -> Response:
+        """
+        Removes a `Category` object and all linked `Assignment` objects from the gradebook.
+
+        Args:
+            category (Category): The `Category` object to be removed from the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Category` object and all linked `Assignment` objects were successfully removed.
+                    - False if the category cannot be found, if any linked assignments cannot be removed, or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the category or any assignment cannot be found in the gradebook.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if a record cannot be found
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+
+        Notes:
+            - This method mutates `Gradebook` state by removing the specified category and all its associated assignments.
+            - Linked assignments are removed first to maintain referential integrity.
+            - In any linked assignment cannot be removed, the operation is aborted and the category remains in the gradebook.
+            - This method calls `mark_dirty()` if and only if the operation succeeds.
+        """
+        try:
+            assignments_response = self.get_records(
+                self.assignments, lambda x: x.category_id == category.id
+            )
+
+            if not assignments_response.success:
+                return Response.fail(
+                    detail=f"Could not populate the list of linked assignments: {assignments_response.detail}",
+                    error=assignments_response.error,
+                    status_code=assignments_response.status_code,
+                )
+
+            linked_assignments = assignments_response.data["records"]
+
+            for assignment in linked_assignments:
+                remove_response = self.remove_assignment(assignment)
+
+                if not remove_response.success:
+                    return remove_response
+
+            remove_response = self._remove_record(category, self.categories)
+
+            if not remove_response.success:
+                return Response.fail(
+                    detail=f"Failed to remove category: {remove_response.detail}",
+                    error=remove_response.error,
+                    status_code=remove_response.status_code,
+                )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Category successfully removed from the gradebook."
+            )
 
     def update_category_weight(
         self, category: Category, weight: float | str | None
@@ -1626,7 +1697,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failed weight validation or logic errors
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "record" (Category): The updated `Category` object.
                     - On failure:
@@ -1684,7 +1755,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "record" (Assignment): The added `Assignment` object.
                     - On failure:
@@ -1725,15 +1796,143 @@ class Gradebook:
                 data=add_response.data,
             )
 
-    # TODO:
-    def remove_assignment() -> Response:
-        pass
+    def remove_assignment(self, assignment: Assignment) -> Response:
+        """
+        Removes an `Assignment` object and all linked `Submission` objects from the gradebook.
+
+        Args:
+            assignment (Assignment): The `Assignment` object to be removed from the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Assignment` object and all linked `Submission` objects were successfully removed.
+                    - False if the assignment cannot be found, if any linked submissions cannot be removed, or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the assignment or any submission cannot be found in the gradebook.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if a record cannot be found
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+        Notes:
+            - This method mutates `Gradebook` state by removing the specified assignment and all its associated submissions.
+            - Linked submissions are removed first to maintain referential integrity.
+            - If any linked submission cannot be removed, the operation is aborted and the assignment remains in the gradebook.
+            - This method calls `mark_dirty()` if and only if the operation succeeds.
+        """
+        try:
+            submissions_response = self.get_records(
+                self.submissions, lambda x: x.assignment_id == assignment.id
+            )
+
+            if not submissions_response.success:
+                return Response.fail(
+                    detail=f"Could not populate the list of linked submissions: {submissions_response.detail}",
+                    error=submissions_response.error,
+                    status_code=submissions_response.status_code,
+                )
+
+            linked_submissions = submissions_response.data["records"]
+
+            for submission in linked_submissions:
+                remove_response = self.remove_submission(submission)
+
+                if not remove_response.success:
+                    return remove_response
+
+            remove_response = self._remove_record(assignment, self.assignments)
+
+            if not remove_response.success:
+                return Response.fail(
+                    detail=f"Failed to remove assignment: {remove_response.detail}",
+                    error=remove_response.error,
+                    status_code=remove_response.status_code,
+                )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Assignment successfully removed from the gradebook."
+            )
 
     # --- submission manipulation ---
 
-    # TODO:
-    def add_submission() -> Response:
-        pass
+    def add_submission(self, submission: Submission) -> Response:
+        """
+        Adds a `Submission` object to the `gradebook.submissions` dictionary.
+
+        Args:
+            submission (Submission): The `Submission` object to be added to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Submission` object was successfully added.
+                    - False if another submission with the same linked assignment and student already exists in the gradebook.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None);
+                    - `ErrorCode.VALIDATION_FIELD` if the student/assignment pair is not unique.
+                    - `ErrorCode.INTERNAL_ERROR` if `_add_record()` fails or for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None): Payload with the following keys:
+                    - On success:
+                        - "record" (Submission): The added `Submission` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            self.require_unique_submission(
+                submission.assignment_id, submission.student_id
+            )
+
+            add_response = self._add_record(submission, self.submissions)
+
+            if not add_response.success:
+                return Response.fail(
+                    detail=f"Failed to add submission: {add_response.detail}",
+                    error=add_response.error,
+                    status_code=add_response.status_code,
+                )
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected response: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Submission successfully added to the gradebook.",
+                data=add_response.data,
+            )
 
     def remove_submission(self, submission: Submission) -> Response:
         """
@@ -1806,7 +2005,7 @@ class Gradebook:
                 - status_code (int | None):
                     - 200 on success
                     - 400 on logic or validation failure
-                - data (dict | None):
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "uses_weighting" (bool): The state of `uses_weighting` after the operation.
                     - On failure:
@@ -1914,206 +2113,354 @@ class Gradebook:
                 detail="All active category weights successfully reset to None."
             )
 
-    # --- add records ---
-
-    # this has been rewritten above, preserved while rewriting the wrappers below
-
-    # def add_record(self, record: RecordType, dictionary: dict) -> None:
-    #     dictionary[record.id] = record
-
-    # TODO: resume refactor from here
-
-    # def add_student(self, student: Student) -> None:
-    #     self._add_record(student, self.students)
-
-    # def add_category(self, category: Category) -> None:
-    #     self._add_record(category, self.categories)
-
-    # def add_assignment(self, assignment: Assignment) -> None:
-    #     self._add_record(assignment, self.assignments)
-
-    def add_submission(self, submission: Submission) -> None:
-        self._add_record(submission, self.submissions)
-
-    # --- remove records ---
-
-    # this has been rewritten above, preserved while rewriting the wrappers below
-
-    # def remove_record(self, record: RecordType, dictionary: dict) -> None:
-    #     try:
-    #         del dictionary[record.id]
-    #     except KeyError:
-    #         print("\nERROR: No matching record could be found for deletion.")
-    #         from cli.menu_helpers import confirm_action
-    #
-    #         if confirm_action("Would you like to display the faulty deletion request?"):
-    #             print(
-    #                 f"\nThe following record was queued for deletion, but could not be located in the Gradebook:"
-    #             )
-    #             print(f" ... {record}")
-
-    # def remove_student(self, student: Student) -> None:
-    #     """
-    #     Removes a Student from self.students.
-    #
-    #     Args:
-    #         student: The Student targeted for deletion.
-    #
-    #     Notes:
-    #         Recursively deletes all linked Submissions as well.
-    #     """
-    #     self._remove_record(student, self.students)
-    #     linked_submissions = self.get_records(
-    #         self.submissions, lambda x: x.student_id == student.id
-    #     )
-    #     for submission in linked_submissions:
-    #         self.remove_submission(submission)
-
-    def remove_category(self, category: Category) -> None:
-        """
-        Removes a Category from self.categories.
-
-        Args:
-            category: The Category targeted for deletion.
-
-        Notes:
-            Recursively deletes all linked Assignments (and therefore Submissions) as well.
-        """
-        self._remove_record(category, self.categories)
-        linked_assignments = self.get_records(
-            self.assignments, lambda x: x.category_id == category.id
-        )
-        for assignment in linked_assignments:
-            self.remove_assignment(assignment)
-
-    def remove_assignment(self, assignment: Assignment) -> None:
-        """
-        Removes an Assignment from self.assignments.
-
-        Args:
-            assignment: The Assignment targeted for deletion.
-
-        Notes:
-            Recursively deletes all linked Submissions as well.
-        """
-        self._remove_record(assignment, self.assignments)
-        linked_submissions = self.get_records(
-            self.submissions, lambda x: x.assignment_id == assignment.id
-        )
-        for submission in linked_submissions:
-            self.remove_submission(submission)
-
-    # def remove_submission(self, submission: Submission) -> None:
-    #     """
-    #     Removes a Submission from self.submissions.
-    #
-    #     Args:
-    #         submission: The Submission targeted for deletion.
-    #     """
-    #     self._remove_record(submission, self.submissions)
-
     # --- attendance methods ---
 
-    def add_class_date(self, class_date: datetime.date) -> bool:
-        if class_date in self.class_dates:
-            return False
+    def add_class_date(self, class_date: datetime.date) -> Response:
+        """
+        Adds a new date to the `gradebook.class_dates` attribute set.
 
-        self.class_dates.add(class_date)
-        self.mark_dirty()
-        return True
+        Args:
+            class_date (datetime.date): The class date to be added to the gradebook.
 
-    def batch_add_class_dates(self, class_dates: list[datetime.date]) -> bool:
-        for class_date in class_dates:
-            self.add_class_date(class_date)
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the date was successfully added.
+                    - False if the date already exists in the schedule or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if the class date already exists in the schedule.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None): Payload with the following keys:
+                    - On success:
+                        - "record" (datetime.date): The raw date object as added to the schedule.
+                    - On failure:
+                        - None
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            self.require_unique_class_date(class_date)
 
-        if any(date not in self.class_dates for date in class_dates):
-            return False
+            self.class_dates.add(class_date)
 
-        return True
-
-    def remove_class_date(self, class_date: datetime.date) -> bool:
-        if class_date not in self.class_dates:
-            return False
-
-        self.class_dates.discard(class_date)
-
-        for student in self.students.values():
-            student.remove_absence(class_date)
-
-        self.mark_dirty()
-        return True
-
-    def remove_all_class_dates(self) -> bool:
-        for class_date in list(self.class_dates):
-            self.remove_class_date(class_date)
-
-        if len(self.class_dates) > 0:
-            return False
-
-        return True
-
-    def mark_student_absent(self, student: Student, class_date: datetime.date) -> bool:
-        if student.id not in self.students:
-            raise ValueError(
-                f"Cannot mark absence: {student.full_name} is not enrolled in this course."
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
             )
 
-        if class_date not in self.class_dates:
-            raise ValueError(
-                f"Cannot mark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
             )
 
-        if student.mark_absent(class_date):
+        else:
             self.mark_dirty()
-            return True
 
-        return False
-
-    def unmark_student_absent(
-        self, student: Student, class_date: datetime.date
-    ) -> bool:
-        if student.id not in self.students:
-            raise ValueError(
-                f"Cannot unmark absence: {student.full_name} is not enrolled in this course."
+            return Response.succeed(
+                detail="Class date successfully added to the gradebook.",
+                data={
+                    "record": class_date,
+                },
             )
 
-        if class_date not in self.class_dates:
-            raise ValueError(
-                f"Cannot unmark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+    def batch_add_class_dates(self, class_dates: list[datetime.date]) -> Response:
+        """
+        Adds multiple class dates to the gradebook schedule.
+
+        Attempts to add each date individually using `add_class_date()`. Tracks which dates were successfully added and which were skipped due to validation errors (e.g., duplicates). This method is not transactional; some dates may be added even if others fail.
+
+        Args:
+            class_dates (list[datetime.date]): A list of class dates to add to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if all class dates were successfully added.
+                    - False if one or more dates could not be added.
+                - detail (str | None):
+                    - Summary of how many dates were added versus skipped.
+                    - On fast-failure, a human-readable description of the error.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if one or more dates were skipped due to duplicates or validation issues.
+                    - `ErrorCode.INTERNAL_ERROR` if an unexpected error interrupts the batch process.
+                - status_code (int | None):
+                    - 200 if all dates were added successfully
+                    - 400 on failure
+                - data (dict | None): A payload describing the operation result:
+                    - "added" (list[datetime.date]): Dates that were successfully added.
+                    - "skipped" (list[datetime.date]): Dates that were not added due to validation failure.
+
+        Notes:
+            - Each call to `add_class_date()` will invoke `mark_dirty()` if the addition succeeds.
+            - This method does not attempt to roll back or retry failed additions.
+        """
+        try:
+            added = []
+            skipped = []
+
+            for class_date in class_dates:
+                add_response = self.add_class_date(class_date)
+
+                if add_response.success:
+                    added.append(class_date)
+                elif add_response.error == ErrorCode.VALIDATION_FAILED:
+                    skipped.append(class_date)
+                else:
+                    return add_response
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
             )
 
-        if student.remove_absence(class_date):
+        else:
+            if len(added) == len(class_dates):
+                return Response.succeed(
+                    detail="All class dates successfully added to the gradebook.",
+                    data={
+                        "added": added,
+                        "skipped": skipped,
+                    },
+                )
+            else:
+                return Response.fail(
+                    detail=f"Added {len(added)} of {len(class_dates)} class dates.",
+                    error=ErrorCode.VALIDATION_FAILED,
+                    data={
+                        "added": added,
+                        "skipped": skipped,
+                    },
+                )
+
+    def remove_class_date(self, class_date: datetime.date) -> Response:
+        """
+        Removes a class date from the gradebook schedule and deletes associated attendance records from each student.
+
+        Args:
+            class_date (datetime.date): The date of the class session to remove. Must already exist in the gradebook's schedule.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the class date was successfully removed.
+                    - False if it wasn't found or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the date is not in `gradebook.class_dates`.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 404 if the class date does not exist
+                    - 400 for other failures (e.g., unexpected errors)
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+
+        Notes:
+            - This method mutates `Gradebook` and `Student` states, and calls `mark_dirty()` if successful.
+            - Attendance cleanup uses `student.clear_attendance` which does not raise on missing entries.
+        """
+        try:
+            if class_date not in self.class_dates:
+                return Response.fail(
+                    detail=f"No matching date could be found in the course schedule: {class_date.isoformat()}",
+                    error=ErrorCode.NOT_FOUND,
+                    status_code=404,
+                )
+
+            for student in self.students.values():
+                student.clear_attendance(class_date)
+
+            self.class_dates.discard(class_date)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
             self.mark_dirty()
-            return True
 
-        return False
+            return Response.succeed(
+                detail="Class date and attendance records successfully removed from the gradebook."
+            )
+
+    def remove_all_class_dates(self) -> Response:
+        """
+        Wrapper method to remove all class dates and associated attendance records from each student.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if all class dates were successfully removed or if none were scheduled.
+                    - False if any class dates remain after the operation or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` if `class_dates` wasn't fully cleared
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - Always None, this method does not return any payload.
+        """
+        try:
+            if not self.class_dates:
+                return Response.succeed(detail="The course schedule is already empty.")
+
+            for class_date in list(self.class_dates):
+                self.remove_class_date(class_date)
+
+            if len(self.class_dates) != 0:
+                return Response.fail(
+                    detail="Failed to clear all class dates.",
+                    error=ErrorCode.INTERNAL_ERROR,
+                )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            return Response.succeed(
+                detail="All class dates and attendance records successfully removed from the gradebook."
+            )
+
+    # TODO: reconsider with the new AttendanceReport
+
+    # def mark_student_absent(self, student: Student, class_date: datetime.date) -> bool:
+    #     if student.id not in self.students:
+    #         raise ValueError(
+    #             f"Cannot mark absence: {student.full_name} is not enrolled in this course."
+    #         )
+    #
+    #     if class_date not in self.class_dates:
+    #         raise ValueError(
+    #             f"Cannot mark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+    #         )
+    #
+    #     if student.mark_absent(class_date):
+    #         self.mark_dirty()
+    #         return True
+    #
+    #     return False
+
+    # TODO: reconsider with the new AttendanceReport
+
+    # def unmark_student_absent(
+    #     self, student: Student, class_date: datetime.date
+    # ) -> bool:
+    #     if student.id not in self.students:
+    #         raise ValueError(
+    #             f"Cannot unmark absence: {student.full_name} is not enrolled in this course."
+    #         )
+    #
+    #     if class_date not in self.class_dates:
+    #         raise ValueError(
+    #             f"Cannot unmark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
+    #         )
+    #
+    #     if student.remove_absence(class_date):
+    #         self.mark_dirty()
+    #         return True
+    #
+    #     return False
 
     # === data validators ===
 
     def require_unique_student_email(self, email: str) -> None:
+        """
+        Validates that no existing student shares the given email address.
+
+        Args:
+            email (str): The email address to validate for uniqueness.
+
+        Raises:
+            ValueError: If a student with the same normalized email already exists.
+        """
         normalized = self._normalize(email)
         if any(self._normalize(s.email) == normalized for s in self.students.values()):
             raise ValueError(f"A student with the email '{email}' already exists.")
 
     def require_unique_category_name(self, name: str) -> None:
+        """
+        Validates that no existing category shares the given name.
+
+        Args:
+            name (str): The category name to validate for uniqueness.
+
+        Raises:
+            ValueError: If a category with the same normalized name already exists.
+        """
         normalized = self._normalize(name)
         if any(self._normalize(c.name) == normalized for c in self.categories.values()):
             raise ValueError(f"A category with the name '{name}' already exists.")
 
     def require_unique_assignment_name(self, name: str) -> None:
+        """
+        Validates that no existing assignment shares the given name.
+
+        Args:
+            name (str): The assignment name to validate for uniqueness.
+
+        Raises:
+            ValueError: If an assignment with the same normalized name already exists.
+        """
         normalized = self._normalize(name)
         if any(
             self._normalize(a.name) == normalized for a in self.assignments.values()
         ):
             raise ValueError(f"An assignment with the name '{name}' already exists.")
 
-    # TODO: create secondary submissions index with (s_id, a_id) tuple as key
-    # TODO: raise ValueError instead
-    def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
-        return any(
+    def require_unique_submission(self, assignment_id: str, student_id: str) -> None:
+        """
+        Validates that no submission already exists for the given student and assignment.
+
+        Args:
+            assignment_id (str): The unique ID of the assignment.
+            student_id (str): The unique ID of the student.
+
+        Raises:
+            ValueError: If a submission already exists for the given student-assignment pair.
+        """
+        if any(
             (s.assignment_id == assignment_id and s.student_id == student_id)
             for s in self.submissions.values()
-        )
+        ):
+            raise ValueError(
+                f"A submission the same linked student and assignment already exists."
+            )
+
+    def require_unique_class_date(self, class_date: datetime.date) -> None:
+        """
+        Validates that the given class date is not already scheduled.
+
+        Args:
+            class_date (datetime.date): The date to validate for uniqueness.
+
+        Raises:
+            ValueError: If the date already exists in the gradebook schedule.
+        """
+        if class_date in self.class_dates:
+            raise ValueError(
+                f"This class date is already found in the course schedule."
+            )
+
+    # TODO: create secondary submissions index with (s_id, a_id) tuple as key
 
     # === helper methods ===
 

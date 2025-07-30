@@ -89,10 +89,10 @@ class Response:
     def __init__(
         self,
         success: bool,
-        error: ErrorCode | str | None = None,
         detail: str | None = None,
-        data: dict | None = None,
+        error: ErrorCode | str | None = None,
         status_code: int | None = None,
+        data: dict | None = None,
     ):
         self.success = success
         self.error = error
@@ -106,15 +106,15 @@ class Response:
     def succeed(
         cls,
         detail: str | None = None,
-        data: dict | None = None,
         status_code: int | None = 200,
+        data: dict | None = None,
     ) -> Response:
         return cls(
             success=True,
-            error=None,
             detail=detail,
-            data=data,
+            error=None,
             status_code=status_code,
+            data=data,
         )
 
     @classmethod
@@ -123,13 +123,14 @@ class Response:
         detail: str | None = None,
         error: ErrorCode | str | None = None,
         status_code: int | None = 400,
+        data: dict | None = None,
     ) -> Response:
         return cls(
             success=False,
-            error=error,
             detail=detail,
-            data=None,
+            error=error,
             status_code=status_code,
+            data=data,
         )
 
     # === persistence and import ===

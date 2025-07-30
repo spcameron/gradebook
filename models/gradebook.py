@@ -373,7 +373,7 @@ class Gradebook:
             dir_path (str): The directory path where the gradebook data is stored.
 
         Raises:
-            ValueError:
+            - ValueError:
                 - If `metadata.json` does not contain a dictionary.
                 - If `class_dates.json` exists but does not contain a list of ISO-formatted strings.
 
@@ -420,32 +420,88 @@ class Gradebook:
         except FileNotFoundError:
             self._class_dates = set()
 
+    def _import_records(
+        self,
+        data: list[dict[str, Any]],
+        from_dict_fn: Callable[[dict[str, Any]], RecordType],
+        add_fn: Callable[[RecordType], Response],
+        record_name: str,
+    ) -> None:
+        """
+        Deserializes and imports a list of records into the gradebook, failing fast on error.
+
+        Args:
+            data (list[dict[str, Any]]): A list of dictionaries representing serialized records.
+            from_dict_fn (Callable[[dict[str, Any]], RecordType]): A function that deserializes a record dictionary into a `RecordType` object.
+            add_fn (Callable[[RecordType], Response]): A function that attempts to add the deserialized record and returns a `Response`.
+            record_name (str): A human-readable name used in error messages (e.g., "student", "assignment").
+
+        Raises:
+            - ValueError:
+                - If a record dictionary is malformed or fails validation.
+            - TypeError:
+                - If the input dictionary is not properly structured.
+            - RuntimeError:
+                - If an internal error occurs during the add operation.
+            - Exception:
+                - For all other unexpected failures.
+
+        Notes:
+            - Designed for internal use by `import_students()`, `import_assignments()`, etc.
+            - This method fails fast: if any record fails deserialization or insertion, the import is aborted.
+        """
+        for record_dict in data:
+            try:
+                record = from_dict_fn(record_dict)
+            except (ValueError, TypeError) as e:
+                raise ValueError(
+                    f"Failed to deserialize {record_name}: {record_dict} - {e}"
+                )
+
+            response = add_fn(record)
+
+            if not response.success:
+                message = (
+                    f"Failed to import {record_name}: {record_dict} - {response.detail}"
+                )
+                match response.error:
+                    case ErrorCode.VALIDATION_FAILED:
+                        raise ValueError(message)
+                    case ErrorCode.INTERNAL_ERROR:
+                        raise RuntimeError(message)
+                    case _:
+                        raise Exception(message)
+
     def import_students(self, student_data: list) -> None:
         """
         Imports a list of student records into the gradebook.
 
         Args:
-            student_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Student` objects.
+            student_data (list[dict[str, Any]]): A list of dictionaries, each representing serialized `Student` objects.
 
         Raises:
-            ValueError:
+            - ValueError:
                 - If any student dictionary is malformed or missing required fields.
                 - If a deserialized student fails uniqueness validation (e.g., duplicate email).
 
-            TypeError:
-                - If the input structure is incorrect (e.g., not a list of dictionaries).
+            - TypeError:
+                - If any record dictionary has incorrect structure during deserialization.
+
+            - RuntimeError:
+                - If unexpected errors occur during `add_student()`.
 
         Notes:
-            - This method fails fast: if any `Student` object is invalid, the entire import is aborted.
+            - This method fails fast: if any record fails to deserialize or insert, the entire import is aborted.
             - Designed for internal use during gradebook loading.
         """
-        for student_dict in student_data:
-            try:
-                student = Student.from_dict(student_dict)
-                self.add_student(student)
-            except (ValueError, TypeError) as e:
-                raise ValueError(f"Failed to import student: {student_dict} - {e}")
+        self._import_records(
+            data=student_data,
+            from_dict_fn=Student.from_dict,
+            add_fn=self.add_student,
+            record_name="student",
+        )
 
+    # TODO: refactor to match import_students
     def import_categories(self, category_data: list) -> None:
         """
         Imports a list of category records into the gradebook.
@@ -454,11 +510,11 @@ class Gradebook:
             category_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Category` objects.
 
         Raises:
-            ValueError:
+            - ValueError:
                 - If any category dictionary is malformed or missing required fields.
                 - If a deserialized category fails uniqueness validation (e.g., duplicate name).
 
-            TypeError:
+            - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
         Notes:
@@ -472,6 +528,7 @@ class Gradebook:
             except (ValueError, TypeError) as e:
                 raise ValueError(f"Failed to import category: {category_dict} - {e}")
 
+    # TODO: refactor to match import_students
     def import_assignments(self, assignment_data: list) -> None:
         """
         Imports a list of assignment records into the gradebook.
@@ -480,11 +537,11 @@ class Gradebook:
             assignment_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Assignment` objects.
 
         Raises:
-            ValueError:
+            - ValueError:
                 - If any assignment dictionary is malformed or missing required fields.
                 - If a deserialized assignment fails uniqueness validation (e.g., duplicate name).
 
-            TypeError:
+            - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
         Notes:
@@ -500,6 +557,7 @@ class Gradebook:
                     f"Failed to import assignment: {assignment_dict} - {e}"
                 )
 
+    # TODO: refactor to match import_students
     def import_submissions(self, submission_data: list) -> None:
         """
         Imports a list of submission records into the gradebook.
@@ -508,11 +566,11 @@ class Gradebook:
             submission_data (list[dict[str, Any]]): A list of dictionaries representing serialized `Submissions` objects.
 
         Raises:
-            ValueError:
+            - ValueError:
                 - If any submission dictionary is malformed or missing required fields.
                 - If a deserialized submission fails uniqueness validation (e.g. linked assignment and student ids).
 
-            TypeError:
+            - TypeError:
                 - If the input structure is incorrect (e.g., not a list of dictionaries).
 
         Notes:
@@ -1353,13 +1411,13 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if the `Student` object was successfully added.
-                    - False if another student with the same email already exists in the dictionary.
+                    - False if another student with the same email already exists in the gradebook.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.VALIDATION_FAILED` if the email is not unique.
-                    - `ErrorCode.INTERNAL_ERROR` if `_add_record` fails or unexpected errors.
+                    - `ErrorCode.INTERNAL_ERROR` if `_add_record()` fails or for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
@@ -1376,6 +1434,7 @@ class Gradebook:
             self.require_unique_student_email(student.email)
 
             add_response = self._add_record(student, self.students)
+
             if not add_response.success:
                 return Response.fail(
                     detail=f"Failed to add student: {add_response.detail}",
@@ -1403,10 +1462,9 @@ class Gradebook:
                 data=add_response.data,
             )
 
-    # TODO: fill in response arguments after writing remove_submission
     def remove_student(self, student: Student) -> Response:
         """
-        Removes a 'Student' object and all linked `Submission` objects from the gradebook.
+        Removes a `Student` object and all linked `Submission` objects from the gradebook.
 
         Args:
             student (Student): The `Student` object to be removed from the gradebook.
@@ -1415,7 +1473,7 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if the `Student` object and all linked `Submission` objects were successfully removed.
-                    - False if the student cannot be found, any linked submissions cannot be removed, or unexpected errors.
+                    - False if the student cannot be found, if any linked submissions cannot be removed, or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
@@ -1434,31 +1492,115 @@ class Gradebook:
             - If any submission cannot be removed, the operation is aborted and the student remains in the Gradebook.
             - This method calls `mark_dirty()` if and only if the operation succeeds.
         """
-        # populate linked submissions
-        submissions_response = self.get_records(
-            self.submissions, lambda x: x.student_id == student.id
-        )
+        try:
+            submissions_response = self.get_records(
+                self.submissions, lambda x: x.student_id == student.id
+            )
 
-        if not submissions_response.success:
-            return Response.fail()
+            if not submissions_response.success:
+                return Response.fail(
+                    detail=f"Could not populate the list of linked submissions: {submissions_response.detail}",
+                    error=submissions_response.error,
+                    status_code=submissions_response.status_code,
+                )
 
-        linked_submissions = submissions_response.data["records"]
+            linked_submissions = submissions_response.data["records"]
 
-        # for submission in linked submissions, remove submission
-        for submission in linked_submissions:
-            remove_response = self.remove_submission(submission)
+            for submission in linked_submissions:
+                remove_response = self.remove_submission(submission)
+
+                if not remove_response.success:
+                    return remove_response
+
+            remove_response = self._remove_record(student, self.students)
+
             if not remove_response.success:
-                return Response.fail()
+                return Response.fail(
+                    detail=f"Failed to remove student: {remove_response.detail}",
+                    error=remove_response.error,
+                    status_code=remove_response.status_code,
+                )
 
-        # remove student
-        remove_response = self._remove_record(student, self.students)
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
 
-        if not remove_response.success:
-            return Response.fail()
+        else:
+            self.mark_dirty()
 
-        return Response.succeed()
+            return Response.succeed(
+                detail="Student successfully removed from the gradebook."
+            )
 
     # --- category manipulation ---
+
+    def add_category(self, category: Category) -> Response:
+        """
+        Adds a `Category` object to the `gradebook.categories` dictionary.
+
+        Args:
+            category (Category): The `Category` object to be added to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Category` object was successfully added.
+                    - False if another category with the same name already exists in the gradebook.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if the name is not unique.
+                    - `ErrorCode.INTERNAL_ERROR` if `_add_record()` fails or for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Category): The added `Category` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            self.require_unique_category_name(category.name)
+
+            add_response = self._add_record(category, self.categories)
+
+            if not add_response.success:
+                return Response.fail(
+                    detail=f"Failed to add category: {add_response.detail}",
+                    error=add_response.error,
+                    status_code=add_response.status_code,
+                )
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Category successfully added to the gradebook.",
+                data=add_response.data,
+            )
+
+    # TODO:
+    def remove_category() -> Response:
+        pass
 
     def update_category_weight(
         self, category: Category, weight: float | str | None
@@ -1521,7 +1663,77 @@ class Gradebook:
 
     # --- assignment manipulation ---
 
+    def add_assignment(self, assignment: Assignment) -> Response:
+        """
+        Adds an `Assignment` object to the `gradebook.assignments` dictionary.
+
+        Args:
+            assignment (Assignment): The `Assignment` object to be added to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the `Assignment` object was successfully added.
+                    - False if another assignment with the same name already exists in the gradebook.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if the name is not unique.
+                    - `ErrorCode.INTERNAL_ERROR` if `_add_record()` fails or for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Assignment): The added `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+        """
+        try:
+            self.require_unique_assignment_name(assignment.name)
+
+            add_response = self._add_record(assignment, self.assignments)
+
+            if not add_response.success:
+                return Response.fail(
+                    detail=f"Failed to add assignment: {add_response.detail}",
+                    error=add_response.error,
+                    status_code=add_response.status_code,
+                )
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected response: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self.mark_dirty()
+
+            return Response.succeed(
+                detail="Assignment successfully added to the gradebook.",
+                data=add_response.data,
+            )
+
+    # TODO:
+    def remove_assignment() -> Response:
+        pass
+
     # --- submission manipulation ---
+
+    # TODO:
+    def add_submission() -> Response:
+        pass
 
     def remove_submission(self, submission: Submission) -> Response:
         """
@@ -1589,10 +1801,9 @@ class Gradebook:
                     - On failure, a human-readable description of the error.
                     - On success, a confirmation message displaying the current weighting status.
                 - error (ErrorCode | str | None):
-                    - TODO AFTER reset_category_weights
+                    - `ErrorCode.INVALID_FIELD_VALUE` if weight validation fails during `reset_category_weights()`
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors
                 - status_code (int | None):
-                    - TODO AFTER reset_category_weights
                     - 200 on success
                     - 400 on logic or validation failure
                 - data (dict | None):
@@ -1611,6 +1822,7 @@ class Gradebook:
                 self._metadata["uses_weighting"] = False
 
                 reset_response = self.reset_category_weights()
+
                 if not reset_response.success:
                     return Response.fail(
                         detail=f"Failed to reset category weights: {reset_response.detail}",
@@ -1681,6 +1893,7 @@ class Gradebook:
 
             for category in active_categories:
                 response = self.update_category_weight(category, None)
+
                 if not response.success:
                     return Response.fail(
                         detail=f"Could not reset category weight to None: {category.name} - {response.detail}",
@@ -1709,16 +1922,15 @@ class Gradebook:
     #     dictionary[record.id] = record
 
     # TODO: resume refactor from here
-    # TODO: unique record validation
 
     # def add_student(self, student: Student) -> None:
     #     self._add_record(student, self.students)
 
-    def add_category(self, category: Category) -> None:
-        self._add_record(category, self.categories)
+    # def add_category(self, category: Category) -> None:
+    #     self._add_record(category, self.categories)
 
-    def add_assignment(self, assignment: Assignment) -> None:
-        self._add_record(assignment, self.assignments)
+    # def add_assignment(self, assignment: Assignment) -> None:
+    #     self._add_record(assignment, self.assignments)
 
     def add_submission(self, submission: Submission) -> None:
         self._add_record(submission, self.submissions)
@@ -1896,6 +2108,7 @@ class Gradebook:
             raise ValueError(f"An assignment with the name '{name}' already exists.")
 
     # TODO: create secondary submissions index with (s_id, a_id) tuple as key
+    # TODO: raise ValueError instead
     def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
         return any(
             (s.assignment_id == assignment_id and s.student_id == student_id)

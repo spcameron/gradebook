@@ -5,6 +5,7 @@ from enum import Enum, auto
 from typing import Any, Callable, Iterable, Optional
 
 import cli.formatters as formatters
+from core.response import Response
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
@@ -154,7 +155,7 @@ def confirm_unsaved_changes() -> bool:
 
 def prompt_if_dirty(gradebook: Gradebook) -> None:
     if gradebook.has_unsaved_changes and confirm_unsaved_changes():
-        gradebook.save(gradebook.path)
+        gradebook.save()
 
 
 def prompt_user_input(prompt: str) -> str:
@@ -492,3 +493,17 @@ def returning_to(destination: str) -> None:
 def caution_banner() -> None:
     caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
+
+
+def display_response_failure(response: Response, debug: bool = False) -> None:
+    if response.success:
+        return
+
+    error_label = (
+        response.error.name if isinstance(response.error, Enum) else str(response.error)
+    )
+
+    print(f"\n[ERROR: {error_label}] {response.detail}")
+
+    if debug and hasattr(response, "trace"):
+        print(f"\nDebug Trace: {response.trace}")

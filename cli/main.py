@@ -26,12 +26,10 @@ def run_cli() -> None:
         RuntimeError: If the menu response is unrecognized.
     """
     title = formatters.format_banner_text("GRADEBOOK MANAGER")
-
     options = [
         ("Create a new Gradebook", create_gradebook),
         ("Load an existing Gradebook", load_gradebook),
     ]
-
     zero_option = "Exit Program"
 
     while True:
@@ -108,7 +106,7 @@ def create_gradebook() -> Gradebook | None:
         gradebook_response = Gradebook.create(name, term, dir_path)
 
         if not gradebook_response.success:
-            print(f"\n... {gradebook_response.detail}")
+            helpers.display_response_failure(gradebook_response)
             continue
 
         print("... Gradebook created successfully.")
@@ -151,7 +149,7 @@ def load_gradebook() -> Gradebook | None:
         gradebook_response = Gradebook.load(dir_path)
 
         if not gradebook_response.success:
-            print(f"\n... {gradebook_response.detail}")
+            helpers.display_response_failure(gradebook_response)
             continue
 
         print("... Gradebook loaded successfully.")
@@ -173,3 +171,7 @@ def exit_program():
     print(f"\n{exit_banner}\n")
 
     raise SystemExit
+
+
+# TODO: [MVP] autocomplete dir path entry (path_utils) w/ readline and completer
+# TODO: [post-MVP] recent gradebooks workflow

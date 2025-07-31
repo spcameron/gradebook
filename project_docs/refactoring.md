@@ -1,5 +1,8 @@
 # Gradebook CLI Refactor Checklist
 
+- grep for 'return None' and change to 'return' for bail-outs
+- change "..." to "->"
+
 ## ⬆️ Core Infrastructure
 
 <!-- - [ ] Move `utils.py` to `core/utils.py` and update all import paths -->

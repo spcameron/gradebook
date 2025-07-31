@@ -6,7 +6,7 @@ Manage Students menu for the Gradebook CLI.
 Provides functions for adding, editing, removing, and viewing Students.
 """
 
-from typing import Callable, Optional, cast
+from typing import Callable, cast
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
@@ -21,13 +21,13 @@ def run(gradebook: Gradebook) -> None:
     Top-level loop with dispatch for the Manage Students menu.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        The finally block guarantees a check for unsaved changes before returning.
+        - The finally block guarantees a check for unsaved changes before returning.
     """
     title = formatters.format_banner_text("Manage Students")
     options = [
@@ -44,10 +44,13 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
+
             elif callable(menu_response):
                 menu_response(gradebook)
+
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
     finally:
         helpers.prompt_if_dirty(gradebook)
 
@@ -59,13 +62,10 @@ def run(gradebook: Gradebook) -> None:
 
 def add_student(gradebook: Gradebook) -> None:
     """
-    Loops a prompt to create a new Student and add to the Gradebook.
+    Loops a prompt to create a new `Student` object and add it to the gradebook.
 
     Args:
-        gradebook: The active Gradebook.
-
-    Notes:
-        New Students are added to the Gradebook but not saved. Gradebook is marked dirty instead.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     while True:
         new_student = prompt_new_student(gradebook)
@@ -73,9 +73,14 @@ def add_student(gradebook: Gradebook) -> None:
         if new_student is not None and preview_and_confirm_student(
             new_student, gradebook
         ):
-            gradebook.add_student(new_student)
-            gradebook.mark_dirty()
-            print(f"\n{new_student.full_name} successfully added.")
+            gradebook_response = gradebook.add_student(new_student)
+
+            if not gradebook_response.success:
+                helpers.display_response_failure(gradebook_response)
+                print(f"\n{new_student.full_name} was not added.")
+
+            else:
+                print(f"\n{new_student.full_name} successfully added.")
 
         if not helpers.confirm_action(
             "Would you like to continue adding new students?"
@@ -85,61 +90,54 @@ def add_student(gradebook: Gradebook) -> None:
     helpers.returning_to("Manage Students menu")
 
 
-def prompt_new_student(gradebook: Gradebook) -> Optional[Student]:
+def prompt_new_student(gradebook: Gradebook) -> Student | None:
     """
-    Creates a new Student.
+    Creates a new `Student` object.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        A new Student object, or None.
+        A new `Student` object, or None.
     """
     email = prompt_email_input_or_cancel(gradebook)
 
     if email is MenuSignal.CANCEL:
         return None
-    else:
-        email = cast(str, email)
+    email = cast(str, email)
 
     first_name = prompt_name_input_or_cancel(gradebook, "first")
 
     if first_name is MenuSignal.CANCEL:
         return None
-    else:
-        first_name = cast(str, first_name)
+    first_name = cast(str, first_name)
 
     last_name = prompt_name_input_or_cancel(gradebook, "last")
 
     if last_name is MenuSignal.CANCEL:
         return None
-    else:
-        last_name = cast(str, last_name)
+    last_name = cast(str, last_name)
 
     try:
-        student_id = generate_uuid()
-        new_student = Student(
-            id=student_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
+        return Student(
+            id=generate_uuid(), first_name=first_name, last_name=last_name, email=email
         )
-        return new_student
+
     except Exception as e:
-        print(f"\nError: Could not create student ... {e}")
+        print(f"\n[ERROR] Could not create student: {e}")
         return None
 
 
 def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
     """
-    Preview Student details, offers opportunity to edit details, and prompts user for confirmation.
+    Previews new `Student` details, offers opportunity to edit details, and prompts user for confirmation.
 
     Args:
-        student: The Student under review.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` object under review.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
-        Uses edit_queued_student() since this Student object has not yet been added to the Gradebook.
+        - Uses `edit_queued_student()` since this `Student` object has not yet been added to the gradebook.
     """
     print("\nYou are about to create the following student:")
     print(formatters.format_student_multiline(student, gradebook))
@@ -147,12 +145,13 @@ def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
     if helpers.confirm_action(
         "Would you like to edit this student first (change the name, email address, or enrollment status)?"
     ):
-        edit_queued_student(student, gradebook)
+        edit_student(student, gradebook, "Student creation preview")
 
     if helpers.confirm_action("Would you like to create this student?"):
         return True
+
     else:
-        print("Discarding assignment.")
+        print(f"Discarding student: {student.full_name}")
         return False
 
 
@@ -161,16 +160,17 @@ def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
 
 def prompt_email_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
     """
-    Solicits user input for Student email, validates formatting and uniqueness, and treats blank input as 'cancel'.
+    Solicits user input for student email, validates formatting and uniqueness, and treats blank input as 'cancel'.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The validated, normalized email address as a string, or MenuSignal.CANCEL if the user cancels input.
+        The validated, normalized email address as a string, or `MenuSignal.CANCEL` if the user cancels input.
 
     Notes:
-        The email address is normalized (stripped and lowercase) before checking and returning.
+        - The email address is normalized (stripped and lowercased) before checking and returning.
+        - If the input is invalid or not unique, the user is prompted again.
     """
     while True:
         user_input = helpers.prompt_user_input_or_cancel(
@@ -183,23 +183,25 @@ def prompt_email_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
         try:
             email = Student.validate_email_input(user_input)
             gradebook.require_unique_student_email(email)
+
             return email
+
         except ValueError as e:
-            print(f"\nError: {e}")
+            print(f"\n[ERROR] {e}")
 
 
 def prompt_name_input_or_cancel(
     _: Gradebook, first_or_last: str = ""
 ) -> str | MenuSignal:
     """
-    Solicits user input for Student name (first or last), treating blank input as 'cancel'.
+    Solicits user input for student name (first or last), treating blank input as 'cancel'.
 
     Args:
-        _: The active Gradebook.
-        first_or_last: Optional string to prefix the prompt with 'first name' or 'last name'.
+        _ (Gradebook): The active `Gradebook` (unused).
+        first_or_last (str): Optional string to prefix the prompt with 'first name' or 'last name'.
 
     Returns:
-        User input unmodified, or MenuSignal.CANCEL if input is "".
+        User input unmodified, or `MenuSignal.CANCEL` if input is "".
     """
     return helpers.prompt_user_input_or_cancel(
         f"Enter {(first_or_last + ' name').strip()} (leave blank to cancel):"
@@ -209,12 +211,12 @@ def prompt_name_input_or_cancel(
 # === edit student ===
 
 
-def get_editable_fields() -> list[tuple[str, Callable[[Student, Gradebook], bool]]]:
+def get_editable_fields() -> list[tuple[str, Callable[[Student, Gradebook], None]]]:
     """
     Helper method to organize the list of editable fields and their related functions.
 
     Returns:
-        A list of tuples - pairs of strings and function names.
+        A list of `(field_name, edit_function)` tuples used to prompt and edit student attributes.
     """
     return [
         ("First Name", edit_first_name_and_confirm),
@@ -226,34 +228,38 @@ def get_editable_fields() -> list[tuple[str, Callable[[Student, Gradebook], bool
 
 def find_and_edit_student(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Student and then passes the result to edit_student().
+    Prompts user to search for a `Student` and then passes the result to `edit_student()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     student = prompt_find_student(gradebook)
 
     if student is MenuSignal.CANCEL:
-        return None
-    else:
-        student = cast(Student, student)
-        edit_student(student, gradebook)
+        return
+    student = cast(Student, student)
+
+    edit_student(student, gradebook)
 
 
-def edit_student(student: Student, gradebook: Gradebook) -> None:
+def edit_student(
+    student: Student, gradebook: Gradebook, return_context: str = "Manage Students menu"
+) -> None:
     """
-    Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
+    Interactive interface for editing fields of a `Student` record.
 
     Args:
-        student: The Student being edited.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` object being edited.
+        gradebook (Gradebook): The active `Gradebook`.
+        return_context (str): An optional description of the call site, uses "Manage Students menu" by default.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        Uses a function scoped variable to flag whether the edit_* methods have manipulated the Student at all.
-        If so, the user is prompted to either save changes now, or defer and mark the Gradebook dirty for saving upstream.
+        - All edit operations are dispatched through `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty after edits, the user will be prompted to save before returning to the previous menu.
+        - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following student:")
     print(formatters.format_student_multiline(student, gradebook))
@@ -262,16 +268,15 @@ def edit_student(student: Student, gradebook: Gradebook) -> None:
     options = get_editable_fields()
     zero_option = "Finish editing and return"
 
-    unsaved_changes = False
-
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response is MenuSignal.EXIT:
             break
+
         elif callable(menu_response):
-            if menu_response(student, gradebook):
-                unsaved_changes = True
+            menu_response(student, gradebook)
+
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -280,130 +285,93 @@ def edit_student(student: Student, gradebook: Gradebook) -> None:
         ):
             break
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
     else:
         helpers.returning_without_changes()
 
-    helpers.returning_to("Manage Students menu")
+    helpers.returning_to(return_context)
 
 
-def edit_queued_student(student: Student, gradebook: Gradebook) -> None:
+def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
-    Dispatch method for the edit menu that does not track changes, since the edited Student has not yet been added to the Gradebook.
+    Prompts for a new first name and updates the `Student` record via `Gradebook`.
 
     Args:
-        student: The Student not yet added to the Gradebook and targeted for editing.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Raises:
-        RuntimeError: If the menu response is unrecognized.
-    """
-    print("\nYou are editing the following student:")
-    print(formatters.format_student_multiline(student, gradebook))
-
-    title = formatters.format_banner_text("Editable Fields")
-    options = get_editable_fields()
-    zero_option = "Finish editing and return"
-
-    while True:
-        menu_response = helpers.display_menu(title, options, zero_option)
-
-        if menu_response is MenuSignal.EXIT:
-            break
-        elif callable(menu_response):
-            menu_response(student, gradebook)
-        else:
-            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-        if not helpers.confirm_action(
-            "Would you like to continue editing this student?"
-        ):
-            break
-
-    helpers.returning_to("Student creation")
-
-
-def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> bool:
-    """
-    Edit the first_name field of a Student.
-
-    Args:
-        student: The Student targeted for editing.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the name was changed, and False otherwise.
+    Notes:
+        - Cancels early if the user enters nothing or declines the confirmation.
+        - Uses `Gradebook.update_student_first_name()` to perform the update and track changes.
     """
     current_first_name = student.first_name
     new_first_name = prompt_name_input_or_cancel(gradebook, "first")
 
     if new_first_name is MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return False
-    else:
-        new_first_name = cast(str, new_first_name)
+        return
+    new_first_name = cast(str, new_first_name)
 
     print(
-        f"\nCurrent first name: {current_first_name} ... New first name: {new_first_name}"
+        f"\nCurrent first name: {current_first_name} -> New first name: {new_first_name}"
     )
 
     if not helpers.confirm_make_change():
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        student.first_name = new_first_name
-        print("\nFirst name successfully updated to: {student.first_name}x")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update student ... {e}")
+    gradebook_response = gradebook.update_student_first_name(student, new_first_name)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print(f"\nStudent name was not updated.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> bool:
+def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
-    Edit the last_name field of a Student.
+    Prompts for a new last name and updates the `Student` record via `Gradebook`.
 
     Args:
-        student: The Student targeted for editing.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Returns:
-        True if the name was changed, and False otherwise.
+    Notes:
+        - Cancels early if the user enters nothing or declines the confirmation.
+        - Uses `Gradebook.update_student_last_name()` to perform the update and track changes.
     """
     current_last_name = student.last_name
     new_last_name = prompt_name_input_or_cancel(gradebook, "last")
 
     if new_last_name is MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return False
-    else:
-        new_last_name = cast(str, new_last_name)
+        return
+    new_last_name = cast(str, new_last_name)
 
-    print(
-        f"\nCurrent last name: {current_last_name} ... New last name: {new_last_name}"
-    )
+    print(f"\nCurrent last name: {current_last_name} -> New last name: {new_last_name}")
 
     if not helpers.confirm_make_change():
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        student.last_name = new_last_name
-        print(f"\nLast name successfully updated to: {student.last_name}.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update student ... {e}")
+    gradebook_response = gradebook.update_student_last_name(student, new_last_name)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print(f"\nStudent name was not updated.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> bool:
+# TODO: resume refactor from here
+def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
     Edit the email field of a Student.
 
@@ -441,7 +409,7 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> bool:
         return False
 
 
-def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> bool:
+def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
     Toggles the is_active field of a Student via calls to confirm_and_archive() or confirm_and_reactivate().
 

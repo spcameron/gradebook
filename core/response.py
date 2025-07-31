@@ -4,35 +4,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-"""
-TEMPLATE FOR DOCSTRINGS THAT RETURN A RESPONSE
-
-<One-sentence summary of what this method does.>
-
-Args:
-    <param1> (<type>): <description>.
-    <param2> (<type>): <description>.
-    ...
-
-Returns:
-    Response: A structured response with the following contract:
-        - success (bool): True if the operation was successful.
-        - detail (str | None): Description of the result for display or logging.
-        - error (ErrorCode | str | None): A machine-readable error code, if any.
-        - status_code (int | None): HTTP-style status code (e.g., 200, 404). Optional in CLI.
-        - data (dict | None): Payload with the following keys:
-            - "<key1>" (<type>): <description of value>.
-            - "<key2>" (<type>): <description of value>.
-            ...
-
-Notes:
-    - <State if method is read-only or mutates gradebook state>.
-    - <Mention any expected preconditions or invariants>.
-    - <What does success/failure look like, if not clear from above?>
-    - <What assumptions must the caller uphold?>
-    - <Does this touch or cascade to other objects?>
-"""
-
 
 class ErrorCode(Enum):
     # === Not Found ===
@@ -80,10 +51,11 @@ class Response:
 
     Attributes:
         success (bool): Indicates whether the operation succeeded.
-        error (ErrorCode | str | None): Optional machine-readable error identifier.
         detail (str | None): Optional human-readable explanation.
-        data (dict): Optional payload, varies by operation.
+        error (ErrorCode | str | None): Optional machine-readable error identifier.
         status_code (int | None): Optional HTTP response code.
+        data (dict): Optional payload, varies by operation.
+        trace (str | None): Optional exception traceback when errors occur.
     """
 
     def __init__(
@@ -93,12 +65,14 @@ class Response:
         error: ErrorCode | str | None = None,
         status_code: int | None = None,
         data: dict | None = None,
+        trace: str | None = None,
     ):
         self.success = success
         self.error = error
         self.detail = detail
         self.data = data or {}
         self.status_code = status_code
+        self.trace = trace
 
     # === public classmethods ===
 

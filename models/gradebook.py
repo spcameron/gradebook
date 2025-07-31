@@ -26,6 +26,12 @@ from models.types import RecordType
 
 
 class Gradebook:
+    _tracking_maps: dict[type, str] = {
+        Student: "students",
+        Category: "categories",
+        Assignment: "assignments",
+        Submission: "submissions",
+    }
 
     def __init__(self, save_dir_path: str):
         self._metadata: dict[str, Any] = {}
@@ -1293,11 +1299,42 @@ class Gradebook:
 
     # === data manipulators ===
 
-    def mark_dirty(self) -> None:
+    def _mark_dirty(self) -> None:
         """
-        Helper method to indicate the presence of unsaved changes.
+        Marks the gradebook as having unsaved changes.
         """
         self._unsaved_changes = True
+
+    def _mark_dirty_if_tracked(self, record: RecordType) -> None:
+        """
+        Marks the gradebook dirty if the provided record is currently tracked.
+
+        Args:
+            record (RecordType): A possibly untracked object that was mutated.
+        """
+        if record.id in self._get_tracking_dict(record):
+            self._mark_dirty()
+
+    def _get_tracking_dict(self, record: RecordType) -> dict[str, RecordType]:
+        """
+        Return the internal tracking dictionary corresponding to the given record type.
+
+        Args:
+            record (RecordType): The object being checked.
+
+        Returns:
+            dict[str, RecordType]: The dictionary (e.g., `self.students`, `self.assignments`) that tracks the given record type.
+
+        Raises:
+            TypeError: If the record type is not recognized.
+        """
+        try:
+            attr_name = self._tracking_maps[type(record)]
+
+            return getattr(self, attr_name)
+
+        except KeyError:
+            raise TypeError(f"Unrecognized record type: {type(record)}")
 
     # --- generalized record operations ---
 
@@ -1329,7 +1366,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and does not call `mark_dirty()`; callers must handle that manually.
+            - This method mutates `Gradebook` state and does not call `_mark_dirty()`; callers must handle that manually.
             - This method is private and should only be called by `Gradebook`-level wrappers.
         """
         try:
@@ -1376,7 +1413,7 @@ class Gradebook:
                     - Always None, this method does not return any payload.
 
         Notes:
-            - This method mutates `Gradebook` state and does not call `mark_dirty()`; callers must handle that manually.
+            - This method mutates `Gradebook` state and does not call `_mark_dirty()`; callers must handle that manually.
             - This method is private and should only be called by `Gradebook`-level wrappers.
         """
         try:
@@ -1430,7 +1467,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             self.require_unique_student_email(student.email)
@@ -1457,7 +1494,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Student successfully added to the gradebook.",
@@ -1492,7 +1529,7 @@ class Gradebook:
             - This method mutates `Gradebook` state by removing the specified student and all their associated submissions.
             - Linked submissions are removed first to maintain referential integrity.
             - If any submission cannot be removed, the operation is aborted and the student remains in the gradebook.
-            - This method calls `mark_dirty()` if and only if the operation succeeds.
+            - This method calls `_mark_dirty()` if and only if the operation succeeds.
         """
         try:
             submissions_response = self.get_records(
@@ -1530,10 +1567,175 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Student successfully removed from the gradebook."
+            )
+
+    def update_student_first_name(self, student: Student, first_name: str) -> Response:
+        """
+        Updates the `first_name` attribute of a given `Student` object.
+
+        Args:
+            student (Student): The student whose attribute is updated.
+            first_name (str): The new first name to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the first name attribute was successfully updated.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Student): The updated `Student` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            student.first_name = first_name
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(student)
+
+            return Response.succeed(
+                detail=f"Student name successfully updated to: {student.full_name}.",
+                data={
+                    "record": student,
+                },
+            )
+
+    def update_student_last_name(self, student: Student, last_name: str) -> Response:
+        """
+        Updates the `last_name` attribute of a given `Student` object.
+
+        Args:
+            student (Student): The student whose attribute is updated.
+            last_name (str): The new last name to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the last name attribute was successfully updated.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Student): The updated `Student` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            student.last_name = last_name
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(student)
+
+            return Response.succeed(
+                detail=f"Student name successfully updated to: {student.full_name}.",
+                data={
+                    "record": student,
+                },
+            )
+
+    def update_student_email(self, student: Student, email: str) -> Response:
+        """
+        Updates the `email` attribute of a given `Student` object, enforcing uniqueness and normalization.
+
+        Args:
+            student (Student): The student whose attribute is updated.
+            email (str): The new email to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the email attribute was successfully updated or no change was needed.
+                    - False if validation fails or an unexpected error occurs.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` for duplicate or malformed input.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None);
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Student): The updated `Student` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the normalized input email matches the current value, the method returns early with a success response indicating no changes were made.
+        """
+        try:
+            if self._normalize(student.email) == self._normalize(email):
+                return Response.succeed(
+                    detail="The email address provided matches the current one. No changes made.",
+                    data={
+                        "record": student,
+                    },
+                )
+
+            self.require_unique_student_email(email)
+
+            student.email = email
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Email validation failed: {e}",
+                error=ErrorCode.INVALID_FIELD_VALUE,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(student)
+
+            return Response.succeed(
+                detail=f"Student email successfully updated to: {student.email}.",
+                data={
+                    "record": student,
+                },
             )
 
     # --- category manipulation ---
@@ -1566,7 +1768,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             self.require_unique_category_name(category.name)
@@ -1593,7 +1795,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Category successfully added to the gradebook.",
@@ -1629,7 +1831,7 @@ class Gradebook:
             - This method mutates `Gradebook` state by removing the specified category and all its associated assignments.
             - Linked assignments are removed first to maintain referential integrity.
             - In any linked assignment cannot be removed, the operation is aborted and the category remains in the gradebook.
-            - This method calls `mark_dirty()` if and only if the operation succeeds.
+            - This method calls `_mark_dirty()` if and only if the operation succeeds.
         """
         try:
             assignments_response = self.get_records(
@@ -1667,7 +1869,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Category successfully removed from the gradebook."
@@ -1704,7 +1906,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
             - The `weight` value must be a finite float between 0 and 100 (inclusive), or None for unweighted. Validation failures raise `TypeError` or `ValueError`.
         """
         try:
@@ -1723,7 +1925,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty_if_tracked(category)
 
             return Response.succeed(
                 detail=f"Category weight successfully updated to: {category.weight if category.weight is not None else '[UNWEIGHTED]'}.",
@@ -1762,7 +1964,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             self.require_unique_assignment_name(assignment.name)
@@ -1789,7 +1991,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Assignment successfully added to the gradebook.",
@@ -1824,7 +2026,7 @@ class Gradebook:
             - This method mutates `Gradebook` state by removing the specified assignment and all its associated submissions.
             - Linked submissions are removed first to maintain referential integrity.
             - If any linked submission cannot be removed, the operation is aborted and the assignment remains in the gradebook.
-            - This method calls `mark_dirty()` if and only if the operation succeeds.
+            - This method calls `_mark_dirty()` if and only if the operation succeeds.
         """
         try:
             submissions_response = self.get_records(
@@ -1862,7 +2064,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Assignment successfully removed from the gradebook."
@@ -1898,7 +2100,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             self.require_unique_submission(
@@ -1927,7 +2129,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Submission successfully added to the gradebook.",
@@ -1960,7 +2162,7 @@ class Gradebook:
                     - Always None, this method does not return any payload.
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             remove_response = self._remove_record(submission, self.submissions)
@@ -1979,7 +2181,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Submission successfully removed from the gradebook."
@@ -2012,7 +2214,7 @@ class Gradebook:
                         - None
 
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             prev_status = self.uses_weighting
@@ -2042,7 +2244,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail=f"Gradebook successfully updated. Weighting is {self.weighting_status}.",
@@ -2073,7 +2275,7 @@ class Gradebook:
                     - Always None, this method does not return any payload.
 
         Notes:
-            - This method mutates `Gradebook` and `Category` states and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` and `Category` states and calls `_mark_dirty()` if successful.
         """
         try:
             categories_response = self.get_records(
@@ -2107,7 +2309,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="All active category weights successfully reset to None."
@@ -2142,7 +2344,7 @@ class Gradebook:
                     - On failure:
                         - None
         Notes:
-            - This method mutates `Gradebook` state and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
             self.require_unique_class_date(class_date)
@@ -2162,7 +2364,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Class date successfully added to the gradebook.",
@@ -2199,7 +2401,7 @@ class Gradebook:
                     - "skipped" (list[datetime.date]): Dates that were not added due to validation failure.
 
         Notes:
-            - Each call to `add_class_date()` will invoke `mark_dirty()` if the addition succeeds.
+            - Each call to `add_class_date()` will invoke `_mark_dirty()` if the addition succeeds.
             - This method does not attempt to roll back or retry failed additions.
         """
         try:
@@ -2267,7 +2469,7 @@ class Gradebook:
                     - Always None, this method does not return any payload.
 
         Notes:
-            - This method mutates `Gradebook` and `Student` states, and calls `mark_dirty()` if successful.
+            - This method mutates `Gradebook` and `Student` states, and calls `_mark_dirty()` if successful.
             - Attendance cleanup uses `student.clear_attendance` which does not raise on missing entries.
         """
         try:
@@ -2290,7 +2492,7 @@ class Gradebook:
             )
 
         else:
-            self.mark_dirty()
+            self._mark_dirty()
 
             return Response.succeed(
                 detail="Class date and attendance records successfully removed from the gradebook."
@@ -2315,6 +2517,9 @@ class Gradebook:
                     - 400 on failure
                 - data (dict | None):
                     - Always None, this method does not return any payload.
+
+        Notes:
+            - Each call to `remove_class_date()` will invoke `_mark_dirty()` if the addition succeeds.
         """
         try:
             if not self.class_dates:

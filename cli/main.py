@@ -6,7 +6,6 @@ Start Menu for the Gradebook CLI.
 Provides functions for creating or loading a Gradebook.
 """
 
-import json
 import os
 from textwrap import dedent
 from typing import cast
@@ -27,10 +26,12 @@ def run_cli() -> None:
         RuntimeError: If the menu response is unrecognized.
     """
     title = formatters.format_banner_text("GRADEBOOK MANAGER")
+
     options = [
         ("Create a new Gradebook", create_gradebook),
         ("Load an existing Gradebook", load_gradebook),
     ]
+
     zero_option = "Exit Program"
 
     while True:
@@ -38,15 +39,32 @@ def run_cli() -> None:
 
         if menu_response is MenuSignal.EXIT:
             exit_program()
+
         elif callable(menu_response):
             gradebook = menu_response()
+
             if gradebook is not None:
                 course_menu.run(gradebook)
+
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
 def create_gradebook() -> Gradebook | None:
+    """
+    Prompts the user to create a new `Gradebook` by collecting course name, term, and optional save directory.
+
+    Returns:
+        Gradebook: A new `Gradebook` instance if successfully created.
+        None: If the user cancels during input or if `Gradebook` creation fails.
+
+    Notes:
+        - The course name and term inputs are cancellable.
+        - If the save directory input is left blank, the `Gradebook` will be stored in `~/Documents/Gradebooks/<term>/<course>`, where both course and term are sanitized (spaces replaced with underscores).
+        - If the resolved directory exists and is not empty, the user must explicitly confirm before continuing.
+        - Filesystem operations such as directory creation and emptiness checks are handled via `cli.path_utils`.
+        - Gradebook instantiation and validation are delegated to `Gradebook.create()`, which returns a structured `Response`.
+    """
     while True:
         name = helpers.prompt_user_input_or_cancel(
             "Enter the course name (e.g. THTR 274A, leave blank to cancel):"
@@ -62,9 +80,8 @@ def create_gradebook() -> Gradebook | None:
 
         if term is MenuSignal.CANCEL:
             return None
-        term = cast(str, name)
+        term = cast(str, term)
 
-        # TODO: resume edit from here
         dir_input = helpers.prompt_user_input_or_none(
             "Enter directory to save the Gradebook (leave blank to use default):"
         )
@@ -82,36 +99,77 @@ def create_gradebook() -> Gradebook | None:
                     Writing to this directory may result in the loss of existing data."""
                 )
             )
+
             if not helpers.confirm_action("\nDo you wish to continue?"):
                 continue
 
-            # TODO: handle response
-            response = Gradebook.create(name, term, dir_path)
+        print("\nCreating Gradebook ...")
+
+        gradebook_response = Gradebook.create(name, term, dir_path)
+
+        if not gradebook_response.success:
+            print(f"\n... {gradebook_response.detail}")
+            continue
+
+        print("... Gradebook created successfully.")
+
+        return gradebook_response.data["gradebook"]
 
 
-# TODO: verify gradebook data (or at least metadata) exists before loading
-# TODO: needs review and doc
 def load_gradebook() -> Gradebook | None:
-    dir_path = helpers.prompt_user_input("Enter path to Gradebook directory:")
-    dir_path = os.path.expanduser(dir_path)
-    dir_path = os.path.abspath(dir_path)
+    """
+    Prompts the user to load a `Gradebook` from a specified directory path.
 
-    if not os.path.isdir(dir_path):
-        print("\nError: No directory found at that path.")
-        return None
+    Returns:
+        Gradebook: A `Gradebook` instance if loading succeeds.
+        None: If the user cancels or if loading fails.
 
-    try:
+    Notes:
+        - The directory input is cancellable.
+        - Relative paths and `~` are expanded to absolute paths using `os.path.expanduser()` and `os.path.abspath()`.
+        - The target path must be an existing directory; otherwise, the user will be prompted again.
+        - Gradebook deserialization and validation are handled by `Gradebook.load()`, which returns a structured `Response`.
+    """
+    while True:
+        dir_path = helpers.prompt_user_input_or_cancel(
+            "Enter path to Gradebook directory (leave blank to cancel):"
+        )
+
+        if dir_path is MenuSignal.CANCEL:
+            return None
+        dir_path = cast(str, dir_path)
+
+        dir_path = os.path.expanduser(dir_path)
+        dir_path = os.path.abspath(dir_path)
+
+        if not os.path.isdir(dir_path):
+            print(f"\nDirectory not found: {dir_path}. Please try again.")
+            continue
+
         print("\nLoading Gradebook ...")
-        gradebook = Gradebook.load(dir_path)
-        print("... load complete.")
-        return gradebook
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"\nError: Failed to load Gradebook: {e}")
-        return None
+
+        gradebook_response = Gradebook.load(dir_path)
+
+        if not gradebook_response.success:
+            print(f"\n... {gradebook_response.detail}")
+            continue
+
+        print("... Gradebook loaded successfully.")
+
+        return gradebook_response.data["gradebook"]
 
 
-# TODO: needs review and doc
 def exit_program():
+    """
+    Displays an exit banner and terminates the CLI program.
+
+    Raises:
+        SystemExit: Always raised to immediately terminate execution.
+
+    Notes:
+        - Should only be called after any necessary cleanup or save operations have been handled.
+    """
     exit_banner = formatters.format_banner_text("Exiting Program")
     print(f"\n{exit_banner}\n")
+
     raise SystemExit

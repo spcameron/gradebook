@@ -1,7 +1,7 @@
 # cli/menu_helpers.py
 
 import datetime
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Callable, Iterable, Optional
 
 import cli.formatters as formatters

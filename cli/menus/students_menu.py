@@ -3,7 +3,14 @@
 """
 Manage Students menu for the Gradebook CLI.
 
-Provides functions for adding, editing, removing, and viewing Students.
+This module defines the full interface for managing `Student` records, including:
+- Adding new students
+- Editing student attributes (name, email, enrollment status)
+- Archiving or permanently removing students
+- Viewing student records (individual, filtered, or all)
+
+All operations are routed through the `Gradebook` API for consistency, validation, and state tracking.
+Control flow adheres to structured CLI menu patterns with clear terminal-level feedback.
 """
 
 from typing import Callable, cast
@@ -246,7 +253,7 @@ def edit_student(
     student: Student, gradebook: Gradebook, return_context: str = "Manage Students menu"
 ) -> None:
     """
-    Interactive interface for editing fields of a `Student` record.
+    Interface for editing fields of a `Student` record.
 
     Args:
         student (Student): The `Student` object being edited.
@@ -430,39 +437,38 @@ def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> No
 # === remove student ===
 
 
-# TODO: resume refactor from here
 def find_and_remove_student(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Student and then passes the result to remove_student().
+    Prompts user to search for a `Student` and then passes the result to `remove_student()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     student = prompt_find_student(gradebook)
 
     if student is MenuSignal.CANCEL:
-        return None
-    else:
-        student = cast(Student, student)
-        remove_student(student, gradebook)
+        return
+    student = cast(Student, student)
+
+    remove_student(student, gradebook)
 
 
 def remove_student(student: Student, gradebook: Gradebook) -> None:
     """
-    Dispatch method to either delete, archive, or edit the Student, or return without changes.
+    Interface for removing, archiving, or editing a `Student` record.
 
     Args:
-        student: The Student targeted for deletion/archiving.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` object targeted for deletion/archiving.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        Uses a function scoped variable to detect if any function calls report data manipulation.
-        If so, the user is prompted to either save now or defer, in which case the Gradebook is marked dirty.
+        - All remove and edit operations are dispatched through `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
-    print("\nYou are viewing the following student record:")
+    print("\nYou are viewing the following student:")
     print(formatters.format_student_oneline(student))
 
     title = "What would you like to do?"
@@ -472,45 +478,41 @@ def remove_student(student: Student, gradebook: Gradebook) -> None:
             confirm_and_remove,
         ),
         (
-            "Archive this student instead (preserve all linked records)",
+            "Archive this student (preserve all linked records)",
             confirm_and_archive,
         ),
         ("Edit this student instead", edit_student),
     ]
     zero_option = "Return to Manage Students menu"
 
-    unsaved_changes = False
-
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
-        return None
+        return
+
     elif callable(menu_response):
-        if menu_response(student, gradebook):
-            unsaved_changes = True
+        menu_response(student, gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
+    else:
+        helpers.returning_without_changes()
 
     helpers.returning_to("Manage Students menu")
 
 
-def confirm_and_remove(student: Student, gradebook: Gradebook) -> bool:
+def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
     """
-    Deletes the Student from the Gradebook after preview and confirmation.
+    Deletes the `Student` record and all linked `Submissions` from the `Gradebook` after preview and user confirmation.
 
     Args:
-        student: The Student targeted for deletion.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the Student was removed, and False otherwise.
+        student (Student): The `Student` targeted for deletion.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
@@ -524,26 +526,30 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> bool:
 
     if not confirm_deletion:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        gradebook.remove_student(student)
-        print("\nStudent successfully removed from Gradebook.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not remove student ... {e}")
+    gradebook_response = gradebook.remove_student(student)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nStudent was not removed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-# refactored already
 def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
     """
-    Toggles the `is_active` field of an active `Student`, after preview and confirmation.
+    Archives an active `Student` after preview and confirmation.
 
     Args:
         student (Student): The `Student` targeted for archiving.
         gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Archiving preserves all linked `Submission` records but excludes the student from reports and calculation.
+        - If the `Student` is already archived, the method exits early.
     """
     if not student.is_active:
         print("\nThis student has already been archived.")
@@ -552,10 +558,10 @@ def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
     print(
         "\nArchiving a student is a safe way to deactivate a student without losing data."
     )
-    print("You are about to archive the following student:")
+    print("You are about to archive the following student record:")
     print(formatters.format_student_multiline(student, gradebook))
     print("\nThis will preserve all linked submissions,")
-    print("but they will not longer appear in reports or grade calculations.")
+    print("but they will no longer appear in reports or grade calculations.")
 
     confirm_archiving = helpers.confirm_action(
         "Are you sure you want to archive this student?"
@@ -576,20 +582,22 @@ def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
         print(f"\n{gradebook_response.detail}")
 
 
-# refactor already
 def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
     """
-    Toggles the `is_active` field of an inactive `Student`, after preview and confirmation.
+    Reactivates an inactive `Student` after preview and confirmation.
 
     Args:
         student (Student): The `Student` targeted for reactivation.
         gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - If the `Student` is already active, the method exits early.
     """
     if student.is_active:
         print("\nThis student is already active.")
         return
 
-    print("\nYou are about to reactivate the following student:")
+    print("\nYou are about to reactivate the following student record:")
     print(formatters.format_student_multiline(student, gradebook))
 
     confirm_reactivate = helpers.confirm_action(
@@ -616,13 +624,16 @@ def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
 
 def view_students_menu(gradebook: Gradebook) -> None:
     """
-    Dispatch method for the various view options (individual, active, inactive, all).
+    Displays the student view menu and dispatches selected view options.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Options include viewing individual, active, inactive, or all students.
     """
     title = "View Students"
     options = [
@@ -636,26 +647,33 @@ def view_students_menu(gradebook: Gradebook) -> None:
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
-        return None
+        return
+
     elif callable(menu_response):
         menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+    helpers.returning_to("Manage Students menu")
 
 
 def view_individual_student(gradebook: Gradebook) -> None:
     """
-    Calls find_student() and then displays a one-line view of that Student, followed by a prompt to view the multi-line view or return.
+    Displays a one-line summary of a selected `Student` record, with the option to view full details.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `prompt_find_student()` to search for a record.
+        - Prompts the user before displaying the multi-line format.
     """
     student = prompt_find_student(gradebook)
 
     if student is MenuSignal.CANCEL:
-        return None
-    else:
-        student = cast(Student, student)
+        return
+    student = cast(Student, student)
 
     print("\nYou are viewing the following student record:")
     print(formatters.format_student_oneline(student))
@@ -668,19 +686,31 @@ def view_individual_student(gradebook: Gradebook) -> None:
 
 def view_active_students(gradebook: Gradebook) -> None:
     """
-    Displays a list of active Students.
+    Displays a sorted list of active `Student` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` with a filter for active students.
+        - Records are sorted by last name, then first name.
     """
     banner = formatters.format_banner_text("Active Students")
     print(f"\n{banner}")
 
-    active_students = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+    gradebook_response = gradebook.get_records(
+        gradebook.students, lambda x: x.is_active
+    )
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    active_students = gradebook_response.data["records"]
 
     if not active_students:
         print("There are no active students.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=active_students,
@@ -691,21 +721,31 @@ def view_active_students(gradebook: Gradebook) -> None:
 
 def view_inactive_students(gradebook: Gradebook) -> None:
     """
-    Displays a list of inactive Student.
+    Displays a sorted list of inactive `Student` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` with a filter for inactive students.
+        - Records are sorted by last name, then first name.
     """
     banner = formatters.format_banner_text("Inactive Students")
     print(f"\n{banner}")
 
-    inactive_students = gradebook.get_records(
+    gradebook_response = gradebook.get_records(
         gradebook.students, lambda x: not x.is_active
     )
 
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    inactive_students = gradebook_response.data["records"]
+
     if not inactive_students:
         print("There are no inactive students.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=inactive_students,
@@ -716,19 +756,29 @@ def view_inactive_students(gradebook: Gradebook) -> None:
 
 def view_all_students(gradebook: Gradebook) -> None:
     """
-    Displays a list of all Students.
+    Displays a list of all `Students` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` to retrieve all students, active and inactive.
+        - Records are sorted by last name, then first name.
     """
     banner = formatters.format_banner_text("All Students")
     print(f"\n{banner}")
 
-    all_students = gradebook.get_records(gradebook.students)
+    gradebook_response = gradebook.get_records(gradebook.students)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    all_students = gradebook_response.data["records"]
 
     if not all_students:
         print("There are no students yet.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=all_students,
@@ -742,16 +792,20 @@ def view_all_students(gradebook: Gradebook) -> None:
 
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     """
-    Menu dispatch for either finding a Student by search or from a list of Students (separate lists for active and inactive).
+    Prompts the user to locate a `Student` record by search or list selection.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected Student, or MenuSignal.CANCEL if either the user cancels or the search yields no hits.
+        Student | MenuSignal: The selected `Student`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Offers search, active list, and inactive list as selection methods.
+        - Returns early if the user chooses to cancel or if no selection is made.
     """
     title = formatters.format_banner_text("Student Selection")
     options = [
@@ -765,7 +819,9 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
+
     elif callable(menu_response):
         return menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

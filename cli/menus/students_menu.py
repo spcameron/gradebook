@@ -87,7 +87,7 @@ def add_student(gradebook: Gradebook) -> None:
                 print(f"\n{new_student.full_name} was not added.")
 
             else:
-                print(f"\n{new_student.full_name} successfully added.")
+                print(f"\n{gradebook_response.detail}")
 
         if not helpers.confirm_action(
             "Would you like to continue adding new students?"
@@ -127,10 +127,13 @@ def prompt_new_student(gradebook: Gradebook) -> Student | None:
 
     try:
         return Student(
-            id=generate_uuid(), first_name=first_name, last_name=last_name, email=email
+            id=generate_uuid(),
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
         )
 
-    except Exception as e:
+    except (TypeError, ValueError) as e:
         print(f"\n[ERROR] Could not create student: {e}")
         return None
 
@@ -143,8 +146,8 @@ def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
         student (Student): The `Student` object under review.
         gradebook (Gradebook): The active `Gradebook`.
 
-    Notes:
-        - Uses `edit_queued_student()` since this `Student` object has not yet been added to the gradebook.
+    Returns:
+        True if user confirms the `Student` details, and False otherwise.
     """
     print("\nYou are about to create the following student:")
     print(formatters.format_student_multiline(student, gradebook))
@@ -195,6 +198,7 @@ def prompt_email_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
 
         except ValueError as e:
             print(f"\n[ERROR] {e}")
+            print("Please try again.")
 
 
 def prompt_name_input_or_cancel(
@@ -223,7 +227,7 @@ def get_editable_fields() -> list[tuple[str, Callable[[Student, Gradebook], None
     Helper method to organize the list of editable fields and their related functions.
 
     Returns:
-        A list of `(field_name, edit_function)` tuples used to prompt and edit student attributes.
+        A list of `(field_name, edit_function)` tuples used to prompt and edit `Student` attributes.
     """
     return [
         ("First Name", edit_first_name_and_confirm),

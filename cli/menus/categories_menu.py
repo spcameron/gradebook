@@ -3,10 +3,10 @@
 """
 Manage Categories menu for the Gradebook CLI.
 
-Provides functions for adding, editing, removing, and viewing Categories.
+TODO copy from student_menu.py
 """
 
-from typing import Callable, Optional, cast
+from typing import Callable, cast
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
@@ -22,13 +22,13 @@ def run(gradebook: Gradebook) -> None:
     Top-level loop with dispatch for the Manage Categories menu.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        The finally block guarantees a check for unsaved changes before returning.
+        - The finally block guarantees a check for unsaved changes before returning.
     """
     title = formatters.format_banner_text("Manage Categories")
     options = [
@@ -46,10 +46,13 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
+
             elif callable(menu_response):
                 menu_response(gradebook)
+
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
     finally:
         helpers.prompt_if_dirty(gradebook)
 
@@ -61,13 +64,10 @@ def run(gradebook: Gradebook) -> None:
 
 def add_category(gradebook: Gradebook) -> None:
     """
-    Loops a prompt to create a new Category and add to the Gradebook.
+    Loops a prompt to create a new `Category` object and add it to the gradebook.
 
     Args:
-        gradebook: The active Gradebook.
-
-    Notes:
-        New Categories are added to the Gradebook but not saved. Gradebook is marked dirty instead.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     while True:
         new_category = prompt_new_category(gradebook)
@@ -75,9 +75,14 @@ def add_category(gradebook: Gradebook) -> None:
         if new_category is not None and preview_and_confirm_category(
             new_category, gradebook
         ):
-            gradebook.add_category(new_category)
-            gradebook.mark_dirty()
-            print(f"\n{new_category.name} successfully added.")
+            gradebook_response = gradebook.add_category(new_category)
+
+            if not gradebook_response.success:
+                helpers.display_response_failure(gradebook_response)
+                print(f"\n{new_category.name} was not added.")
+
+            else:
+                print(f"\n{gradebook_response.detail}")
 
         if not helpers.confirm_action(
             "Would you like to continue adding new categories?"
@@ -87,48 +92,43 @@ def add_category(gradebook: Gradebook) -> None:
     helpers.returning_to("Manage Categories menu")
 
 
-def prompt_new_category(gradebook: Gradebook) -> Optional[Category]:
+def prompt_new_category(gradebook: Gradebook) -> Category | None:
     """
-    Creates a new Category.
+    Creates a new `Category` object.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        A new Category object, or None.
+        A new `Category` object, or None.
     """
     name = prompt_name_input_or_cancel(gradebook)
 
     if name is MenuSignal.CANCEL:
         return None
-    else:
-        name = cast(str, name)
+    name = cast(str, name)
 
     try:
-        category_id = generate_uuid()
-        new_category = Category(
-            id=category_id,
+        return Category(
+            id=generate_uuid(),
             name=name,
         )
-        return new_category
+
     except (TypeError, ValueError) as e:
-        print(f"\nError: Could not create category ... {e}")
+        print(f"\n[ERROR] Could not create category: {e}")
         return None
 
 
 def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bool:
     """
-    Previews Category details, offers opportunity to edit details, and prompts user for confirmation.
+    Previews new `Category` details, offers opportunity to edit details, and prompts user for confirmation.
 
     Args:
-        category: The Category under review.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` object under review.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        True if user confirm the Category details, and False otherwise.
-
-    Notes:
-        Uses edit_queued_category() since this Category has not yet been added to the Gradebook.
+        True if user confirms the `Category` details, and False otherwise.
     """
     print("\nYou are about to create the following category:")
     print(formatters.format_category_multiline(category, gradebook))
@@ -136,12 +136,13 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
     if helpers.confirm_action(
         "Would you like to edit this category first (change the name or mark as archived)?"
     ):
-        edit_queued_category(category, gradebook)
+        edit_category(category, gradebook, "Category creation preview")
 
     if helpers.confirm_action("Would you like to create this category?"):
         return True
+
     else:
-        print("Discarding category.")
+        print(f"Discarding category: {category.name}")
         return False
 
 
@@ -150,16 +151,16 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
 
 def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
     """
-    Solicits user input for Category name, validates uniqueness, and treats a blank input as 'cancel'.
+    Solicits user input for category name, validates uniqueness, and treats a blank input as 'cancel'.
 
     Args:
-        gradebook: The active Gradebook, required for the unique-name check.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        User input, or MenuSignal.CANCEL if input is "".
+        User input unmodified, or `MenuSignal.CANCEL` if input is "".
 
     Notes:
-        The only validation is the call to require_unique_category_name. Defensive validation against malicious input is missing.
+        - The only validation is the call to `require_unique_category_name()`. Defensive validation against malicious input is missing.
     """
     while True:
         user_input = helpers.prompt_user_input_or_cancel(
@@ -171,20 +172,23 @@ def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
 
         try:
             gradebook.require_unique_category_name(user_input)
+
             return user_input
+
         except ValueError as e:
-            print(f"\nError: {e}")
+            print(f"\n[ERROR] {e}")
+            print("Please try again.")
 
 
 # === edit category ===
 
 
-def get_editable_fields() -> list[tuple[str, Callable[[Category, Gradebook], bool]]]:
+def get_editable_fields() -> list[tuple[str, Callable[[Category, Gradebook], None]]]:
     """
     Helper method to organize the list of editable fields and their related functions.
 
     Returns:
-        A list of tuples - pairs of strings and function names.
+        A list of `(field_name, edit_function)` tuples used to prompt and edit `Category` attributes.
     """
     return [
         ("Name", edit_name_and_confirm),
@@ -194,34 +198,40 @@ def get_editable_fields() -> list[tuple[str, Callable[[Category, Gradebook], boo
 
 def find_and_edit_category(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Category and then passes the result to edit_category().
+    Prompts user to search for a `Category` and then passes the result to `edit_category()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     category = prompt_find_category(gradebook)
 
     if category is MenuSignal.CANCEL:
-        return None
-    else:
-        category = cast(Category, category)
-        edit_category(category, gradebook)
+        return
+    category = cast(Category, category)
+
+    edit_category(category, gradebook)
 
 
-def edit_category(category: Category, gradebook: Gradebook) -> None:
+def edit_category(
+    category: Category,
+    gradebook: Gradebook,
+    return_context: str = "Manage Categories menu",
+) -> None:
     """
-    Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
+    Interface for editing fields of a `Category` record.
 
     Args:
-        category: The Category being edited.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` object being edited.
+        gradebook (Gradebook): The active `Gradebook`.
+        return_context (str): An optional description of the call site, uses "Manage Categories menu" by default.
 
     Raise:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        Uses a function scoped variable to flag whether the edit_* methods have manipulated the Category at all.
-        If so, the user is prompted to either save changes now, or defer and mark the Gradebook dirty for saving upstream.
+        - All edit operations are dispatched through `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty after edits, the user will be prompted to save before returning to the previous menu.
+        - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following category:")
     print(formatters.format_category_multiline(category, gradebook))
@@ -230,16 +240,15 @@ def edit_category(category: Category, gradebook: Gradebook) -> None:
     options = get_editable_fields()
     zero_option = "Finish editing and return"
 
-    unsaved_changes = False
-
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response is MenuSignal.EXIT:
             break
+
         elif callable(menu_response):
-            if menu_response(category, gradebook):
-                unsaved_changes = True
+            menu_response(category, gradebook)
+
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -248,89 +257,53 @@ def edit_category(category: Category, gradebook: Gradebook) -> None:
         ):
             break
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
     else:
         helpers.returning_without_changes()
 
-    helpers.returning_to("Manage Categories menu")
+    helpers.returning_to(return_context)
 
 
-def edit_queued_category(category: Category, gradebook: Gradebook) -> None:
+def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
     """
-    Dispatch method for the edit menu that does not track changes, since the edited Category has not yet been added to the Gradebook.
+    Prompts for a new name and updates the `Category` record via `Gradebook`.
 
     Args:
-        category: A Category not yet added to the Gradebook and targeted for editing.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Raises:
-        RuntimeError: If the menu response is unrecognized.
-    """
-    print("\nYou are editing the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
-
-    title = formatters.format_banner_text("Editable Fields")
-    options = get_editable_fields()
-    zero_option = "Finish editing and return"
-
-    while True:
-        menu_response = helpers.display_menu(title, options, zero_option)
-
-        if menu_response is MenuSignal.EXIT:
-            break
-        elif callable(menu_response):
-            menu_response(category, gradebook)
-        else:
-            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-
-        if not helpers.confirm_action(
-            "Would you like to continue editing this category?"
-        ):
-            break
-
-    helpers.returning_to("Category creation")
-
-
-def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> bool:
-    """
-    Edit the name field of a Category.
-
-    Args:
-        category: The Category targeted for editing.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the name was changed, and False otherwise.
+    Notes:
+        - Cancels early if the user enters nothing or declines the confirmation.
+        - Uses `Gradebook.update_category_name()` to perform the update and track changes.
     """
     current_name = category.name
     new_name = prompt_name_input_or_cancel(gradebook)
 
     if new_name is MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return False
-    else:
-        new_name = cast(str, new_name)
+        return
+    new_name = cast(str, new_name)
 
-    print(f"\nCurrent category name: {current_name} ... New category name: {new_name}")
+    print(f"\nCurrent category name: {current_name} -> New category name: {new_name}")
 
     if not helpers.confirm_make_change():
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        category.name = new_name
-        print(f"\nName successfully updated to {category.name}.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update category ... {e}")
+    gradebook_response = gradebook.update_category_name(category, new_name)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nCategory name was not updated.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
+# TODO: resume refactor from here
 def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> bool:
     """
     Toggles the is_active field of a Category via calls to confirm_and_archive() or confirm_and_reactivate().

@@ -1923,6 +1923,55 @@ class Gradebook:
                 detail="Category successfully removed from the gradebook."
             )
 
+    def update_category_name(self, category: Category, name: str) -> Response:
+        """
+        Updates the `name` attribute of a given `Category` object.
+
+        Args:
+            category (Category): The category whose attribute is updated.
+            name (str): The new name to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the name attribute was successfully updated.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Category): The updated `Category` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` stats and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            category.name = name
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(category)
+
+            return Response.succeed(
+                detail=f"Category name successfully updated to: {category.name}.",
+                data={
+                    "record": category,
+                },
+            )
+
     def update_category_weight(
         self, category: Category, weight: float | str | None
     ) -> Response:

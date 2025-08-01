@@ -326,7 +326,7 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
     if not gradebook_response.success:
         helpers.display_response_failure(gradebook_response)
-        print(f"\nStudent name was not updated.")
+        print("\nStudent name was not updated.")
         helpers.returning_without_changes()
 
     else:
@@ -363,78 +363,74 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
 
     if not gradebook_response.success:
         helpers.display_response_failure(gradebook_response)
-        print(f"\nStudent name was not updated.")
+        print("\nStudent name was not updated.")
         helpers.returning_without_changes()
 
     else:
         print(f"\n{gradebook_response.detail}")
 
 
-# TODO: resume refactor from here
 def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
-    Edit the email field of a Student.
+    Prompts for a new email and updates the `Student` record via `Gradebook`.
 
     Args:
-        student: The Student targeted for editing.
-        gradebook: The active Gradebook.
+        student (Student): The `Student` targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Returns:
-        True if the email was chnaged, and False otherwise.
+    Notes:
+        - Cancels early if the user enters nothing or declines the confirmation.
+        - Uses `Gradebook.update_student_email()` to perform the update and track changes.
     """
     current_email = student.email
     new_email = prompt_email_input_or_cancel(gradebook)
 
     if new_email is MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return False
-    else:
-        new_email = cast(str, new_email)
+        return
+    new_email = cast(str, new_email)
 
-    print(
-        f"\nCurrent email address: {current_email} ... New email address: {new_email}"
-    )
+    print(f"\nCurrent email address: {current_email} -> New email address: {new_email}")
 
     if not helpers.confirm_make_change():
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        student.email = new_email
-        print(f"\nEmail address successfully updated to: {student.email}.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update student ... {e}")
+    gradebook_response = gradebook.update_student_email(student, new_email)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nStudent email was not updated.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
 def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of a Student via calls to confirm_and_archive() or confirm_and_reactivate().
+    Toggles the `is_active` field of a `Student` record via calls to `confirm_and_archive()` or `confirm_and_reactivate()`.
 
     Args:
-        student: The Student targeted for editing.
-        gradebook: The Active Gradebook.
-
-    Returns:
-        True if the active status was changed, and False otherwise.
+        student (Student): The `Student` targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     print(f"\nThis student is currently {student.status}.")
 
     if not helpers.confirm_action("Do you want to edit the enrollment status?"):
         helpers.returning_without_changes()
-        return False
+        return
 
     if student.is_active:
-        return confirm_and_archive(student, gradebook)
+        confirm_and_archive(student, gradebook)
     else:
-        return confirm_and_reactivate(student, gradebook)
+        confirm_and_reactivate(student, gradebook)
 
 
 # === remove student ===
 
 
+# TODO: resume refactor from here
 def find_and_remove_student(gradebook: Gradebook) -> None:
     """
     Prompts user to search for a Student and then passes the result to remove_student().
@@ -540,20 +536,18 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> bool:
         return False
 
 
-def confirm_and_archive(student: Student, gradebook: Gradebook) -> bool:
+# refactored already
+def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of an active Student, after preview and confirmation.
+    Toggles the `is_active` field of an active `Student`, after preview and confirmation.
 
     Args:
-        student: The Student targeted for archiving.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the active status was changed, and False otherwise.
+        student (Student): The `Student` targeted for archiving.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     if not student.is_active:
         print("\nThis student has already been archived.")
-        return False
+        return
 
     print(
         "\nArchiving a student is a safe way to deactivate a student without losing data."
@@ -569,52 +563,52 @@ def confirm_and_archive(student: Student, gradebook: Gradebook) -> bool:
 
     if not confirm_archiving:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        student.toggle_archived_status()
-        print(f"\nStudent status successfully updated to: {student.status}")
-        return True
-    except Exception as e:
-        print(f"\nError: Could nt update student ... {e}")
+    gradebook_response = gradebook.toggle_student_active_status(student)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> bool:
+# refactor already
+def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of an inactive Student, after preview and confirmation.
+    Toggles the `is_active` field of an inactive `Student`, after preview and confirmation.
 
     Args:
-        student: The Student targeted for reactivation.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the active status was changed, and False otherwise.
+        student (Student): The `Student` targeted for reactivation.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     if student.is_active:
         print("\nThis student is already active.")
-        return False
+        return
 
     print("\nYou are about to reactivate the following student:")
     print(formatters.format_student_multiline(student, gradebook))
 
     confirm_reactivate = helpers.confirm_action(
-        "Are you sure you want to reactive this student?"
+        "Are you sure you want to reactivate this student?"
     )
 
     if not confirm_reactivate:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        student.toggle_archived_status()
-        print(f"\nStudent status sucessfully updated to: {student.status}.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update student ... {e}")
+    gradebook_response = gradebook.toggle_student_active_status(student)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
 # === view student ===

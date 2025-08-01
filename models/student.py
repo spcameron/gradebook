@@ -91,8 +91,9 @@ class Student:
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
+    # TODO: copy this oneliner to the other models
     def toggle_archived_status(self) -> None:
-        self._is_active = False if self._is_active else True
+        self._is_active = not self._is_active
 
     # === persistence and import ===
 

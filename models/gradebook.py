@@ -1683,7 +1683,7 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if the email attribute was successfully updated or no change was needed.
-                    - False if validation fails or an unexpected error occurs.
+                    - False if validation fails or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message with the updated value.
@@ -1733,6 +1733,54 @@ class Gradebook:
 
             return Response.succeed(
                 detail=f"Student email successfully updated to: {student.email}.",
+                data={
+                    "record": student,
+                },
+            )
+
+    def toggle_student_active_status(self, student: Student) -> Response:
+        """
+        Toggles the `is_active` attribute of a given `Student` object.
+
+        Args:
+            student (Student): The student whose attribute is updated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the active status was successfully toggled.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message reflecting the new status.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Student): The updated `Student` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            student.toggle_archived_status()
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(student)
+
+            return Response.succeed(
+                detail=f"Student status successfully updated to: {student.status}.",
                 data={
                     "record": student,
                 },

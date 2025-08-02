@@ -1972,6 +1972,52 @@ class Gradebook:
                 },
             )
 
+    def toggle_category_active_status(self, category: Category) -> Response:
+        """
+        Toggles the `is_active` attribute of a given `Category` object.
+
+        Args:
+            category (Category): The category whose attribute is updated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the active status was successfully toggled.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message reflecting the new status.
+                - error (ErrorCode | str | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Category): The updated `Category` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            category.toggle_archived_status()
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(category)
+
+            return Response.succeed(
+                detail=f"Category status successfully updated to: {category.status}.",
+                data={
+                    "record": category,
+                },
+            )
+
     def update_category_weight(
         self, category: Category, weight: float | str | None
     ) -> Response:

@@ -303,28 +303,24 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
         print(f"\n{gradebook_response.detail}")
 
 
-# TODO: resume refactor from here
-def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> bool:
+def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of a Category via calls to confirm_and_archive() or confirm_and_reactivate().
+    Toggles the `is_active` field of a `Category` record via calls to `confirm_and_archive()` or `confirm_and_reactivate()`.
 
     Args:
-        category: The Category targeted for editing.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the active status was changed, and False otherwise.
+        category (Category): The `Category` targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     print(f"\nThis category is currently {category.status}.")
 
     if not helpers.confirm_action("Would you like to edit the archived status?"):
         helpers.returning_without_changes()
-        return False
+        return
 
     if category.is_active:
-        return confirm_and_archive(category, gradebook)
+        confirm_and_archive(category, gradebook)
     else:
-        return confirm_and_reactivate(category, gradebook)
+        confirm_and_reactivate(category, gradebook)
 
 
 # === remove category ===
@@ -332,34 +328,34 @@ def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> 
 
 def find_and_remove_category(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Category and then passes the result to remove_category().
+    Prompts user to search for a `Category` and then passes the result to `remove_category()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     category = prompt_find_category(gradebook)
 
     if category is MenuSignal.CANCEL:
-        return None
-    else:
-        category = cast(Category, category)
-        remove_category(category, gradebook)
+        return
+    category = cast(Category, category)
+
+    remove_category(category, gradebook)
 
 
 def remove_category(category: Category, gradebook: Gradebook) -> None:
     """
-    Dispatch method to either delete, archive, or edit the Category, or return without changes.
+    Interface for removing, archiving, or editing a `Category` record.
 
     Args:
-        category: The Category targeted for deletion/archiving.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` object targeted for deletion/archiving.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        Uses a function scoped variable to detect if any function calls report data manipulation.
-        If so, the user is prompted to either save now or defer, in which case the Gradebook is marked dirty.
+        - All remove and edit operations are dispatched through `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
     print("\nYou are viewing the following category:")
     print(formatters.format_category_oneline(category))
@@ -381,38 +377,34 @@ def remove_category(category: Category, gradebook: Gradebook) -> None:
     ]
     zero_option = "Return to Manage Categories menu"
 
-    unsaved_changes = False
-
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
-        return None
+        return
+
     elif callable(menu_response):
-        if menu_response(category, gradebook):
-            unsaved_changes = True
+        menu_response(category, gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
+    else:
+        helpers.returning_without_changes()
 
     helpers.returning_to("Manage Categories menu")
 
 
-def confirm_and_remove(category: Category, gradebook: Gradebook) -> bool:
+def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
     """
-    Deletes the Category from the Gradebook after preview and confirmation.
+    Deletes the `Category` record and all linked `Assignments` and `Submissions` from the `Gradebook` after preview and user confirmation.
 
     Args:
-        category: The Category targeted for deletion.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the Category was removed, and False otherwise.
+        category (Category): The `Category` targeted for deletion.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
@@ -426,32 +418,34 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> bool:
 
     if not confirm_deletion:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        gradebook.remove_category(category)
-        print("\nCategory successfully removed from Gradebook.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not remove submission ... {e}")
+    gradebook_response = gradebook.remove_category(category)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nCategory was not removed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def confirm_and_archive(category: Category, gradebook: Gradebook) -> bool:
+def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of an active Category, after preview and confirmation.
+    Archives an active `Category` after preview and confirmation.
 
     Args:
-        category: The Category targeted for archiving.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` targeted for archiving.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Returns:
-        True if the active status was changed, and False otherwise.
+    Notes:
+        - Archiving preserves all linked `Assignment` and `Submission` records but excludes the category from reports and calculations.
+        - If the `Category` is already archived, the method exits early.
     """
     if not category.is_active:
         print("\nThis category has already been archived.")
-        return False
+        return
 
     print(
         "\nArchiving a category is a safe way to deactivate a category without losing data."
@@ -467,32 +461,33 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> bool:
 
     if not confirm_archiving:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        category.toggle_archived_status()
-        print(f"\nCategory status successfully updated to: {category.status}")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update category ... {e}")
+    gradebook_response = gradebook.toggle_category_active_status(category)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> bool:
+def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
     """
-    Toggles the is_active field of an inactive Category, after preview and confirmation.
+    Reactivates an inactive `Category` after preview and confirmation.
 
     Args:
-        category: The Category targeted for reactivation.
-        gradebook: The active Gradebook.
+        category (Category): The `Category` targeted for reactivation.
+        gradebook (Gradebook): The active `Gradebook`.
 
-    Returns:
-        True if the active status was changed, and False otherwise.
+    Notes:
+        - If the `Category` is already active, the method exits early.
     """
     if category.is_active:
         print("\nThis category is already active.")
-        return False
+        return
 
     print("\nYou are about to reactivate the following category:")
     print(formatters.format_category_multiline(category, gradebook))
@@ -503,16 +498,17 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> bool:
 
     if not confirm_reactivate:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        category.toggle_archived_status()
-        print(f"\nCategory status successfully updated to: {category.status}")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update category ... {e}")
+    gradebook_response = gradebook.toggle_category_active_status(category)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
 # === view category ===
@@ -520,13 +516,16 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> bool:
 
 def view_categories_menu(gradebook: Gradebook) -> None:
     """
-    Dispatch method for the various view options (individual, active, inactive, all).
+    Displays the category view menu and dispatches selected view options.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Options include viewing individual, active, inactive, or all students.
     """
     title = "View Categories"
     options = [
@@ -540,26 +539,33 @@ def view_categories_menu(gradebook: Gradebook) -> None:
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
-        return None
+        return
+
     elif callable(menu_response):
         menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+    helpers.returning_to("Manage Categories menu")
 
 
 def view_individual_category(gradebook: Gradebook) -> None:
     """
-    Calls find_category() and then displays a one-line view of that Category, followed by a prompt to view the multi-line view or return.
+    Display a one-line summary of a selected `Category` record, with the option to view full details.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `prompt_find_category()` to search for a record.
+        - Prompts the user before displaying the multi-line format.
     """
     category = prompt_find_category(gradebook)
 
     if category is MenuSignal.CANCEL:
-        return None
-    else:
-        category = cast(Category, category)
+        return
+    category = cast(Category, category)
 
     print("\nYou are viewing the following category:")
     print(formatters.format_category_oneline(category))
@@ -572,21 +578,31 @@ def view_individual_category(gradebook: Gradebook) -> None:
 
 def view_active_categories(gradebook: Gradebook) -> None:
     """
-    Displays a list of active Categories.
+    Displays a sorted list of active `Category` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` with a filter for active categories.
+        - Records are sorted by name.
     """
     banner = formatters.format_banner_text("Active Categories")
     print(f"\n{banner}")
 
-    active_categories = gradebook.get_records(
+    gradebook_response = gradebook.get_records(
         gradebook.categories, lambda x: x.is_active
     )
 
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    active_categories = gradebook_response.data["records"]
+
     if not active_categories:
         print("There are no active categories.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=active_categories,
@@ -597,21 +613,31 @@ def view_active_categories(gradebook: Gradebook) -> None:
 
 def view_inactive_categories(gradebook: Gradebook) -> None:
     """
-    Displays a list of inactive Categories.
+    Displays a sorted list of inactive `Category` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` with a filter for inactive students.
+        - Records are sorted by name.
     """
     banner = formatters.format_banner_text("Inactive Categories")
     print(f"\n{banner}")
 
-    inactive_categories = gradebook.get_records(
+    gradebook_response = gradebook.get_records(
         gradebook.categories, lambda x: not x.is_active
     )
 
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    inactive_categories = gradebook_response.data["records"]
+
     if not inactive_categories:
         print("There are no inactive categories.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=inactive_categories,
@@ -622,19 +648,29 @@ def view_inactive_categories(gradebook: Gradebook) -> None:
 
 def view_all_categories(gradebook: Gradebook) -> None:
     """
-    Displays a list of all Categories.
+    Displays a list of all `Category` records.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `Gradebook.get_records()` to retrieve all students, activea and inactive.
+        - Records are sorted by name.
     """
     banner = formatters.format_banner_text("All Categories")
     print(f"\n{banner}")
 
-    all_categories = gradebook.get_records(gradebook.categories)
+    gradebook_response = gradebook.get_records(gradebook.categories)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return
+
+    all_categories = gradebook_response.data["records"]
 
     if not all_categories:
         print("There are no categories yet.")
-        return None
+        return
 
     helpers.sort_and_display_records(
         records=all_categories,
@@ -648,16 +684,20 @@ def view_all_categories(gradebook: Gradebook) -> None:
 
 def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
     """
-    Menu dispatch for either finding a Category by search or from a list of Categories (separate lists for active and inactive).
+    Prompts the user to locate a `Category` record by search or list selection.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected Category, or MenuSignal.CANCEL if either the user cancels or the search yields no hits.
+        Category | MenuSignal: The selected `Category`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Offers search, active list, and inactive list as selection methods.
+        - Return early if the user chooses to cancel or if no selection is made.
     """
     title = formatters.format_banner_text("Category Selection")
     options = [
@@ -671,7 +711,9 @@ def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
+
     elif callable(menu_response):
         return menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

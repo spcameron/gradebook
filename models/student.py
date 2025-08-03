@@ -91,7 +91,6 @@ class Student:
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
-    # TODO: copy this oneliner to the other models
     def toggle_archived_status(self) -> None:
         self._is_active = not self._is_active
 
@@ -193,7 +192,9 @@ class Student:
         """
         email = email.strip().lower()
         if not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-            raise ValueError("Email must be a valid address with one @ and a domain.")
+            raise ValueError(
+                "Invalid input. Email must be a valid address with one @ and a domain."
+            )
         return email
 
     # === dunder methods ===

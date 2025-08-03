@@ -17,6 +17,7 @@ import json
 import os
 from typing import Any, Callable
 
+import cli.formatters as formatters
 from core.response import ErrorCode, Response
 from models.assignment import Assignment
 from models.category import Category
@@ -130,7 +131,7 @@ class Gradebook:
                 - data (dict | None): Payload with the following keys:
                     - On success:
                         - "gradebook" (Gradebook): The newly created `Gradebook` object.
-                    - On failure:
+        - On failure:
                         - None
 
         Notes:
@@ -1584,7 +1585,7 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool):
-                    - True if the first name attribute was successfully updated.
+                    - True if the first name attribute was successfully updated or no-op.
                     - False if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
@@ -1602,7 +1603,16 @@ class Gradebook:
 
         Notes:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the input first_name matches the current value, the method returns early with a success response indicating no changes were made.
         """
+        if student.first_name == first_name:
+            return Response.succeed(
+                detail="The first name provided matches the current one. No changes made.",
+                data={
+                    "record": student,
+                },
+            )
+
         try:
             student.first_name = first_name
 
@@ -1633,7 +1643,7 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool):
-                    - True if the last name attribute was successfully updated.
+                    - True if the last name attribute was successfully updated or no-op.
                     - False if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
@@ -1651,7 +1661,16 @@ class Gradebook:
 
         Notes:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the input last_name matches the current value, the method returns early with a success response indicating no changes were made.
         """
+        if student.last_name == last_name:
+            return Response.succeed(
+                detail="The last name provided matches the current one. No changes made.",
+                data={
+                    "record": student,
+                },
+            )
+
         try:
             student.last_name = last_name
 
@@ -1682,13 +1701,14 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool):
-                    - True if the email attribute was successfully updated or no change was needed.
+                    - True if the email attribute was successfully updated or no-op.
                     - False if validation fails or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message with the updated value.
                 - error (ErrorCode | str | None):
-                    - `ErrorCode.VALIDATION_FAILED` for duplicate or malformed input.
+                    - `ErrorCode.VALIDATION_FAILED` if another record exists with the same email.
+                    - `ErrorCode.INVALID_FIELD_VALUE` if the input is malformed.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None);
                     - 200 on success
@@ -1703,22 +1723,35 @@ class Gradebook:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
             - If the normalized input email matches the current value, the method returns early with a success response indicating no changes were made.
         """
-        try:
-            if self._normalize(student.email) == self._normalize(email):
-                return Response.succeed(
-                    detail="The email address provided matches the current one. No changes made.",
-                    data={
-                        "record": student,
-                    },
-                )
+        if self._normalize(student.email) == self._normalize(email):
+            return Response.succeed(
+                detail="The email address provided matches the current one. No changes made.",
+                data={
+                    "record": student,
+                },
+            )
 
+        try:
             self.require_unique_student_email(email)
 
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Unique record validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        try:
             student.email = email
 
         except ValueError as e:
             return Response.fail(
-                detail=f"Email validation failed: {e}",
+                detail=f"Input validation failed: {e}",
                 error=ErrorCode.INVALID_FIELD_VALUE,
             )
 
@@ -1934,7 +1967,7 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool):
-                    - True if the name attribute was successfully updated.
+                    - True if the name attribute was successfully updated or no-op.
                     - False if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
@@ -1952,7 +1985,16 @@ class Gradebook:
 
         Notes:
             - This method mutates `Gradebook` stats and calls `_mark_dirty_if_tracked()` if successful.
+            - If the input name matches the current value, the method returns early with a success response indicating no changes were made.
         """
+        if category.name == name:
+            return Response.succeed(
+                detail="The name provided matches the current one. No changes made.",
+                data={
+                    "record": category,
+                },
+            )
+
         try:
             category.name = name
 
@@ -2031,7 +2073,7 @@ class Gradebook:
         Returns:
             Response: A structured response with the following contract:
                 - success (bool):
-                    - True if the weight attribute was successfully updated.
+                    - True if the weight attribute was successfully updated or no-op.
                     - False if the new weight value is invalid or if unexpected errors occur.
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
@@ -2051,7 +2093,16 @@ class Gradebook:
         Notes:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
             - The `weight` value must be a finite float between 0 and 100 (inclusive), or None for unweighted. Validation failures raise `TypeError` or `ValueError`.
+            - If the input weight matches the current value, the method returns early with a success response indicating no changes were made.
         """
+        if category.weight == weight:
+            return Response.succeed(
+                detail="The weight provided matches the current one. No changes made.",
+                data={
+                    "record": category,
+                },
+            )
+
         try:
             category.weight = weight
 
@@ -2211,6 +2262,308 @@ class Gradebook:
 
             return Response.succeed(
                 detail="Assignment successfully removed from the gradebook."
+            )
+
+    def update_assignment_name(self, assignment: Assignment, name: str) -> Response:
+        """
+        Updates the `name` attribute of a given `Assignment` object.
+
+        Args:
+            assignment (Assignment): The assignment whose attribute is updated.
+            name (str): The new name to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the name attribute was successfully updated or no-op.
+                    - False if validation fails or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if another category with the same name already exists.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Assignment): The updated `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the input name matches the current value, the method returns early with a success response indicating no changes were made.
+        """
+        if assignment.name == name:
+            return Response.succeed(
+                detail="The name provided matches the current one. No changes made.",
+                data={
+                    "record": assignment,
+                },
+            )
+
+        try:
+            self.require_unique_assignment_name(name)
+
+            assignment.name = name
+
+        except ValueError as e:
+            return Response.fail(
+                detail=f"Name validation failed: {e}",
+                error=ErrorCode.VALIDATION_FAILED,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(assignment)
+
+            return Response.succeed(
+                detail=f"Assignment name successfully updated to: {assignment.name}",
+                data={
+                    "record": assignment,
+                },
+            )
+
+    def update_assignment_linked_category(
+        self, assignment: Assignment, category: Category | None
+    ) -> Response:
+        """
+        Updates the `category_id` attribute of a given `Assignment` object.
+
+        Args:
+            assignment (Assignment): The assignment whose attribute is updated.
+            category (Category | None): The new category whose id is to be assigned, or None if the assignment is being marked 'uncategorized.'
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the name attribute was successfully updated or no-op.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confrimation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        "record" (Assignment): The updated `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the input category matches the currently linked category, the method returns early with a success response indicating no changes were made.
+        """
+        category_id = category.id if category else None
+
+        if assignment.category_id == category_id:
+            return Response.succeed(
+                detail="The category provided matches the current linked category. No changes made.",
+                data={
+                    "record": assignment,
+                },
+            )
+
+        try:
+            assignment.category_id = category_id
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(assignment)
+
+            return Response.succeed(
+                detail=f"Assignment linked category successfully updated to: {category.name if category else '[UNCATEGORIZED]'}",
+                data={
+                    "record": assignment,
+                },
+            )
+
+    def update_assignment_due_date(
+        self, assignment: Assignment, due_date_dt: datetime.datetime | None
+    ) -> Response:
+        """
+        Updates the `due_date_dt` attribute of a given `Assignment` object.
+
+        Args:
+            assignment (Assignment): The assignment whose attribute is updated.
+            due_date_dt (datetime.datetime | None): The new due date to be assigned, or None if the the assignment has no due date.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the due_date_dt attribute was successfully updated or no-op.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Assignment): The updated `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and call `_mark_dirty_if_tracked()` if successful.
+            - If the input due date matches the current due date, the method returns early with a success response indicating no changes were made.
+        """
+        if assignment.due_date_dt == due_date_dt:
+            return Response.succeed(
+                detail="The due date provided matches the current due date. No changes made.",
+                data={
+                    "record": assignment,
+                },
+            )
+
+        try:
+            assignment.due_date_dt = due_date_dt
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(assignment)
+
+            return Response.succeed(
+                detail=f"Assignment due date successfully updated to: {formatters.format_due_date_from_datetime(assignment.due_date_dt)}",
+                data={
+                    "record": assignment,
+                },
+            )
+
+    def update_assignment_points_possible(
+        self, assignment: Assignment, points_possible: float
+    ) -> Response:
+        """
+        Updates the `point_possible` attribute of a given `Assignment` object.
+
+        Args:
+            assignment (Assignment): The assignment whose attribute is updated.
+            point_possilble (float): The new points_possible to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the points_possible value was successfully updated or no-op.
+                    - False if validation fails or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INVALID_FIELD_VALUE` if the input fails to pass validation.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Assignment): The updated `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the points_possible input value matches the current value, the method returns early with a success response indicating no changes were made.
+        """
+        if assignment.points_possible == points_possible:
+            return Response.succeed(
+                detail="The points possible value provided matches the current points possible. No changes made.",
+                data={
+                    "record": assignment,
+                },
+            )
+
+        try:
+            assignment.points_possible = points_possible
+
+        except (TypeError, ValueError) as e:
+            return Response.fail(
+                detail=f"Input validation failed: {e}",
+                error=ErrorCode.INVALID_FIELD_VALUE,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(assignment)
+
+            return Response.succeed(
+                detail=f"Assignment points possible successfully updated to: {assignment.points_possible}",
+                data={
+                    "record": assignment,
+                },
+            )
+
+    def toggle_assignment_active_status(self, assignment: Assignment) -> Response:
+        """
+        Toggles the `is_active` attribute of a given `Assignment` object.
+
+        Args:
+            assignment (Assignment): The assignment whose attribute is updated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the active status was successfully toggled.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message reflecting the new status.
+                - error (ErrorCode | str | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Assignment): The updated `Assignment` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            assignment.toggle_archived_status()
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(assignment)
+
+            return Response.succeed(
+                detail=f"Assignment status successfully updated to: {assignment.status}",
+                data={
+                    "record": assignment,
+                },
             )
 
     # --- submission manipulation ---

@@ -3,7 +3,14 @@
 """
 Manage Categories menu for the Gradebook CLI.
 
-TODO copy from student_menu.py
+This module defines the full interface for managing `Category` records, including:
+- Adding new categories
+- Editing category attributes (name, archival status)
+- Archiving or permanently removing categories
+- Viewing category records (individual, filtered, or all)
+
+All operations are routed through the `Gradebook` API for consistency, validation, and state tracking.
+Control flow adheres to structured CLI menu patterns with clear terminal-level feedback.
 """
 
 from typing import Callable, cast
@@ -308,7 +315,7 @@ def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> 
     Toggles the `is_active` field of a `Category` record via calls to `confirm_and_archive()` or `confirm_and_reactivate()`.
 
     Args:
-        category (Category): The `Category` targeted for editing.
+        category (Category): The `Category` object targeted for editing.
         gradebook (Gradebook): The active `Gradebook`.
     """
     print(f"\nThis category is currently {category.status}.")
@@ -319,6 +326,7 @@ def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> 
 
     if category.is_active:
         confirm_and_archive(category, gradebook)
+
     else:
         confirm_and_reactivate(category, gradebook)
 
@@ -403,7 +411,7 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
     Deletes the `Category` record and all linked `Assignments` and `Submissions` from the `Gradebook` after preview and user confirmation.
 
     Args:
-        category (Category): The `Category` targeted for deletion.
+        category (Category): The `Category` object targeted for deletion.
         gradebook (Gradebook): The active `Gradebook`.
     """
     caution_banner = formatters.format_banner_text("CAUTION!")
@@ -436,7 +444,7 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
     Archives an active `Category` after preview and confirmation.
 
     Args:
-        category (Category): The `Category` targeted for archiving.
+        category (Category): The `Category` object targeted for archiving.
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
@@ -479,7 +487,7 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
     Reactivates an inactive `Category` after preview and confirmation.
 
     Args:
-        category (Category): The `Category` targeted for reactivation.
+        category (Category): The `Category` object targeted for reactivation.
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
@@ -525,7 +533,7 @@ def view_categories_menu(gradebook: Gradebook) -> None:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        - Options include viewing individual, active, inactive, or all students.
+        - Options include viewing individual, active, inactive, or all categories.
     """
     title = "View Categories"
     options = [
@@ -654,7 +662,7 @@ def view_all_categories(gradebook: Gradebook) -> None:
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
-        - Uses `Gradebook.get_records()` to retrieve all students, activea and inactive.
+        - Uses `Gradebook.get_records()` to retrieve all categories, active and inactive.
         - Records are sorted by name.
     """
     banner = formatters.format_banner_text("All Categories")
@@ -697,7 +705,7 @@ def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
 
     Notes:
         - Offers search, active list, and inactive list as selection methods.
-        - Return early if the user chooses to cancel or if no selection is made.
+        - Returns early if the user chooses to cancel or if no selection is made.
     """
     title = formatters.format_banner_text("Category Selection")
     options = [

@@ -16,7 +16,7 @@ class Category:
         self,
         id: str,
         name: str,
-        weight: Optional[float] = None,
+        weight: float | None = None,
         active: bool = True,
     ):
         self._id = id
@@ -38,7 +38,7 @@ class Category:
         self._name = name
 
     @property
-    def weight(self) -> Optional[float]:
+    def weight(self) -> float | None:
         weight = 0.0 if not self._is_active else self._weight
         return weight
 
@@ -60,7 +60,7 @@ class Category:
         return "'ACTIVE'" if self._is_active else "'ARCHIVED'"
 
     def toggle_archived_status(self) -> None:
-        self._is_active = False if self._is_active else True
+        self._is_active = not self._is_active
 
     def to_dict(self) -> dict:
         return {
@@ -101,15 +101,15 @@ class Category:
     @staticmethod
     def validate_weight_input(weight: Any) -> float | None:
         """
-        Validates and normalizes input for a Category weight.
+        Validates and normalizes input for a `Category` weight.
 
         Accepts None as a valid input, otherwise:
-            - Casts to float,
-            - Ensures the number is finite
-            - Ensures it is between 0 and 100, inclusive
+            - Casts to float.
+            - Ensures the number is finite.
+            - Ensures it is between 0 and 100, inclusive.
 
         Args:
-            weight: The input value to validate.
+            weight (Any): The input value to validate.
 
         Returns:
             The normalized weight value (float or None).
@@ -123,6 +123,7 @@ class Category:
 
         try:
             weight = float(weight)
+
         except (TypeError, ValueError):
             raise TypeError("Weight must be a number or None.")
 

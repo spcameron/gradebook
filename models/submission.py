@@ -49,14 +49,14 @@ class Submission:
         return self._is_late
 
     def toggle_late_status(self) -> None:
-        self._is_late = False if self._is_late else True
+        self._is_late = not self._is_late
 
     @property
     def is_exempt(self) -> bool:
         return self._is_exempt
 
     def toggle_exempt_status(self) -> None:
-        self._is_exempt = False if self._is_exempt else True
+        self._is_exempt = not self._is_exempt
 
     def to_dict(self) -> dict:
         return {

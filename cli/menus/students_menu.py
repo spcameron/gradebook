@@ -214,9 +214,21 @@ def prompt_name_input_or_cancel(
     Returns:
         User input unmodified, or `MenuSignal.CANCEL` if input is "".
     """
-    return helpers.prompt_user_input_or_cancel(
-        f"Enter {(first_or_last + ' name').strip()} (leave blank to cancel):"
-    )
+    # uses this structure in case validators are added later
+    while True:
+        user_input = helpers.prompt_user_input_or_cancel(
+            f"Enter {(first_or_last + ' name').strip()} (leave blank to cancel):"
+        )
+
+        if isinstance(user_input, MenuSignal):
+            return user_input
+
+        try:
+            return user_input
+
+        except Exception as e:
+            print(f"\n[ERROR] {e}")
+            print("Please try again.")
 
 
 # === edit student ===

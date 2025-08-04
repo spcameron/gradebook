@@ -711,6 +711,12 @@ class Gradebook:
             }
         )
 
+    def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
+        return any(
+            (s.assignment_id == assignment_id and s.student_id == student_id)
+            for s in self.submissions.values()
+        )
+
     # --- attendance records ---
 
     def get_attendance_for_date(self, class_date: datetime.date) -> Response:
@@ -2583,11 +2589,13 @@ class Gradebook:
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
-                - error (ErrorCode | str | None);
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if either the linked assignment or student cannot be found in the gradebook.
                     - `ErrorCode.VALIDATION_FIELD` if the student/assignment pair is not unique.
                     - `ErrorCode.INTERNAL_ERROR` if `_add_record()` fails or for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
+                    - 404 if either the linked assignment or student cannot be found
                     - 400 on failure
                 - data (dict | None): Payload with the following keys:
                     - On success:
@@ -2598,6 +2606,28 @@ class Gradebook:
         Notes:
             - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
+        assignment_response = self.find_assignment_by_uuid(submission.assignment_id)
+
+        if not assignment_response.success:
+            return Response.fail(
+                detail=f"Could not resolve assignment for submission: {assignment_response.detail}",
+                error=assignment_response.error,
+                status_code=assignment_response.status_code,
+            )
+
+        assignment = assignment_response.data["record"]
+
+        student_response = self.find_student_by_uuid(submission.student_id)
+
+        if not student_response.success:
+            return Response.fail(
+                detail=f"Could not resolve student for submission: {student_response.detail}",
+                error=student_response.error,
+                status_code=student_response.status_code,
+            )
+
+        student = student_response.data["record"]
+
         try:
             self.require_unique_submission(
                 submission.assignment_id, submission.student_id
@@ -2628,9 +2658,13 @@ class Gradebook:
             self._mark_dirty()
 
             return Response.succeed(
-                detail="Submission successfully added to the gradebook.",
+                detail=f"Submission from {student.full_name} to {assignment.name} successfully added to the gradebook.",
                 data=add_response.data,
             )
+
+    # TODO:
+    def batch_add_submissions(self, submissions: list[Submission]) -> Response:
+        pass
 
     def remove_submission(self, submission: Submission) -> Response:
         """
@@ -2900,17 +2934,19 @@ class Gradebook:
             - Each call to `add_class_date()` will invoke `_mark_dirty()` if the addition succeeds.
             - This method does not attempt to roll back or retry failed additions.
         """
-        try:
-            added = []
-            skipped = []
+        added = []
+        skipped = []
 
+        try:
             for class_date in class_dates:
                 add_response = self.add_class_date(class_date)
 
                 if add_response.success:
                     added.append(class_date)
-                elif add_response.error == ErrorCode.VALIDATION_FAILED:
+
+                elif add_response.error is ErrorCode.VALIDATION_FAILED:
                     skipped.append(class_date)
+
                 else:
                     return add_response
 
@@ -2918,6 +2954,10 @@ class Gradebook:
             return Response.fail(
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "added": added,
+                    "skipped": skipped,
+                },
             )
 
         else:
@@ -2929,9 +2969,10 @@ class Gradebook:
                         "skipped": skipped,
                     },
                 )
+
             else:
                 return Response.fail(
-                    detail=f"Added {len(added)} of {len(class_dates)} class dates.",
+                    detail="Not all class dates could be sucessfully added to the gradebook.",
                     error=ErrorCode.VALIDATION_FAILED,
                     data={
                         "added": added,

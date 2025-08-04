@@ -75,6 +75,9 @@ def add_category(gradebook: Gradebook) -> None:
 
     Args:
         gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Additions are not saved automatically. If the gradebook is marked dirty after adding, the user will be prompted to save before returning to the previous menu.
     """
     while True:
         new_category = prompt_new_category(gradebook)
@@ -95,6 +98,8 @@ def add_category(gradebook: Gradebook) -> None:
             "Would you like to continue adding new categories?"
         ):
             break
+
+    helpers.prompt_if_dirty(gradebook)
 
     helpers.returning_to("Manage Categories menu")
 

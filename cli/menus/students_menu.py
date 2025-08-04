@@ -73,6 +73,9 @@ def add_student(gradebook: Gradebook) -> None:
 
     Args:
         gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Additions are not saved automatically. If the gradebook is marked dirty after adding, the user will be prompted to save before returning to the previous menu.
     """
     while True:
         new_student = prompt_new_student(gradebook)
@@ -93,6 +96,8 @@ def add_student(gradebook: Gradebook) -> None:
             "Would you like to continue adding new students?"
         ):
             break
+
+    helpers.prompt_if_dirty(gradebook)
 
     helpers.returning_to("Manage Students menu")
 

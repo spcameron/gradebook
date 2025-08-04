@@ -3,15 +3,22 @@
 """
 Manage Submissions menu for the Gradebook CLI.
 
-Provides functions for adding, editing, removing, and viewing Submissions.
-Includes a special batch entry process to quickly enter Submissions by Assignment.
+This module defines the full interace for managing `Submission` records, including:
+- Adding new submissions, individually or in batches by assignment
+- Editing submission attributes (TODO)
+- Permanently removing submissions
+- View submission records (TODO)
+
+All operations are routed through the `Gradebook` API for consistency, validation, and state-tracking.
+Control flow adheres to traditional CLI menu patterns with clear terminal-level feedback.
 """
 
-from typing import Callable, Optional, cast
+from typing import Callable, cast
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
 from cli.menu_helpers import MenuSignal
+from core.response import ErrorCode
 from core.utils import generate_uuid
 from models.assignment import Assignment
 from models.gradebook import Gradebook
@@ -24,18 +31,18 @@ def run(gradebook: Gradebook) -> None:
     Top-level loop with dispatch for the Manage Submissions menu.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
 
     Notes:
-        The finally block guarantees a check for unsaved changes before returning.
+        - The finally block guarantees a check for unsaved changes before returning.
     """
     title = formatters.format_banner_text("Manage Submissions")
     options = [
         ("Add Single Submission", add_single_submission),
-        ("Batch Enter Submissions by Assignment", add_submissions_by_assignment),
+        ("Batch Add Submissions by Assignment", batch_add_submissions_by_assignment),
         ("Edit Submission", find_and_edit_submission),
         ("Remove Submission", find_and_remove_submission),
         ("View Submissions", view_submissions_menu),
@@ -48,10 +55,13 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
+
             elif callable(menu_response):
                 menu_response(gradebook)
+
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
     finally:
         helpers.prompt_if_dirty(gradebook)
 
@@ -63,153 +73,54 @@ def run(gradebook: Gradebook) -> None:
 
 def add_single_submission(gradebook: Gradebook) -> None:
     """
-    Loops a prompt to search/select an Assignment, Student, and create new Submission.
+    Loops a prompt to search/select an `Assignment`, `Student`, and create new `Submission`.
 
     Args:
-        gradebook: The active gradebook.
+        gradebook (Gradebook): The active `gradebook`.
 
     Notes:
-        New Submissions are added to the Gradebook but not saved. Gradebook is marked dirty instead.
+        - Additions are not saved automatically. If the gradebook is marked dirty after adding, the user will be prompted to save before returning to the previous menu.
     """
     while True:
         assignment = prompt_find_assignment(gradebook)
 
         if assignment is MenuSignal.CANCEL:
             break
-        else:
-            assignment = cast(Assignment, assignment)
+        assignment = cast(Assignment, assignment)
 
         student = prompt_find_student(gradebook)
 
         if student is MenuSignal.CANCEL:
             break
-        else:
-            student = cast(Student, student)
+        student = cast(Student, student)
 
         new_submission = prompt_new_submission(assignment, student, gradebook)
 
         if new_submission is not None and preview_and_confirm_submission(
             new_submission, gradebook
         ):
-            gradebook.add_submission(new_submission)
-            gradebook.mark_dirty()
-            print(
-                f"\nSubmission for {student.full_name} to {assignment.name} successfully added."
-            )
+            gradebook_response = gradebook.add_submission(new_submission)
+
+            if not gradebook_response.success:
+                helpers.display_response_failure(gradebook_response)
+                print(
+                    f"\nSubmission from {student.full_name} to {assignment.name} was not added."
+                )
+
+            else:
+                print(f"\n{gradebook_response.detail}")
 
         if not helpers.confirm_action(
             "Would you like to continue adding new submissions?"
         ):
             break
 
-    helpers.returning_to("Manage Submissions menu")
-
-
-def add_submissions_by_assignment(gradebook: Gradebook) -> None:
-    """
-    Batch entry process for choosing an assignment, iterating across active student roster, and adding Submissions (or skipping) for each.
-
-    Args:
-        gradebook: The active gradebook.
-
-    Notes:
-        Only active students who have not submitted for this assignment are displayed.
-        New submissions are queued for review and chance to edit.
-        Skipped students are also queued for review and chance to mark exempt.
-        After preview and confirmation, submissions are added to Gradebook but not saved. Gradebook is marked dirty.
-    """
-    assignment = prompt_find_assignment(gradebook)
-
-    if assignment is MenuSignal.CANCEL:
-        return None
-    else:
-        assignment = cast(Assignment, assignment)
-
-    students_to_prompt = gradebook.get_records(
-        gradebook.students,
-        lambda student: student.is_active
-        and not gradebook.submission_already_exists(assignment.id, student.id),
-    )
-
-    queued_submissions = []
-    skipped_students = []
-
-    for student in students_to_prompt:
-        points_earned = prompt_score_with_bailout(assignment, student)
-
-        if points_earned is None:
-            print(f"\nAdding {student.full_name} to skipped students.")
-            skipped_students.append(student)
-            continue
-        elif points_earned is MenuSignal.CANCEL:
-            if helpers.confirm_action(
-                "This will also discard the other submissions in this batch. Are you sure you want to cancel?"
-            ):
-                print(
-                    f"\nDiscarding {len(queued_submissions)} submissions. No change saved."
-                )
-                return None
-            else:
-                print(f"\nAdding {student.full_name} to skipped students instead.")
-                skipped_students.append(student)
-                continue
-        else:
-            points_earned = cast(float, points_earned)
-
-        try:
-            submission_id = generate_uuid()
-            new_submission = Submission(
-                id=submission_id,
-                student_id=student.id,
-                assignment_id=assignment.id,
-                points_earned=points_earned,
-            )
-            queued_submissions.append(new_submission)
-        except (TypeError, ValueError) as e:
-            print(f"\nError: Could not create submission ... {e}")
-            skipped_students.append(student)
-            print(f"\nAdding {student.full_name} to skipped students instead.")
-            continue
-
-    if queued_submissions:
-        preview_batch_submissions(assignment, queued_submissions, gradebook)
-
-    if queued_submissions and helpers.confirm_action(
-        "Would you like to edit any of these submissions?"
-    ):
-        edit_batch_submissions(
-            assignment, queued_submissions, skipped_students, gradebook
-        )
-
-    if skipped_students and helpers.confirm_action(
-        "Would you like to review the skipped students?"
-    ):
-        review_skipped_students(
-            assignment, queued_submissions, skipped_students, gradebook
-        )
-
-    if queued_submissions:
-        preview_batch_submissions(assignment, queued_submissions, gradebook)
-
-    if queued_submissions and helpers.confirm_action(
-        "Do you want to add these submissions to the Gradebook?"
-    ):
-        for submission in queued_submissions:
-            gradebook.add_submission(submission)
-        gradebook.mark_dirty()
-        print(
-            f"\n{len(queued_submissions)} submissions successfully added to the Gradebook."
-        )
-    elif queued_submissions:
-        print(f"\nDiscarding {len(queued_submissions)} submissions. No changes saved.")
+    helpers.prompt_if_dirty(gradebook)
 
     helpers.returning_to("Manage Submissions menu")
 
 
 # TODO:
-# preview and confirm is found in add methods
-# data input prompts are extracted to their own functions
-# export this pattern to Assignment, Categories, and Students
 def prompt_new_submission(
     linked_assignment: Assignment, linked_student: Student, gradebook: Gradebook
 ) -> Optional[Submission]:
@@ -256,6 +167,7 @@ def prompt_new_submission(
         return None
 
 
+# TODO:
 def preview_and_confirm_submission(
     submission: Submission, gradebook: Gradebook
 ) -> bool:
@@ -287,6 +199,189 @@ def preview_and_confirm_submission(
         return False
 
 
+def batch_add_submissions_by_assignment(gradebook: Gradebook) -> None:
+    """
+    Guides the user through batch entry of `Submission` records for a selected assignment.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - The user can cancel at assignment selection, during score entry, or at final confirmation.
+        - Only active students without existing submissions for the chosen assignment are included.
+        - Points can be entered for each student or skipped; skipped students are queued separately.
+        - After entry, the user may edit submissions, review skipped students, and confirm final additions.
+        - Submissions are committed via `Gradebook.batch_add_submissions()` with validation and state tracking.
+        - The gradebook is not automatically saved; if modified, the user will be prompted to save before exiting.
+    """
+    assignment = prompt_find_assignment(gradebook)
+
+    if assignment is MenuSignal.CANCEL:
+        return
+    assignment = cast(Assignment, assignment)
+
+    students_response = gradebook.get_records(
+        gradebook.students,
+        lambda student: student.is_active
+        and not gradebook.submission_already_exists(assignment.id, student.id),
+    )
+
+    if not students_response.success:
+        helpers.display_response_failure(students_response)
+        print("Unable to populate the active student roster.")
+        helpers.returning_without_changes()
+        return
+
+    students_to_prompt = students_response.data["records"]
+
+    if not students_to_prompt:
+        print(
+            "\nThere are no active students who have yet to submit for this assignment."
+        )
+        helpers.returning_without_changes()
+        return
+
+    queued_submissions = []
+    skipped_students = []
+
+    for student in students_to_prompt:
+        points_earned = prompt_score_with_bailout(assignment, student)
+
+        if points_earned is None:
+            print(f"\nAdding {student.full_name} to skipped students.")
+            skipped_students.append(student)
+            continue
+
+        elif points_earned is MenuSignal.CANCEL:
+            if helpers.confirm_action(
+                "This will also discard the other submissions in this batch. Are you sure you want to cancel?"
+            ):
+                print(
+                    f"\nDiscarding {len(queued_submissions)} submissions. No changes saved."
+                )
+                return
+
+            else:
+                print(f"\nAdding {student.full_name} to skipped students instead.")
+                skipped_students.append(student)
+                continue
+
+        else:
+            points_earned = cast(float, points_earned)
+
+        try:
+            queued_submissions.append(
+                Submission(
+                    id=generate_uuid(),
+                    student_id=student.id,
+                    assignment_id=assignment.id,
+                    points_earned=points_earned,
+                )
+            )
+
+        except (TypeError, ValueError) as e:
+            print(f"\nError: Could not create submission ... {e}")
+            skipped_students.append(student)
+            print(f"\nAdding {student.full_name} to skipped students instead.")
+            continue
+
+    if review_and_confirm_batch_add(
+        assignment, queued_submissions, skipped_students, gradebook
+    ):
+        gradebook_response = gradebook.batch_add_submissions(queued_submissions)
+
+        added_submissions = gradebook_response.data["added"]
+        skipped_submissions = gradebook_response.data["skipped"]
+
+        if not gradebook_response.success:
+            helpers.display_response_failure(gradebook_response)
+
+            if gradebook_response.error is ErrorCode.VALIDATION_FAILED:
+                print(
+                    f"{len(added_submissions)} of {len(queued_submissions)} submissions were added."
+                )
+                print(
+                    f"{len(skipped_submissions)} submissions were skipped due to validation errors."
+                )
+
+            else:
+                print(
+                    f"Batch entry failed after adding {len(added_submissions)} of {len(queued_submissions)} submissions."
+                )
+
+        else:
+            print(f"\n{gradebook_response.detail}")
+
+        # TODO: discard after writing gradebook.batch_add_submissions()
+
+        # for submission in queued_submissions:
+        #     gradebook.add_submission(submission)
+        # gradebook.mark_dirty()
+        # print(
+        #     f"\n{len(queued_submissions)} submissions successfully added to the Gradebook."
+        # )
+
+    else:
+        print(f"\nDiscarding {len(queued_submissions)} submissions. No changes saved.")
+
+    helpers.prompt_if_dirty(gradebook)
+
+    helpers.returning_to("Manage Submissions menu")
+
+
+def review_and_confirm_batch_add(
+    assignment: Assignment,
+    queued_submissions: list[Submission],
+    skipped_students: list[Student],
+    gradebook: Gradebook,
+) -> bool:
+    """
+    Handles user review, optional editing, and final confirmation for a batch of queued `Submission` records.
+
+    Args:
+        assignment (Assignment): The target assignment for the batch.
+        queued_submissions (list[Submission]): The submissions prepared during batch entry.
+        skipped_students (list[Student]): Students who were skipped during score entry.
+        gradebook (Gradebook): The active `Gradebook`, used for previewing and editing.
+
+    Returns:
+        bool: True if the user confirms final submission; False if the operation is canceled or abandoned.
+
+    Notes:
+        - Allows optional editing of queued submissions.
+        - Offers a chance to review and update skipped students.
+        - If no submissions remain after review, the process is aborted.
+        - This method does not mutate the gradebook; it only prepares data for potential submission.
+    """
+    if queued_submissions:
+        preview_batch_submissions(assignment, queued_submissions, gradebook)
+
+        if helpers.confirm_action("Would you like to edit any of these submissions?"):
+            edit_batch_submissions(
+                assignment, queued_submissions, skipped_students, gradebook
+            )
+
+    if skipped_students and helpers.confirm_action(
+        "Would you like to review the skipped students?"
+    ):
+        review_skipped_students(
+            assignment, queued_submissions, skipped_students, gradebook
+        )
+
+    if not queued_submissions:
+        print("You have not entered any submissions to add to the gradebook.")
+        return False
+
+    banner = formatters.format_banner_text("Batch Entry: Final Preview")
+    print(f"\n{banner}\n")
+    preview_batch_submissions(assignment, queued_submissions, gradebook)
+
+    return helpers.confirm_action(
+        "Do you want to add these submissions to the gradebook?"
+    )
+
+
+# TODO:
 def preview_batch_submissions(
     assignment: Assignment, submissions: list[Submission], gradebook: Gradebook
 ) -> None:
@@ -316,6 +411,7 @@ def preview_batch_submissions(
         )
 
 
+# TODO:
 def edit_batch_submissions(
     assignment: Assignment,
     queued_submissions: list[Submission],
@@ -451,6 +547,7 @@ def edit_batch_submissions(
     helpers.returning_to("Submission batch entry review")
 
 
+# TODO:
 def review_skipped_students(
     assignment: Assignment,
     queued_submissions: list[Submission],
@@ -567,6 +664,7 @@ def review_skipped_students(
     helpers.returning_to("Submission batch entry review")
 
 
+# TODO:
 def handle_existing_submission(
     linked_assignment: Assignment, linked_student: Student, gradebook: Gradebook
 ) -> None:
@@ -608,6 +706,7 @@ def handle_existing_submission(
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
+# TODO:
 def delete_and_create_new_submission(
     existing_submission: Submission, gradebook: Gradebook
 ) -> None:

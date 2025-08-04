@@ -1123,7 +1123,7 @@ class Gradebook:
                     - 404 if no match is found
                 - data (dict): Payload with the following keys:
                     - On success:
-                        - "submission" (Submission): The matched `Submission` object.
+                        - "record" (Submission): The matched `Submission` object.
                     - On failure:
                         - None
 
@@ -1139,7 +1139,7 @@ class Gradebook:
             ):
                 return Response.succeed(
                     data={
-                        "submission": submission,
+                        "record": submission,
                     },
                 )
 
@@ -2662,8 +2662,14 @@ class Gradebook:
                 data=add_response.data,
             )
 
-    # TODO:
+    # TODO: model after batch_add_class_dates()
     def batch_add_submissions(self, submissions: list[Submission]) -> Response:
+        # for submission in queued_submissions:
+        #     gradebook.add_submission(submission)
+        # gradebook.mark_dirty()
+        # print(
+        #     f"\n{len(queued_submissions)} submissions successfully added to the Gradebook."
+        # )
         pass
 
     def remove_submission(self, submission: Submission) -> Response:

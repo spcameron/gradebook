@@ -2331,7 +2331,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(assignment)
 
             return Response.succeed(
-                detail=f"Assignment name successfully updated to: {assignment.name}",
+                detail=f"Assignment name successfully updated to: {assignment.name}.",
                 data={
                     "record": assignment,
                 },
@@ -2393,7 +2393,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(assignment)
 
             return Response.succeed(
-                detail=f"Assignment linked category successfully updated to: {category.name if category else '[UNCATEGORIZED]'}",
+                detail=f"Assignment linked category successfully updated to: {category.name if category else '[UNCATEGORIZED]'}.",
                 data={
                     "record": assignment,
                 },
@@ -2453,7 +2453,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(assignment)
 
             return Response.succeed(
-                detail=f"Assignment due date successfully updated to: {formatters.format_due_date_from_datetime(assignment.due_date_dt)}",
+                detail=f"Assignment due date successfully updated to: {formatters.format_due_date_from_datetime(assignment.due_date_dt)}.",
                 data={
                     "record": assignment,
                 },
@@ -2467,7 +2467,7 @@ class Gradebook:
 
         Args:
             assignment (Assignment): The assignment whose attribute is updated.
-            point_possilble (float): The new points_possible to be assigned.
+            points_possilble (float): The new points_possible value to be assigned.
 
         Returns:
             Response: A structured response with the following contract:
@@ -2520,7 +2520,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(assignment)
 
             return Response.succeed(
-                detail=f"Assignment points possible successfully updated to: {assignment.points_possible}",
+                detail=f"Assignment points possible successfully updated to: {assignment.points_possible}.",
                 data={
                     "record": assignment,
                 },
@@ -2566,7 +2566,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(assignment)
 
             return Response.succeed(
-                detail=f"Assignment status successfully updated to: {assignment.status}",
+                detail=f"Assignment status successfully updated to: {assignment.status}.",
                 data={
                     "record": assignment,
                 },
@@ -2662,15 +2662,82 @@ class Gradebook:
                 data=add_response.data,
             )
 
-    # TODO: model after batch_add_class_dates()
     def batch_add_submissions(self, submissions: list[Submission]) -> Response:
-        # for submission in queued_submissions:
-        #     gradebook.add_submission(submission)
-        # gradebook.mark_dirty()
-        # print(
-        #     f"\n{len(queued_submissions)} submissions successfully added to the Gradebook."
-        # )
-        pass
+        """
+        Add multiples submissions to the gradebook.
+
+        Attemps to add each submission individually with `add_submission()`. Tracks which submissions were successfully added and which were skipped due to validation errors (e.g., duplicates). This method is not transactional; some submissions may be added even if others fail.
+
+        Args:
+            submissions (list[Submission]): A list of `Submission` objects to add to the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if all submissions were successfully added.
+                    - False if one or more submissions could not be added.
+                - detail (str | None):
+                    - Indication of complete or partial success.
+                    - On fast-failure, a human-readable description of the error.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if one or more submissions were skipped due to duplicates or validation issues.
+                    - `ErrorCode.INTERNAL_ERROER` if an unexpected error interrupts the batch process.
+                - status_code (int | None):
+                    - 200 if all submissions were added successfully
+                    - 400 on failure
+                - data (dict | None):
+                    - "added" (list[Submission]): Submissions that were successfully added.
+                    - "skipped" (list[Submission]): Submissions that were not added due to validation failure.
+
+        Notes:
+            - Each call to `add_submission()` will invoke `_mark_dirty()` if the addition succeeds.
+            - This method does not attempt to roll back or rety failed additions.
+        """
+        added = []
+        skipped = []
+
+        try:
+            for submission in submissions:
+                add_response = self.add_submission(submission)
+
+                if add_response.success:
+                    added.append(submission)
+
+                elif add_response.error is ErrorCode.VALIDATION_FAILED:
+                    skipped.append(submission)
+
+                else:
+                    return add_response
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "added": added,
+                    "skipped": skipped,
+                },
+            )
+
+        else:
+            if len(added) == len(submissions):
+                return Response.succeed(
+                    detail="All submissions successfully added to the gradebook.",
+                    data={
+                        "added": added,
+                        "skipped": skipped,
+                    },
+                )
+
+            else:
+                return Response.fail(
+                    detail="Not all submissions could be successfully added to the gradebook.",
+                    error=ErrorCode.VALIDATION_FAILED,
+                    data={
+                        "added": added,
+                        "skipped": skipped,
+                    },
+                )
 
     def remove_submission(self, submission: Submission) -> Response:
         """
@@ -2721,6 +2788,177 @@ class Gradebook:
 
             return Response.succeed(
                 detail="Submission successfully removed from the gradebook."
+            )
+
+    def update_submission_points_earned(
+        self, submission: Submission, points_earned: float
+    ) -> Response:
+        """
+        Updates the `points_earned` attribute of a given `Submission` object.
+
+        Args:
+            submission (Submission): The submission whose attribute is updated.
+            points_earned (float): The new points_earned value to be assigned.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the points_earned value was successfully updated or no-op.
+                    - False if validation fails or if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message with the updated value.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INVALID_FIELD_VALUE` if the input fails to pass validation.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Submission): The updated `Submission` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+            - If the points_earned input value matches the current value, the method returns early with a success response indicating no changes were made.
+        """
+        if submission.points_earned == points_earned:
+            return Response.succeed(
+                detail="The points earned value provided matches the current points earned. No changes made.",
+                data={
+                    "record": submission,
+                },
+            )
+
+        try:
+            submission.points_earned = points_earned
+
+        except (TypeError, ValueError) as e:
+            return Response.fail(
+                detail=f"Input validation failed: {e}",
+                error=ErrorCode.INVALID_FIELD_VALUE,
+            )
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(submission)
+
+            assignment_response = self.find_assignment_by_uuid(submission.assignment_id)
+            assignment = (
+                assignment_response.data["record"]
+                if assignment_response.success
+                else None
+            )
+            points_possible = f"/ {assignment.points_possible}" if assignment else ""
+
+            return Response.succeed(
+                detail=f"Submission points earned successfully updated to: {submission.points_earned}{points_possible}.",
+                data={
+                    "record": submission,
+                },
+            )
+
+    def toggle_submission_late_status(self, submission: Submission) -> Response:
+        """
+        Toggles the `is_late` attribute of a given `Submission` object.
+
+        Args:
+            submission (Submission): The submission whose attribute is updated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the late status was successfully toggled.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message reflecting the new status.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Submission): The updated `Submission` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            submission.toggle_late_status()
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(submission)
+
+            return Response.succeed(
+                detail=f"Submission late status sucessfully updated to: {submission.late_status}.",
+                data={
+                    "record": submission,
+                },
+            )
+
+    def toggle_submission_exempt_status(self, submission: Submission) -> Response:
+        """
+        Toggles the `is_exempt` attribute of a given `Submission` object.
+
+        Args:
+            submission (Submission): The submission whose attribute is updated.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the exempt status was successfully toggled.
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message reflecting the new status.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - status_code (int | None):
+                    - 200 on success
+                    - 400 on failure
+                - data (dict | None):
+                    - On success:
+                        - "record" (Submission): The updated `Submission` object.
+                    - On failure:
+                        - None
+
+        Notes:
+            - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
+        """
+        try:
+            submission.toggle_exempt_status()
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty_if_tracked(submission)
+
+            return Response.succeed(
+                detail=f"Submission exempt status successfully updated to: {submission.exempt_status}.",
+                data={
+                    "record": submission,
+                },
             )
 
     # --- category weighting methods ---
@@ -2924,7 +3162,7 @@ class Gradebook:
                     - True if all class dates were successfully added.
                     - False if one or more dates could not be added.
                 - detail (str | None):
-                    - Summary of how many dates were added versus skipped.
+                    - Indication of complete or partial success.
                     - On fast-failure, a human-readable description of the error.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.VALIDATION_FAILED` if one or more dates were skipped due to duplicates or validation issues.

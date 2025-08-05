@@ -197,6 +197,7 @@ def confirm_and_clear_schedule(gradebook: Gradebook) -> None:
     helpers.returning_to("Manage Class Schedule menu")
 
 
+# TODO: update operation result messaging to match submissions_menu.batch_add_submissions_by_assignment
 def generate_recurring_schedule(gradebook: Gradebook) -> None:
     while True:
         start_date = prompt_class_date_or_cancel()

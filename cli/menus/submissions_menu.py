@@ -5,9 +5,9 @@ Manage Submissions menu for the Gradebook CLI.
 
 This module defines the full interace for managing `Submission` records, including:
 - Adding new submissions, individually or in batches by assignment
-- Editing submission attributes (TODO)
+- Editing submission attributes (points earned, late status, exempt status)
 - Permanently removing submissions
-- View submission records (TODO)
+- View submission records (invidual, by assignment, by student)
 
 All operations are routed through the `Gradebook` API for consistency, validation, and state-tracking.
 Control flow adheres to traditional CLI menu patterns with clear terminal-level feedback.
@@ -777,16 +777,15 @@ def delete_and_create_new_submission(
 # === data input helpers ===
 
 
-# TODO: resume refactor from here
 def prompt_points_earned_input_or_cancel() -> float | MenuSignal:
     """
     Solicits user input for points earned, casts it to float, and treats a blank input as 'cancel'.
 
     Returns:
-        User input as a float, or MenuSignal.CANCEL if input is "".
+        The validated user input as a float, or `MenuSignal.CANCEL` if input is "".
 
     Notes:
-        Handles the type casting from string to float, but further data validation is the responsibility of the caller.
+        - Validation and normalization is handled by `Submission.validate_points_input()`.
     """
     while True:
         user_input = helpers.prompt_user_input_or_cancel(
@@ -797,31 +796,37 @@ def prompt_points_earned_input_or_cancel() -> float | MenuSignal:
             return user_input
 
         try:
-            return float(user_input)
-        except ValueError:
-            print(
-                "\nError: Invalid input. Please enter a number or leave blank to cancel."
-            )
+            points = Submission.validate_points_input(user_input)
+
+            return points
+
+        except (ValueError, TypeError) as e:
+            print(f"\n[ERROR] {e}")
+            print("Please try again.")
 
 
 def prompt_score_with_bailout(
     assignment: Assignment, student: Student
-) -> Optional[float] | MenuSignal:
+) -> float | None | MenuSignal:
     """
-    Input prompt for use during the batch entry process. Accepts a float, treats a blank input as 'skip', and 'q' as 'cancel'.
+    Prompts the user to enter a score for a student during batch submission entry.
+
+    Accepts a numeric score, an empty input to skip, or 'q' to cancel the batch process.
 
     Args:
-        assignment: The Assignment associated with this submission.
-        student: The Student associated with this submission.
+        assignment (Assignment): The assignment associated with the submission.
+        student (Student): The student associated with the submission.
 
     Returns:
-        One of three return values: float value, None if input is "", and MenuSignal.CANCEL if input is "q" or ":exit".
+        float: A validated numeric score entered by the user.
+        None: If the user enters a blank input to skip this student.
+        MenuSignal.CANCEL: If the user enters 'q' or ':exit' to cancel the batch entry process.
 
     Notes:
-        Handles the type casting from string to float, but further data validation is the responsibility of the caller.
+        - Input validation and normalization is handled by `Submission.validate_points_input()`.
     """
     while True:
-        print(f"\nRecord a submission from {student.full_name} in {assignment.name}")
+        print(f"\nRecord a submission from {student.full_name} to {assignment.name}")
 
         user_input = helpers.prompt_user_input_or_none(
             "Enter points earned (leave blank to skip, 'q' to cancel):"
@@ -829,26 +834,29 @@ def prompt_score_with_bailout(
 
         if user_input is None:
             return None
+
         elif user_input in {"q", ":exit"}:
             return MenuSignal.CANCEL
 
         try:
-            return float(user_input)
-        except ValueError:
-            print(
-                "\nInvalid input. Please enter a number, leave blank to skip, or 'q' to cancel."
-            )
+            points = Submission.validate_points_input(user_input)
+
+            return points
+
+        except (ValueError, TypeError) as e:
+            print(f"\n[ERROR] {e}")
+            print("Please try again.")
 
 
 # === edit submission ===
 
 
-def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], bool]]]:
+def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], None]]]:
     """
     Helper method to organize the list of editable fields and their related functions.
 
     Returns:
-        A list of tuples - pairs of strings and function names.
+        A list of `(field_name, edit_function)` tuples used to prompt and edit `Submission` attributes.
     """
     return [
         ("Score", edit_score_and_confirm),
@@ -859,15 +867,18 @@ def get_editable_fields() -> list[tuple[str, Callable[[Submission, Gradebook], b
 
 def find_and_edit_submission(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Submission and then passes the result to edit_submission().
+    Prompts user to search for a `Submission` and then passes the result to `edit_submission()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     submission = prompt_find_submission(gradebook)
 
-    if submission is not None:
-        edit_submission(submission, gradebook)
+    if submission is MenuSignal.CANCEL:
+        return
+    submission = cast(Submission, submission)
+
+    edit_submission(submission, gradebook)
 
 
 def edit_submission(
@@ -876,18 +887,19 @@ def edit_submission(
     return_context: str = "Manage Submissions menu",
 ) -> None:
     """
-    Dispatch method for selecting an editable field and using boolean return values to monitor whether changes have been made.
+    Interface for editing fields of a `Submission` record.
 
     Args:
-        submission: The Submission being edited.
-        gradebook: The active Gradebook.
-
-    Notes:
-        Uses a function scoped variable to flag whether the edit_* methods have manipulated the Submission at all.
-        If so, the user is prompted to either save changes now, or defer saving and mark the Gradebook dirty for saving upstream.
+        submission (Submission): The `Submission` object being edited.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - All edit operations are dispatched through `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty after edits, the user will be prompted to save before returning to the previous menu.
+        - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
@@ -896,16 +908,15 @@ def edit_submission(
     options = get_editable_fields()
     zero_option = "Finish editing and return"
 
-    unsaved_changes = False
-
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response is MenuSignal.EXIT:
             break
+
         elif callable(menu_response):
-            if menu_response(submission, gradebook):
-                unsaved_changes = True
+            menu_response(submission, gradebook)
+
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -914,147 +925,114 @@ def edit_submission(
         ):
             break
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
     else:
         helpers.returning_without_changes()
 
-    helpers.returning_to("Manage Submissions menu")
+    helpers.returning_to(return_context)
 
 
-# def edit_queued_submission(submission: Submission, gradebook: Gradebook) -> None:
-#     """
-#     Dispatch method for the edit menu that does not track changes, since the edited Submission has not yet been added to the Gradebook.
-#
-#     Args:
-#         submission: A Submission not yet added to the Gradebook and targeted for editing.
-#         gradebook: The active Gradebook.
-#
-#     Raises:
-#         RuntimeError: If the menu response is unrecognized.
-#     """
-#     print("\nYou are editing the following submission:")
-#     print(formatters.format_submission_multiline(submission, gradebook))
-#
-#     title = formatters.format_banner_text("Editable Fields")
-#     options = get_editable_fields()
-#     zero_option = "Finish editing and return"
-#
-#     while True:
-#         menu_response = helpers.display_menu(title, options, zero_option)
-#
-#         if menu_response is MenuSignal.EXIT:
-#             break
-#         elif callable(menu_response):
-#             menu_response(submission, gradebook)
-#         else:
-#             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
-#
-#         if not helpers.confirm_action(
-#             "Would you like to continue editing this submission?"
-#         ):
-#             break
-#
-#     helpers.returning_to("Submission preview")
-
-
-def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> bool:
+def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
     """
-    Edits the points_earned field of a Submission.
+    Prompts for a new score and updates the points_earned field of a `Submission` record via `Gradebook`.
 
-    Returns:
-        True if the score was changed, and False otherwise.
+    Args:
+        submission (Submission): The `Submission` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Cancels early if the linked assignment cannot be found, and if the user enters nothing or declines the confirmation.
+        - Uses `Gradebook.update_submission_points_earned` to perform the update and track changes.
     """
-    assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+    assignment_response = gradebook.find_assignment_by_uuid(submission.assignment_id)
 
-    if assignment is None:
-        return False
+    if not assignment_response.success:
+        helpers.display_response_failure(assignment_response)
+        helpers.returning_without_changes()
+        return
+
+    assignment = assignment_response.data["record"]
+    points_possible = assignment.points_possible
 
     current_points_earned = submission.points_earned
     new_points_earned = prompt_points_earned_input_or_cancel()
-    points_possible = assignment.points_possible
 
     if new_points_earned is MenuSignal.CANCEL:
         helpers.returning_without_changes()
-        return False
-    else:
-        new_points_earned = cast(float, new_points_earned)
+        return
+    new_points_earned = cast(float, new_points_earned)
 
     print(
-        f"Current score: {current_points_earned} / {points_possible} ... New score: {new_points_earned} / {points_possible}"
+        f"Current score: {current_points_earned} / {points_possible} -> New score: {new_points_earned} / {points_possible}"
     )
 
     if not helpers.confirm_make_change():
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        submission.points_earned = new_points_earned
-        print(
-            f"\nSubmission score successfully updated to {new_points_earned} / {points_possible}."
-        )
-        return True
-    except (TypeError, ValueError) as e:
-        print(f"\nError: Could not update submission ... {e}:")
-        helpers.returning_without_changes()
-        return False
-
-
-def edit_late_and_confirm(submission: Submission, _: Gradebook) -> bool:
-    """
-    Toggles the is_late field of a Submission.
-
-    Returns:
-        True if the late status was changed, and False otherwise.
-    """
-    print(
-        f"\nSubmission current late status: {'Late' if submission.is_late else 'Not Late'}."
+    gradebook_response = gradebook.update_submission_points_earned(
+        submission, new_points_earned
     )
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nSubmission points earned value was not updated.")
+        helpers.returning_without_changes()
+
+    else:
+        print(f"\n{gradebook_response.detail}")
+
+
+def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
+    """
+    Toggles the `is_late` field of a `Submission` record.
+
+    Args:
+        submission (Submission): The `Submission` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
+    """
+    print(f"\nSubmission current late status: {submission.late_status}.")
 
     if not helpers.confirm_action("Would you like to edit the late status?"):
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        submission.toggle_late_status()
-        print(
-            f"\nSubmission late status successfully updated to {'Late' if submission.is_late else 'Not Late'}."
-        )
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update submission ... {e}")
+    gradebook_response = gradebook.toggle_submission_late_status(submission)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nSubmission late status was not changed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
-def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
+def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
     """
-    Toggles the is_exempt field of a Submission.
+    Toggles the `is_exempt` field of a `Submission` record.
 
-    Returns:
-        True is the exempt status was changed, and False otherwise.
+    Args:
+        submission (Submission): The `Submission` object targeted for editing.
+        gradebook (Gradebook): The active `Gradebook`.
     """
-    print(
-        f"\nSubmission current exempt status: {'Exempt' if submission.is_exempt else 'Not Exempt'}."
-    )
+    print(f"\nSubmission current exempt status: {submission.exempt_status}.")
 
     if not helpers.confirm_action("Would you like to edit the exempt status?"):
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        submission.toggle_exempt_status()
-        print(
-            f"\nSubmission exempt status successfully updated to {'Exempt' if submission.is_exempt else 'Not Exempt'}."
-        )
-        return True
-    except Exception as e:
-        print(f"\nError: Could not update submission ... {e}")
+    gradebook_response = gradebook.toggle_submission_exempt_status(submission)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nSubmission exempt status was not chnaged.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
 # === remove submission ===
@@ -1062,31 +1040,34 @@ def edit_exempt_and_confirm(submission: Submission, _: Gradebook) -> bool:
 
 def find_and_remove_submission(gradebook: Gradebook) -> None:
     """
-    Prompts user to search for a Submission and then passes the result to remove_submission().
+    Prompts user to search for a `Submission` and then passes the result to `remove_submission()`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     submission = prompt_find_submission(gradebook)
 
-    if submission is not None:
-        remove_submission(submission, gradebook)
+    if submission is MenuSignal.CANCEL:
+        return
+    submission = cast(Submission, submission)
+
+    remove_submission(submission, gradebook)
 
 
 def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
     """
-    Dispatch method to either delete or edit the Submission, or return without changes.
+    Interface for removing or editing a `Submission` record.
 
     Args:
-        submission: The Submission targeted for deletion/editing.
-        gradebook: The active Gradebook.
+        submission (Submission): The `Submission` object targeted for deletion/editing.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response if unrecognized.
 
     Notes:
-        Uses a function scoped variable to detect if any function calls report a data change.
-        If so, the user is prompted to either save now or defer, in which case the Gradebook is marked dirty.
+        - All remove and edit operations are dispatched the `Gradebook` to ensure proper mutation and state tracking.
+        - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
     print(f"\nYou are viewing the following submission:")
     print(formatters.format_submission_oneline(submission, gradebook))
@@ -1104,38 +1085,34 @@ def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
     ]
     zero_option = "Return to Manage Submissions menu"
 
-    unsaved_changes = False
-
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
-        return None
+        return
+
     elif callable(menu_response):
-        if menu_response(submission, gradebook):
-            unsaved_changes = True
+        menu_response(submission, gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
-    if unsaved_changes:
-        if helpers.confirm_unsaved_changes():
-            gradebook.save(gradebook.path)
-        else:
-            gradebook.mark_dirty()
+    if gradebook.has_unsaved_changes:
+        helpers.prompt_if_dirty(gradebook)
+
+    else:
+        helpers.returning_without_changes()
 
     helpers.returning_to("Manage Submissions menu")
 
 
-def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> bool:
+def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
     """
-    Deletes the Submission from the Gradebook after preview and confirmation.
+    Deletes the `Submission` record from the `Gradebook` after preview and user confirmation.
 
     Args:
-        submission: The Submission targeted for deletion.
-        gradebook: The active Gradebook.
-
-    Returns:
-        True if the Submission was removed, and False otherwise.
+        submission (Submission): The `Submission` object targeted for deletion.
+        gradebook (Gradebook): The active `Gradebook`.
     """
     caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
@@ -1148,16 +1125,17 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> bool:
 
     if not confirm_deletion:
         helpers.returning_without_changes()
-        return False
+        return
 
-    try:
-        gradebook.remove_submission(submission)
-        print("\nSubmission successfully removed from Gradebook.")
-        return True
-    except Exception as e:
-        print(f"\nError: Could not remove submission ... {e}")
+    gradebook_response = gradebook.remove_submission(submission)
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        print("\nSubmission was not removed.")
         helpers.returning_without_changes()
-        return False
+
+    else:
+        print(f"\n{gradebook_response.detail}")
 
 
 def delete_queued_submission(
@@ -1167,21 +1145,23 @@ def delete_queued_submission(
     gradebook: Gradebook,
 ) -> None:
     """
-    Deletes the user queued submission and adds the student to skipped students after preview and confirmation.
+    Deletes the queued submission and adds the linked student to the list of skipped students after preview and confirmation.
 
     Args:
-        queued_submissions: The queued Submissions generated during batch entry.
-        skipped_students: The Students skipped during batch entry.
-        submission: The queued Submission targeted for deletion.
-        gradebook: The active Gradebook.
-
-    Notes:
-        No save prompt or gradebook.mark_dirty() since these Submissions have not yet been added to the Gradebook.
+        queued_submissions (list[Submission]): The queued submissions generated during batch entry.
+        skipped_students (list[Student]): The students skipped during batch entry.
+        submission (Submission): The queued `Submission` object targeted for deletion.
+        gradebook (Gradebook): The active `Gradebook`.
     """
-    student = gradebook.find_student_by_uuid(submission.student_id)
+    student_response = gradebook.find_student_by_uuid(submission.student_id)
 
-    if student is None:
-        return None
+    if not student_response.success:
+        helpers.display_response_failure(student_response)
+        print("Could not resolve the linked student.")
+        helpers.returning_without_changes()
+        return
+
+    student = student_response.data["record"]
 
     caution_banner = formatters.format_banner_text("CAUTION!")
     print(f"\n{caution_banner}")
@@ -1194,10 +1174,11 @@ def delete_queued_submission(
 
     if not confirm_deletion:
         helpers.returning_without_changes()
-        return None
+        return
 
     queued_submissions.remove(submission)
     skipped_students.append(student)
+
     print(
         f"\nSubmission successfully deleted and {student.full_name} added to skipped students list."
     )
@@ -1208,13 +1189,16 @@ def delete_queued_submission(
 
 def view_submissions_menu(gradebook: Gradebook) -> None:
     """
-    Dispatch method for the various view options (individual, all by student, all by assignment).
+    Displays the submission view menu and dispatches selected view options.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Options include viewing individual submissions, submissions by assignment, or submissions by student.
     """
     title = "View Submissions"
     options = [
@@ -1227,24 +1211,33 @@ def view_submissions_menu(gradebook: Gradebook) -> None:
     menu_response = helpers.display_menu(title, options, zero_option)
 
     if menu_response is MenuSignal.EXIT:
-        return None
+        return
+
     elif callable(menu_response):
         menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+    helpers.returning_to("Manage Submissions menu")
 
 
 def view_individual_submission(gradebook: Gradebook) -> None:
     """
-    Calls find_submission() and then displays a one-line view of that Submission, followed by a prompt to view the multi-line view or return.
+    Display a one-line summary of a selected `Submission` record, with the option to view full details.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Uses `prompt_find_submission()` to search for a record.
+        - Prompts the user before displaying the multi-line format.
     """
     submission = prompt_find_submission(gradebook)
 
-    if submission is None:
-        return None
+    if submission is MenuSignal.CANCEL:
+        return
+    submission = cast(Submission, submission)
 
     print("\nYou are viewing the following submission:")
     print(formatters.format_submission_oneline(submission, gradebook))
@@ -1257,42 +1250,51 @@ def view_individual_submission(gradebook: Gradebook) -> None:
 
 def view_submissions_by_assignment(gradebook: Gradebook) -> None:
     """
-    Searches for an Assigment and then displays a list of linked Submissions.
+    Searches for an `Assigment` record and then displays a list of linked `Submissions`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
 
-    def sort_key_student_name(submission: Submission) -> Optional[tuple[str, str]]:
+    def sort_key_student_name(submission: Submission) -> tuple[str, str] | None:
         """
-        Sort key method to organize the Submissions in order of Student name (last, first).
+        Sort key method to organize the submissions in order of student name (last, first).
 
         Args:
-            submission: The Submission being sorted.
+            submission (Submission): The `Submission` record being sorted.
 
         Returns:
-            Either a tuple (last name, firstname) or None if the Student cannot be found.
+            Either a tuple (last name, firstname) or None if the linked student cannot be found.
         """
-        student = gradebook.find_student_by_uuid(submission.student_id)
+        student_response = gradebook.find_student_by_uuid(submission.student_id)
+
+        student = student_response.data["record"] if student_response.success else None
+
         return (student.last_name, student.first_name) if student else None
 
     assignment = prompt_find_assignment(gradebook)
 
     if assignment is MenuSignal.CANCEL:
-        return None
-    else:
-        assignment = cast(Assignment, assignment)
+        return
+    assignment = cast(Assignment, assignment)
 
     banner = formatters.format_banner_text(f"Submissions to {assignment.name}")
     print(f"\n{banner}")
 
-    submissions = gradebook.get_records(
+    submissions_response = gradebook.get_records(
         gradebook.submissions, lambda x: x.assignment_id == assignment.id
     )
 
+    if not submissions_response.success:
+        helpers.display_response_failure(submissions_response)
+        print(f"Cannot display submissions to {assignment.name}.")
+        return
+
+    submissions = submissions_response.data["records"]
+
     if not submissions:
         print(f"There are no submissions linked to this assignment yet.")
-        return None
+        return
 
     helpers.sort_and_display_submissions(
         submissions=submissions,
@@ -1304,43 +1306,56 @@ def view_submissions_by_assignment(gradebook: Gradebook) -> None:
 
 def view_submissions_by_student(gradebook: Gradebook) -> None:
     """
-    Searches for a Student and then displays a list of linked Submissions.
+    Searches for a `Student` record and then displays a list of linked `Submissions`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
     """
 
     def sort_key_assignment_due_date(submission: Submission) -> str:
         """
-        Sort key method to order the Submissions in order of Assignment due date.
+        Sort key method to order the submissions in order of assignment due date.
 
         Args:
-            submission: The Submission being sorted.
+            submission (Submission): The `Submission` record being sorted.
 
         Returns:
             The due date in iso format as a string, or "" if the due date cannot be found.
         """
-        assignment = gradebook.find_assignment_by_uuid(submission.assignment_id)
+        assignment_response = gradebook.find_assignment_by_uuid(
+            submission.assignment_id
+        )
+
+        assignment = (
+            assignment_response.data["record"] if assignment_response.success else None
+        )
+
         due_date_iso = assignment.due_date_iso if assignment else ""
-        return due_date_iso if due_date_iso else ""
+
+        return due_date_iso
 
     student = prompt_find_student(gradebook)
 
     if student is MenuSignal.CANCEL:
-        return None
-    else:
-        student = cast(Student, student)
+        return
+    student = cast(Student, student)
 
     banner = formatters.format_banner_text(f"Submissions from {student.full_name}")
     print(f"\n{banner}")
 
-    submissions = gradebook.get_records(
+    submissions_response = gradebook.get_records(
         gradebook.submissions, lambda x: x.student_id == student.id
     )
 
+    if not submissions_response.success:
+        helpers.display_response_failure(submissions_response)
+        print(f"Cannot display submissions from {student.full_name}.")
+
+    submissions = submissions_response.data["records"]
+
     if not submissions:
         print(f"There are no submissions linked to this student yet.")
-        return None
+        return
 
     helpers.sort_and_display_submissions(
         submissions=submissions,
@@ -1353,47 +1368,57 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
 # === finder methods ===
 
 
-def prompt_find_submission(gradebook: Gradebook) -> Optional[Submission]:
+def prompt_find_submission(gradebook: Gradebook) -> Submission | MenuSignal:
     """
-    Prompts search for linked Assignment and Student, and then returns the associated Submission.
+    Prompts user to search for a linked `Assignment` and `Student`, and then returns the associated `Submission`.
 
     Args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The linked Submission, or None if no matching Submission exists.
+        The linked `Submission`, or None if no matching `Submission` exists.
     """
     linked_assignment = prompt_find_assignment(gradebook)
 
     if linked_assignment is MenuSignal.CANCEL:
-        return None
-    else:
-        linked_assignment = cast(Assignment, linked_assignment)
+        return MenuSignal.CANCEL
+    linked_assignment = cast(Assignment, linked_assignment)
 
     linked_student = prompt_find_student(gradebook)
 
     if linked_student is MenuSignal.CANCEL:
-        return None
-    else:
-        linked_student = cast(Student, linked_student)
+        return MenuSignal.CANCEL
+    linked_student = cast(Student, linked_student)
 
-    return gradebook.find_submission_by_assignment_and_student(
+    gradebook_response = gradebook.find_submission_by_assignment_and_student(
         linked_assignment.id, linked_student.id
     )
+
+    if not gradebook_response.success:
+        helpers.display_response_failure(gradebook_response)
+        return MenuSignal.CANCEL
+
+    submission = gradebook_response.data["record"]
+
+    return submission
 
 
 def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
     """
-    Menu dispatch for either finding an Assignment by search or from a list of active Assignments.
+    Prompts the user to locate an `Assignment` record by search or list selection.
 
     args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected Assignment, or MenuSignal.CANCEL if the user bails out.
+        The selected `Assignment`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Offers search, active list, and inactive list as selection methods.
+        - Returns early if the user chooses to cancel or if no selection is made.
     """
     title = formatters.format_banner_text("Assignment Selection")
     options = [
@@ -1410,21 +1435,23 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
+
     elif callable(menu_response):
         return menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     """
-    Menu dispatch for either finding a Student by search or from a list of active Students.
+    Prompts the user to locate a `Student` record by search or list selection.
 
     args:
-        gradebook: The active Gradebook.
+        gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected Student, or MenuSignal.CANCEL if the user bails out.
+        The selected `Student`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -1441,7 +1468,9 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
+
     elif callable(menu_response):
         return menu_response(gradebook)
+
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

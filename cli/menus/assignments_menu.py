@@ -1028,7 +1028,7 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected `Assignment`, or `MenuSignal.CANCEL` if either the canceled or the search yields no hits.
+        The selected `Assignment`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.

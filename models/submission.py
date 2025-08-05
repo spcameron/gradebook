@@ -6,6 +6,9 @@ The Submission model represents submitted work and links it to a particular Assi
 The model records the points earned as well as the status (late or exempt).
 """
 
+import math
+from typing import Any
+
 
 class Submission:
 
@@ -48,12 +51,20 @@ class Submission:
     def is_late(self) -> bool:
         return self._is_late
 
+    @property
+    def late_status(self) -> str:
+        return "'LATE'" if self._is_late else "'NOT LATE'"
+
     def toggle_late_status(self) -> None:
         self._is_late = not self._is_late
 
     @property
     def is_exempt(self) -> bool:
         return self._is_exempt
+
+    @property
+    def exempt_status(self) -> str:
+        return "'EXEMPT'" if self._is_exempt else "'NOT EXEMPT'"
 
     def toggle_exempt_status(self) -> None:
         self._is_exempt = not self._is_exempt
@@ -84,3 +95,39 @@ class Submission:
 
     def __str__(self) -> str:
         return f"SUBMISSION: id: {self.id}, student id: {self._student_id}, assignment id: {self._assignment_id}"
+
+    # === data validators ===
+
+    @staticmethod
+    def validate_points_input(points: Any) -> float:
+        """
+        Validates and normalizes input for a `Submission` points_earned value.
+
+        Accepts any input, and then:
+            - Casts to float.
+            - Ensures the number is finite.
+            - Ensures it is non-negative.
+
+        Args:
+            points (Any): The input value to validate.
+
+        Returns:
+            The normalized points value (float).
+
+        Raises:
+            TypeError: If the input cannot be case to float.
+            ValueError: If the input is non-finite or less than zero.
+        """
+        try:
+            points = float(points)
+
+        except (TypeError, ValueError):
+            raise TypeError("Invalid input. Points earned must be a number.")
+
+        if not math.isfinite(points):
+            raise ValueError("Invalid input. Points earned must be a finite number.")
+
+        if points < 0:
+            raise ValueError("Invalid input. Points earned cannot be less than zero.")
+
+        return points

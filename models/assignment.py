@@ -135,7 +135,7 @@ class Assignment:
     @staticmethod
     def validate_points_input(points: Any) -> float:
         """
-        Validates and normalizes input for an `Assignment` point possible.
+        Validates and normalizes input for an `Assignment` points_possible value.
 
         Accepts any input, and then:
             - Casts to float.

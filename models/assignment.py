@@ -1,7 +1,21 @@
 # models/assignment.py
 
 """
-The Assignment model represents classroom assignments, assessments, or any other graded component.
+Represents an assignment in the Gradebook.
+
+Each `Assignment` has a name, unique ID, possible point value, optional category,
+and optional due date. It may also be marked as extra credit or archived (inactive).
+
+Includes functionality for:
+- Validating and setting `points_possible`
+- Formatting and serializing due dates in multiple formats
+- Toggling archival status
+- Serializing to and from JSON-compatible dictionaries
+
+Notes:
+- `due_date_dt` stores the datetime object; ISO, date, and time strings are exposed via read-only properties.
+- Validation is enforced via setters and static methods.
+- An assignment may belong to a category or remain uncategorized.
 """
 
 from __future__ import annotations
@@ -31,6 +45,8 @@ class Assignment:
         self._due_date_dt = due_date
         self._is_extra_credit = is_extra_credit
         self._is_active = active
+
+    # === properties ===
 
     @property
     def id(self) -> str:
@@ -95,6 +111,8 @@ class Assignment:
     def toggle_archived_status(self) -> None:
         self._is_active = not self._is_active
 
+    # === persistence and import ===
+
     def to_dict(self) -> dict:
         return {
             "id": self._id,
@@ -122,6 +140,8 @@ class Assignment:
             is_extra_credit=data["extra_credit"],
             active=data["active"],
         )
+
+    # === dunder methods ===
 
     # TODO: update with due_date_dt and is_active
     def __repr__(self) -> str:

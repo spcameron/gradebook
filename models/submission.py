@@ -1,9 +1,21 @@
 # models/submission.py
 
 """
-The Submission model represents submitted work and links it to a particular Assignment and Student.
+Represents a student's submission for a specific assignment.
 
-The model records the points earned as well as the status (late or exempt).
+Each `Submission` records the student's ID, the assignment ID, the number of points earned,
+and optional flags for lateness and exemption. These flags influence grading and reporting
+but do not directly alter the stored score.
+
+Includes functionality for:
+- Validating and updating `points_earned`
+- Toggling `is_late` and `is_exempt` status flags
+- Serializing to and from JSON-compatible dictionaries
+
+Notes:
+- Validation is enforced via the `points_earned` setter and `validate_points_input()`.
+- A submission may be marked both late and exempt simultaneously.
+- Actual grade calculations are handled externally by the Gradebook.
 """
 
 import math
@@ -28,6 +40,8 @@ class Submission:
         self._is_late = is_late
         self._is_exempt = is_exempt
         # self.resolved_refs = False
+
+    # === properties ===
 
     @property
     def student_id(self) -> str:
@@ -69,6 +83,8 @@ class Submission:
     def toggle_exempt_status(self) -> None:
         self._is_exempt = not self._is_exempt
 
+    # === persistence and import ===
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -89,6 +105,8 @@ class Submission:
             is_late=data["is_late"],
             is_exempt=data["is_exempt"],
         )
+
+    # === dunder methods ===
 
     def __repr__(self) -> str:
         return f"Submission({self.id}, {self._student_id}, {self._assignment_id}, {self._points_earned}, {self._is_late}, {self._is_exempt})"

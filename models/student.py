@@ -1,20 +1,20 @@
 # models/student.py
 
 """
-The Student model represents an individual enrolled in a course.
+Represents a student enrolled in a course.
 
-Stores core identifying information including name, email, and unique ID.
-Supports active/inactive status toggling to indiacte enrollement changes.
+Stores core identifying information such as name, email, and a unique ID.
+Supports toggling between active and inactive status to reflect enrollment changes.
 
 Includes functionality for:
 - Validating and normalizing email input
-- Tracking student absences by date
+- Tracking attendance by date
 - Serializing to and from JSON-compatible dictionaries
-- Mutating individual student fields via property access
+- Mutating individual fields via property access
 
-Attendance is internally tracked as a dictionary mapping dates to status values.
-This allow for explicit representation of Present, Absent, Excused, and other states,
-as well as detection of unmarked records.
+Attendance is internally represented as a dictionary mapping `datetime.date` objects
+to status values (e.g., Present, Absent, Excused). This allows for explicit representation
+of attendance states and detection of unmarked records.
 """
 
 from __future__ import annotations
@@ -127,6 +127,8 @@ class Student:
 
         return student
 
+    # === dunder methods ===
+
     def __repr__(self) -> str:
         return f"Student({self._id}, {self._first_name}, {self._last_name}, {self._email}, {self._is_active})"
 
@@ -196,5 +198,3 @@ class Student:
                 "Invalid input. Email must be a valid address with one @ and a domain."
             )
         return email
-
-    # === dunder methods ===

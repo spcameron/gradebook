@@ -1,7 +1,20 @@
 # models/category.py
 
 """
-The Category model represents a grouping of related Assignments, and may optionally be assigned a weighted percentage of the final grade.
+Represents a grade category within the Gradebook.
+
+Each `Category` groups related `Assignment` records and may optionally carry a weight
+used for calculating weighted grades. If weighting is disabled, all categories are treated equally.
+
+Key behaviors:
+- `weight`: Accepts a float from 0 to 100, or None if unweighted. Returns 0.0 if the category is archived.
+- `is_active`: Controls whether the category is currently included in grade calculations.
+- `toggle_archived_status()`: Used to archive or restore a category.
+- `to_dict()` / `from_dict()`: Used for serialization and persistence.
+
+Notes:
+- The `is_archived` property is deprecated; use `is_active` for clarity.
+- All weight validation is handled through `validate_weight_input()` and enforced via the setter.
 """
 
 from __future__ import annotations
@@ -24,6 +37,8 @@ class Category:
         self._is_active = active
         # weight uses setter method for defensive validation
         self.weight = weight
+
+    # === properties ===
 
     @property
     def id(self) -> str:
@@ -62,6 +77,8 @@ class Category:
     def toggle_archived_status(self) -> None:
         self._is_active = not self._is_active
 
+    # === persistence and import ===
+
     def to_dict(self) -> dict:
         return {
             "id": self._id,
@@ -79,22 +96,13 @@ class Category:
             active=data["active"],
         )
 
+    # === dunder methods ===
+
     def __repr__(self) -> str:
         return f"Category({self._id}, {self._name}, {self._weight}, {self._is_active})"
 
     def __str__(self) -> str:
         return f"CATEGORY: name: {self._name}, weight: {self._weight}, id: {self._id}"
-
-    # === data manipulators ===
-
-    # TODO: deprecated, functionality moved to Gradebook
-
-    # def update_category_weight(self, weight: Any) -> bool:
-    #     try:
-    #         self.weight = weight
-    #         return True
-    #     except Exception:
-    #         return False
 
     # === data validators ===
 

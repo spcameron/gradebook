@@ -990,7 +990,7 @@ def prompt_find_category_or_none(
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected `Category`, None to indicate 'Uncategorized', or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
+        Category | MenuSignal: The selected `Category`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -1028,7 +1028,7 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected `Assignment`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
+        Assignment | MenuSignal: The selected `Assignment`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.

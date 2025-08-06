@@ -10,6 +10,7 @@ Provides functions for loading a Gradebook from memory, and saving a Gradebook a
 Includes attributes that are session-scoped like dir_path (current save location) and unsaved_changes (unsaved mutations to linked data).
 Provides functions for importing, adding, removing, and finding RecordTypes, as well as methods for verifying unique values before adding.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -1173,7 +1174,7 @@ class Gradebook:
                     - 404 if no match is found
                 - data (dict): Payload with the following keys:
                     - On success:
-                        - "matches" (list[Student]): Students whose full name or email contains the search query.
+                        - "records" (list[Student]): Students whose full name or email contains the search query.
                     - On failure:
                         - None.
 
@@ -1198,7 +1199,7 @@ class Gradebook:
 
         return Response.succeed(
             data={
-                "matches": matching_students,
+                "records": matching_students,
             },
         )
 
@@ -1224,7 +1225,7 @@ class Gradebook:
                     - 404 if no match is found
                 - data (dict): Payload with the following keys:
                     - On success:
-                        - "matches" (list[Category]): Categories whose name contains the search query.
+                        - "records" (list[Category]): Categories whose name contains the search query.
                     - On failure:
                         - None
 
@@ -1249,7 +1250,7 @@ class Gradebook:
 
         return Response.succeed(
             data={
-                "matches": matching_categories,
+                "records": matching_categories,
             },
         )
 
@@ -1275,7 +1276,7 @@ class Gradebook:
                     - 404 if no match is found
                 - data (dict): Payload with the following keys:
                     - On success:
-                        - "matches" (list[Assignment]): Assignments whose name contains the search query.
+                        - "records" (list[Assignment]): Assignments whose name contains the search query.
                     - On failure:
                         - None
 
@@ -1300,7 +1301,7 @@ class Gradebook:
 
         return Response.succeed(
             data={
-                "matches": matching_assignments,
+                "records": matching_assignments,
             },
         )
 

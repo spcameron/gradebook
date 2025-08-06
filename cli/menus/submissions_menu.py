@@ -1376,7 +1376,7 @@ def prompt_find_submission(gradebook: Gradebook) -> Submission | MenuSignal:
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The linked `Submission`, or None if no matching `Submission` exists.
+        Submission | MenuSignal: The selected `Submission`, or `MenuSignal.CANCEL` if canceled or no matches are found.
     """
     linked_assignment = prompt_find_assignment(gradebook)
 
@@ -1411,7 +1411,7 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected `Assignment`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
+        Assignment | MenuSignal: The selected `Assignment`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
@@ -1451,10 +1451,14 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
         gradebook (Gradebook): The active `Gradebook`.
 
     Returns:
-        The selected `Student`, or `MenuSignal.CANCEL` if either the user cancels or the search yields no hits.
+        Student | MenuSignal: The selected `Student`, or `MenuSignal.CANCEL` if canceled or no matches are found.
 
     Raises:
         RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Offers search, active list, and inactive list as selection methods.
+        - Returns early if the user chooses to cancel or no selection is made.
     """
     title = formatters.format_banner_text("Student Selection")
     options = [

@@ -2990,6 +2990,7 @@ class Gradebook:
 
         Notes:
             - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
+            - This method does not validate category weights when enabling weighting. Callers are responsible for pre-validating before use.
         """
         try:
             prev_status = self.uses_weighting
@@ -3007,6 +3008,8 @@ class Gradebook:
                     )
 
             else:
+                # TODO: supply a require_validated_weights() check
+
                 self._metadata["uses_weighting"] = True
 
             if prev_status == self.uses_weighting:
@@ -3022,7 +3025,7 @@ class Gradebook:
             self._mark_dirty()
 
             return Response.succeed(
-                detail=f"Gradebook successfully updated. Weighting is {self.weighting_status}.",
+                detail=f"Gradebook successfully updated. Weighted categories are now: {self.weighting_status}.",
                 data={
                     "uses_weighting": self.uses_weighting,
                 },
@@ -3036,7 +3039,7 @@ class Gradebook:
             Response: A structured response with the following contract:
                 - success (bool):
                     - True if all category weights are reset to None
-                    - False if the list of active categories fails to populate or any of the categories fails to set `weight` to None
+                    - False if active categories cannot be retrieved, or if any weight fails to reset
                 - detail (str | None):
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
@@ -3047,7 +3050,7 @@ class Gradebook:
                     - 200 on success
                     - 400 on failed weight validation or logic errors
                 - data (dict | None):
-                    - Always None, this method does not return any payload.
+                    - Always None. This method performs a batch mutation and does not return additional data.
 
         Notes:
             - This method mutates `Gradebook` and `Category` states and calls `_mark_dirty()` if successful.

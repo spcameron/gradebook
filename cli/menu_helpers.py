@@ -177,11 +177,15 @@ def sort_and_display_course_dates(
         calendar_name (str, optional): A custom title for the banner heading. Defaults to "Calendar View".
 
     Notes:
+        - If `calendar_dates` is an empty set/list, a "no dates" message is displayed.
         - Dates are grouped by (month, year) and printed in ascending order.
         - Formatting is handled via `formatters.format_banner_text()`, `format_month_and_year()`, and `format_class_date_short()`.
     """
     banner = formatters.format_banner_text(calendar_name)
     print(f"\n{banner}")
+
+    if not calendar_dates:
+        print("\nNo dates to display.\n")
 
     last_month_printed = (None, None)
 

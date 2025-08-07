@@ -18,6 +18,8 @@ Notes:
 - Actual grade calculations are handled externally by the Gradebook.
 """
 
+from __future__ import annotations
+
 import math
 from typing import Any
 
@@ -96,7 +98,7 @@ class Submission:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Submission":
+    def from_dict(cls, data: dict) -> Submission:
         return cls(
             id=data["id"],
             student_id=data["student_id"],

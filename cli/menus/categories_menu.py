@@ -154,7 +154,7 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
         return True
 
     else:
-        print(f"Discarding category: {category.name}")
+        print(f"\nDiscarding category: {category.name}")
         return False
 
 
@@ -419,8 +419,7 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
         category (Category): The `Category` object targeted for deletion.
         gradebook (Gradebook): The active `Gradebook`.
     """
-    caution_banner = formatters.format_banner_text("CAUTION!")
-    print(f"\n{caution_banner}")
+    helpers.caution_banner()
     print("You are about to permanently delete the following category:")
     print(formatters.format_category_multiline(category, gradebook))
     print("\nThis will also delete all linked assignments and submissions.")

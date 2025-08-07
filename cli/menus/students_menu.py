@@ -166,7 +166,7 @@ def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
         return True
 
     else:
-        print(f"Discarding student: {student.full_name}")
+        print(f"\nDiscarding student: {student.full_name}")
         return False
 
 
@@ -535,8 +535,7 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
         student (Student): The `Student` targeted for deletion.
         gradebook (Gradebook): The active `Gradebook`.
     """
-    caution_banner = formatters.format_banner_text("CAUTION!")
-    print(f"\n{caution_banner}")
+    helpers.caution_banner()
     print("You are about to permanently delete the following student record:")
     print(formatters.format_student_multiline(student, gradebook))
     print("\nThis will also delete all linked submissions.")

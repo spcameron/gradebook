@@ -190,7 +190,7 @@ def preview_and_confirm_submission(
         return True
 
     else:
-        print("Discarding submission.")
+        print("\nDiscarding submission.")
         return False
 
 
@@ -1114,8 +1114,7 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
         submission (Submission): The `Submission` object targeted for deletion.
         gradebook (Gradebook): The active `Gradebook`.
     """
-    caution_banner = formatters.format_banner_text("CAUTION!")
-    print(f"\n{caution_banner}")
+    helpers.caution_banner()
     print("You are about to permanently delete the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 
@@ -1163,8 +1162,7 @@ def delete_queued_submission(
 
     student = student_response.data["record"]
 
-    caution_banner = formatters.format_banner_text("CAUTION!")
-    print(f"\n{caution_banner}")
+    helpers.caution_banner()
     print("You are about to permanently delete the following submission:")
     print(formatters.format_submission_multiline(submission, gradebook))
 

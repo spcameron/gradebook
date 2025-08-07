@@ -175,7 +175,7 @@ def preview_and_confirm_assignment(
         return True
 
     else:
-        print(f"Discarding assignment: {assignment.name}")
+        print(f"\nDiscarding assignment: {assignment.name}")
         return False
 
 
@@ -662,8 +662,7 @@ def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> None:
         assignment (Assignment): The `Assignment` object targeted for deletion.
         gradebook (Gradebook): The active `Gradebook`.
     """
-    caution_banner = formatters.format_banner_text("CAUTION!")
-    print(f"\n{caution_banner}")
+    helpers.caution_banner()
     print("You are about to permanently delete the following assignment:")
     print(formatters.format_assignment_multiline(assignment, gradebook))
     print("\nThis will also delete all linked submissions.")

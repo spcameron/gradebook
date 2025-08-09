@@ -720,12 +720,16 @@ class Gradebook:
 
     # --- attendance records ---
 
-    def get_attendance_for_date(self, class_date: datetime.date) -> Response:
+    # TODO:
+    def get_attendance_for_date(
+        self, class_date: datetime.date, active_only: bool = True
+    ) -> Response:
         """
-        Generates an attendance report for all active students on a given class date.
+        Generates an attendance map on a given class date, with options for reporting on all students or the active students only.
 
         Args:
             class_date (datetime.date): The date for which to generate the attendance report.
+            active_only (bool): Optional flag to include inactive students if set to False.
 
         Returns:
             Response: A structured response with the following contract:
@@ -742,9 +746,9 @@ class Gradebook:
                     - 200 on success
                     - 404 if the date is invalid or no active students exist
                     - 400 on internal failure
-                - data (dict[str, dict[str, str]] | None): Payload with the following keys:
+                - data (dict[str, dict[str, AttendanceStatus]] | None): Payload with the following keys:
                     - On success:
-                        - "attendance" (dict[str, str]): A dictionary mapping student IDs to attendance status strings for the given date.
+                        - "attendance" (dict[str, AttendanceStatus]): A dictionary mapping student IDs to AttendanceStatus for the given date.
                     - On failure:
                         - None
 
@@ -763,8 +767,8 @@ class Gradebook:
         attendance_report = {}
 
         students_response = self.get_records(
-            self.students,
-            lambda x: x.is_active,
+            dictionary=self.students,
+            predicate=(lambda x: x.is_active) if active_only else None,
         )
 
         if not students_response.success:
@@ -774,22 +778,17 @@ class Gradebook:
                 status_code=students_response.status_code,
             )
 
-        active_students = students_response.data["records"]
+        students = students_response.data["records"]
 
-        if not active_students:
+        if not students:
             return Response.fail(
                 detail=f"No active students found to report attendance for {class_date.isoformat()}.",
                 error=ErrorCode.NOT_FOUND,
                 status_code=404,
             )
 
-        for student in sorted(
-            active_students, key=lambda x: (x.last_name, x.first_name)
-        ):
-            status = student.attendance_on(class_date)
-            attendance_report[student.id] = (
-                "[UNMARKED]" if status == AttendanceStatus.UNMARKED else status.value
-            )
+        for student in sorted(students, key=lambda x: (x.last_name, x.first_name)):
+            attendance_report[student.id] = student.attendance_on(class_date)
 
         return Response.succeed(
             data={
@@ -797,6 +796,7 @@ class Gradebook:
             },
         )
 
+    # TODO: update to match get_attendance_for_date, namely enum not string
     def get_attendance_for_student(self, student: Student) -> Response:
         """
         Generates an attendance report for the given student across all scheduled class dates.
@@ -839,6 +839,7 @@ class Gradebook:
         attendance_report = {}
 
         for class_date in sorted(self.class_dates):
+            # TODO: map datetime.date -> AttendanceStatus ... NOT string
             status = student.attendance_on(class_date)
             attendance_report[class_date] = (
                 "[UNMARKED]" if status == AttendanceStatus.UNMARKED else status.value
@@ -3329,6 +3330,32 @@ class Gradebook:
             return Response.succeed(
                 detail="All class dates and attendance records successfully removed from the gradebook."
             )
+
+    # TODO:
+    def mark_student_attendance(
+        self, student: Student, status: AttendanceStatus
+    ) -> Response:
+        pass
+
+    # TODO:
+    def mark_student_present(self, student: Student) -> Response:
+        pass
+
+    # TODO:
+    def mark_student_absent(self, student: Student) -> Response:
+        pass
+
+    # TODO:
+    def mark_student_excused(self, student: Student) -> Response:
+        pass
+
+    # TODO:
+    def mark_student_late(self, student: Student) -> Response:
+        pass
+
+    # TODO:
+    def clear_student_attendance(self, student: Student) -> Response:
+        pass
 
     # TODO: reconsider with the new AttendanceReport
 

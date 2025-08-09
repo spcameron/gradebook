@@ -155,17 +155,22 @@ class Student:
 
     # --- attendance methods ---
 
-    def mark_present(self, date: datetime.date) -> None:
-        self._attendance[date] = AttendanceStatus.PRESENT
+    def mark_attendance(
+        self, date: datetime.date, attendance_status: AttendanceStatus
+    ) -> None:
+        self._attendance[date] = attendance_status
 
-    def mark_absent(self, date: datetime.date) -> None:
-        self._attendance[date] = AttendanceStatus.ABSENT
-
-    def mark_excused(self, date: datetime.date) -> None:
-        self._attendance[date] = AttendanceStatus.EXCUSED_ABSENCE
-
-    def mark_late(self, date: datetime.date) -> None:
-        self._attendance[date] = AttendanceStatus.LATE
+    # def mark_present(self, date: datetime.date) -> None:
+    #     self._attendance[date] = AttendanceStatus.PRESENT
+    #
+    # def mark_absent(self, date: datetime.date) -> None:
+    #     self._attendance[date] = AttendanceStatus.ABSENT
+    #
+    # def mark_excused(self, date: datetime.date) -> None:
+    #     self._attendance[date] = AttendanceStatus.EXCUSED_ABSENCE
+    #
+    # def mark_late(self, date: datetime.date) -> None:
+    #     self._attendance[date] = AttendanceStatus.LATE
 
     def clear_attendance(self, date: datetime.date) -> None:
         self._attendance.pop(date, None)

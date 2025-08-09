@@ -49,7 +49,7 @@ def display_menu(
         zero_option (str, optional): The label for the "cancel" or "exit" option. Defaults to "Return".
 
     Returns:
-        MenuSignal.EXIT if the user selects the zero option.
+        `MenuSignal.EXIT` if the user selects the zero option.
         Callable[..., Any]: The function associated with the selected menu item.
 
     Raises:
@@ -200,6 +200,11 @@ def sort_and_display_course_dates(
         print(f"   {formatters.format_class_date_short(current_date)}")
 
 
+# TODO: many problems here:
+# Gradebook will never return an empty {} on success,
+# and will soon return dict[str, AttendanceStatus] rather than [str, str]
+# this helper should manage the conversion from AttendanceStatus to str
+# may very well be other problems
 def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) -> None:
     """
     Displays the attendance summary for a specific class date.

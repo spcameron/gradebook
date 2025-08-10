@@ -285,8 +285,8 @@ def batch_add_submissions_by_assignment(gradebook: Gradebook) -> None:
     ):
         gradebook_response = gradebook.batch_add_submissions(queued_submissions)
 
-        added_submissions = gradebook_response.data["added"]
-        skipped_submissions = gradebook_response.data["skipped"]
+        added_submissions = gradebook_response.data["success"]
+        skipped_submissions = gradebook_response.data["failure"]
 
         if not gradebook_response.success:
             helpers.display_response_failure(gradebook_response)

@@ -26,9 +26,10 @@ from models.gradebook import Gradebook
 from models.student import AttendanceStatus, Student
 
 
-class GatewayChoice(str, Enum):
+class GatewayResponse(str, Enum):
     START_UNMARKED = "START_UNMARKED"
-    STAGE_ALL_PRESENT = "STAGE_ALL_PRESENT"
+    # STAGE_ALL_PRESENT = "STAGE_ALL_PRESENT"
+    STAGE_REMAINING_PRESENT = "STAGE_REMAINING_PRESENT"
     STAGE_REMAINING_ABSENT = "STAGE_REMAINING_ABSENT"
     EDIT_EXISTING = "EDIT_EXISTING"
     CLEAR_DATE = "CLEAR_DATE"
@@ -52,109 +53,211 @@ class GatewayState:
     def __init__(
         self,
         class_date: datetime.date,
-        active_roster: set[Student],
+        active_roster: list[Student],
         gradebook_status_map: dict[str, AttendanceStatus],
         staged_status_map: dict[str, AttendanceStatus],
     ) -> None:
-        # --- inputs frozen for display only ---
-        self._date_label: str = formatters.format_class_date_long(class_date)
-
-        # roster/indexes for this render
-        self._active_roster: list[Student] = list(active_roster)
+        # --- roster/indexes for this render ---
+        self._active_roster: list[Student] = sorted(
+            active_roster, key=lambda x: (x.last_name, x.first_name)
+        )
         self._active_ids: set[str] = {s.id for s in self._active_roster}
         self._active_roster_count: int = len(self._active_roster)
 
-        # defensive filter to active IDs
-        gradebook_active_map: dict[str, AttendanceStatus] = {
+        # --- generating preview overlay ---
+        # missing entries are treated as UNMARKED
+        default_status = AttendanceStatus.UNMARKED
+
+        # gradebook_status_map with defensive filter to active IDs
+        gradebook_map_filtered: dict[str, AttendanceStatus] = {
             student_id: status
             for student_id, status in gradebook_status_map.items()
             if student_id in self._active_ids
         }
 
-        # missing entries are treated as UNMARKED during overlay
-        default_status = AttendanceStatus.UNMARKED
+        # only staged entries for active IDs that differ from gradebook
+        staged_map_filtered: dict[str, AttendanceStatus] = {}
 
-        # only staged entries for active IDs that differ from gradebook affect preview
-        staged_active_map: dict[str, AttendanceStatus] = {}
         for student_id, staged in staged_status_map.items():
             if student_id in self._active_ids:
-                prev = gradebook_active_map.get(student_id, default_status)
+                prev = gradebook_map_filtered.get(student_id, default_status)
                 if staged != prev:
-                    staged_active_map[student_id] = staged
+                    staged_map_filtered[student_id] = staged
 
         # effective (preview) map: gradebook overlaid with staged diffs
-        effective_map: dict[str, AttendanceStatus] = {}
+        effective_status_map: dict[str, AttendanceStatus] = {}
+
         for student in self._active_roster:
             student_id = student.id
-            effective_map[student_id] = staged_active_map.get(
-                student_id, gradebook_active_map.get(student_id, default_status)
+            effective_status_map[student_id] = staged_map_filtered.get(
+                student_id, gradebook_map_filtered.get(student_id, default_status)
             )
 
-        # --- derived fields (computed once) ---
-        # counts by enum (not strings)
-        counts = Counter(effective_map.values())
+        # --- counts by enum for each mapping ---
+        gradebook_counts = Counter(gradebook_map_filtered.values())
+        staged_counts = Counter(staged_map_filtered.values())
+        effective_counts = Counter(effective_status_map.values())
 
-        # ensure all buckets exist
         for status in AttendanceStatus:
-            counts.setdefault(status, 0)
-
-        unmarked_ids = {
-            student_id
-            for student_id, status in effective_map.items()
-            if status == AttendanceStatus.UNMARKED
-        }
-
-        # staged summary is by status for staged diffs only (active IDs)
-        staged_summary = Counter(staged_active_map.values())
-
-        # again, ensure all buckets exist
-        for status in AttendanceStatus:
-            staged_summary.setdefault(status, 0)
+            gradebook_counts.setdefault(status, 0)
+            staged_counts.setdefault(status, 0)
+            effective_counts.setdefault(status, 0)
 
         # tiny unmarked sample, sorted Last, First for display nicety
         # (names are only for UI; IDs drive logic)
         roster_by_id = {student.id: student for student in self._active_roster}
-        sample_names = []
-        for student_id in sorted(
+
+        unmarked_ids = {
+            student_id
+            for student_id, status in effective_status_map.items()
+            if status == AttendanceStatus.UNMARKED
+        }
+
+        # sample_names = []
+        #
+        # for student_id in sorted(
+        #     unmarked_ids,
+        #     key=lambda x: (roster_by_id[x].last_name, roster_by_id[x].first_name),
+        # ):
+        #     sample_names.append(
+        #         f"{roster_by_id[student_id].last_name}, {roster_by_id[student_id].first_name}"
+        #     )
+        #
+        #     if len(sample_names) >= 10:
+        #         break
+        #
+        # sample_remaining = max(0, len(unmarked_ids) - len(sample_names))
+
+        # --- store frozen snapshot ---
+        self._active_roster_by_id: dict[str, Student] = roster_by_id
+
+        self._class_date: datetime.date = class_date
+        self._date_label_short: str = formatters.format_class_date_short(class_date)
+        self._date_label_long: str = formatters.format_class_date_long(class_date)
+
+        self._gradebook_map: dict[str, AttendanceStatus] = gradebook_map_filtered
+        self._staged_map: dict[str, AttendanceStatus] = staged_map_filtered
+        self._effective_map: dict[str, AttendanceStatus] = effective_status_map
+
+        self._gradebook_counts: dict[AttendanceStatus, int] = dict(gradebook_counts)
+        self._staged_counts: dict[AttendanceStatus, int] = dict(staged_counts)
+        self._effective_counts: dict[AttendanceStatus, int] = dict(effective_counts)
+
+        self._unmarked_ids = sorted(
             unmarked_ids,
             key=lambda x: (roster_by_id[x].last_name, roster_by_id[x].first_name),
-        ):
-            sample_names.append(
-                f"{roster_by_id[student_id].last_name}, {roster_by_id[student_id].first_name}"
-            )
-            if len(sample_names) >= 10:
-                break
-        sample_remaining = max(0, len(unmarked_ids) - len(sample_names))
+        )
+        self._unmarked_count: int = len(unmarked_ids)
+        # self._unmarked_sample_names: list[str] = sample_names
+        # self._unmarked_sample_remaining: int = sample_remaining
 
-        # store frozen snapshot
-        self._counts_preview: dict[AttendanceStatus, int] = dict(counts)
-        self._unmarked_count_preview: int = len(unmarked_ids)
-        self._is_complete_preview: bool = self._unmarked_count_preview == 0
-        self._has_staging: bool = bool(staged_active_map)
-        self._staged_summary: dict[AttendanceStatus, int] = dict(staged_summary)
-        self._unmarked_sample_names: list[str] = sample_names
-        self._unmarked_sample_remaining: int = sample_remaining
-
-        # useful for later rendering or debug (extra)
-        self._effective_map: dict[str, AttendanceStatus] = effective_map
+        self._is_complete_preview: bool = self._unmarked_count == 0
+        self._has_staging: bool = bool(staged_map_filtered)
 
     # === properties (read-only) ===
 
+    # --- date ---
+
     @property
-    def date_label(self) -> str:
-        return self._date_label
+    def class_date(self) -> datetime.date:
+        return self._class_date
+
+    @property
+    def date_label_short(self) -> str:
+        return self._date_label_short
+
+    @property
+    def date_label_long(self) -> str:
+        return self._date_label_long
+
+    # --- roster ---
+
+    @property
+    def active_roster(self) -> list[Student]:
+        return self._active_roster
+
+    @property
+    def active_ids(self) -> set[str]:
+        return self._active_ids
+
+    @property
+    def active_roster_by_id(self) -> dict[str, Student]:
+        return self._active_roster_by_id
 
     @property
     def active_roster_count(self) -> int:
         return self._active_roster_count
 
-    @property
-    def counts_preview(self) -> dict[AttendanceStatus, int]:
-        return self._counts_preview
+    # --- mappings ---
+    # exposes the preview map (IDs -> status) if UI wants to show badges
 
     @property
-    def unmarked_count_preview(self) -> int:
-        return self._unmarked_count_preview
+    def gradebook_map(self) -> dict[str, AttendanceStatus]:
+        """
+        Gradebook status map filtered by active students.
+
+        Returns:
+            - dict[str, AttendanceStatus]: Mapping student IDs to `AttendanceStatus`.
+        """
+        return self._gradebook_map.copy()
+
+    @property
+    def staged_map(self) -> dict[str, AttendanceStatus]:
+        """
+        Staged status map filtered by active students and differ-only entries from current Gradebook status.
+
+        Returns:
+            - dict[str, AttendanceStatus]: Mapping student IDs to `AttendanceStatus`.
+        """
+        return self._staged_map.copy()
+
+    @property
+    def effective_map(self) -> dict[str, AttendanceStatus]:
+        """
+        Status map result of overlaying `gradebook_map` with `staged_map`. In other words, what the Gradebook would look like as a result of applying changes right now.
+
+        Returns:
+            - dict[str, AttendanceStatus]: Mapping student IDs to `AttendanceStatus`.
+
+        Notes:
+            - This is what the `Gradebook` would look like as a result of applying changes.
+            - Records are ordered by student (last name, first name).
+        """
+        return self._effective_map.copy()
+
+    # --- counts ---
+
+    @property
+    def gradebook_counts(self) -> dict[AttendanceStatus, int]:
+        return self._gradebook_counts.copy()
+
+    @property
+    def staged_counts(self) -> dict[AttendanceStatus, int]:
+        return self._staged_counts.copy()
+
+    @property
+    def effective_counts(self) -> dict[AttendanceStatus, int]:
+        return self._effective_counts.copy()
+
+    # --- unmarked students ---
+
+    @property
+    def unmarked_ids(self) -> list[str]:
+        return self._unmarked_ids.copy()
+
+    @property
+    def unmarked_count(self) -> int:
+        return self._unmarked_count
+
+    # @property
+    # def unmarked_sample_names(self) -> list[str]:
+    #     return self._unmarked_sample_names
+    #
+    # @property
+    # def unmarked_sample_remaining(self) -> int:
+    #     return self._unmarked_sample_remaining
+
+    # --- statuses ---
 
     @property
     def is_complete_preview(self) -> bool:
@@ -164,23 +267,6 @@ class GatewayState:
     def has_staging(self) -> bool:
         return self._has_staging
 
-    @property
-    def staged_summary(self) -> dict[AttendanceStatus, int]:
-        return self._staged_summary
-
-    @property
-    def unmarked_sample_names(self) -> list[str]:
-        return self._unmarked_sample_names
-
-    @property
-    def unmarked_sample_remaining(self) -> int:
-        return self._unmarked_sample_remaining
-
-    # optionally, expose the preview map (IDs -> status) if UI wants to show badges
-    @property
-    def effective_status_map(self) -> dict[str, AttendanceStatus]:
-        return self._effective_map
-
     # === convenience flags for menu gating ===
 
     @property
@@ -189,17 +275,21 @@ class GatewayState:
 
     @property
     def can_start_unmarked(self) -> bool:
-        return self._unmarked_count_preview > 0
+        return self._unmarked_count > 0
+
+    @property
+    def can_mark_remaining_present(self) -> bool:
+        return self._unmarked_count > 0
 
     @property
     def can_mark_remaining_absent(self) -> bool:
-        return self._unmarked_count_preview > 0
+        return self._unmarked_count > 0
 
     @property
     def can_edit_existing(self) -> bool:
         return any(
             count
-            for status, count in self._counts_preview.items()
+            for status, count in self._gradebook_counts.items()
             if status != AttendanceStatus.UNMARKED
         )
 
@@ -545,8 +635,8 @@ def generate_recurring_schedule(gradebook: Gradebook) -> None:
     if preview_and_confirm_course_schedule(candidate_schedule, no_classes_dates):
         gradebook_response = gradebook.batch_add_class_dates(candidate_schedule)
 
-        added_dates = gradebook_response.data["added"]
-        skipped_dates = gradebook_response.data["skipped"]
+        added_dates = gradebook_response.data["success"]
+        skipped_dates = gradebook_response.data["failure"]
 
         if not gradebook_response.success:
             helpers.display_response_failure(gradebook_response)
@@ -944,7 +1034,7 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 # === record attendance ===
 
 
-# TODO:
+# TODO: checkpoint
 def record_attendance(gradebook: Gradebook) -> None:
     # resolve class date
     class_date = resolve_class_date(gradebook)
@@ -978,6 +1068,157 @@ def record_attendance(gradebook: Gradebook) -> None:
         - APPLY_NOW -> apply batch with stager.pending(), show results, then exit
         - CANCEL -> if no staging, returning_without_changes() and exit; if staging, offer the three-way Apply now (apply & exit) / Discard (clear stager & exit) / Return (back to step 1)
     """
+
+    while True:
+        students_response = gradebook.get_records(
+            dictionary=gradebook.students,
+            predicate=lambda x: x.is_active,
+        )
+
+        if not students_response.success:
+            helpers.display_response_failure(students_response)
+            print("Unable to retrieve active students.")
+            helpers.returning_without_changes()
+            return
+
+        active_students = students_response.data["records"]
+
+        attendance_response = gradebook.get_attendance_for_date(
+            class_date=class_date,
+            active_only=True,
+        )
+
+        if not attendance_response.success:
+            helpers.display_response_failure(attendance_response)
+            print(f"\nUnable to retrieve attendance data.")
+            helpers.returning_without_changes()
+            return
+
+        gradebook_status_map = attendance_response.data["attendance"]
+
+        gateway_state = GatewayState(
+            class_date=class_date,
+            active_roster=active_students,
+            gradebook_status_map=gradebook_status_map,
+            staged_status_map=stager.status_map(),
+        )
+
+        gateway_response = prompt_gateway_response(gateway_state)
+
+        match gateway_response:
+            # TODO:
+            case GatewayResponse.START_UNMARKED:
+                """
+                goal: one-by-one pass over the unmarked students
+
+                1. compute target_ids = gateway_state.unmarked_ids
+                2. enter the per-student loop
+                    - present/absent/excused/late -> stager.stage(id, status)
+                    - skip -> no staging
+                    - cancel -> three-way: apply now / discard staged / return to loop
+                3. on exhausting the list: show a small toast
+                    - ("staged updates for N students")
+                    - view buckets?
+
+                continue
+
+                """
+                pass
+            # TODO:
+            case GatewayResponse.STAGE_REMAINING_PRESENT:
+                """
+                goal: bulk stage Present for unmarked students
+
+                1. compute target_ids = gateway_state.unmarked_ids
+                2. stager.bulk_stage(target_ids, PRESENT, overwrite=True)
+                3. toast: "Staged Present for {len(target_ids)} students."
+
+                continue
+                """
+                pass
+            # TODO:
+            case GatewayResponse.STAGE_REMAINING_ABSENT:
+                """
+                identical to above but ABSENT
+                """
+                pass
+            # TODO:
+            case GatewayResponse.EDIT_EXISTING:
+                """
+                goal: scapel flow; gradebook writes happen immediately
+
+                pre check:
+                    - if stager.is_empty() -> go straight to edit
+                    - else prompt:
+                        - apply staged now -> do the apply_now branch (below) and exit after results, force user to explicitly re-enter Edit
+                        - discard staged and enter edit -> stager.clear() then run Edit
+                        - stay in Record -> skip Edit; return to gateway loop
+
+                edit flow:
+                    - run edit_attendance_flow(class_date). It writes immediately.
+                    - on return, do nothing else here; the next loop rebuild picks up changes
+                """
+                pass
+            # TODO:
+            case GatewayResponse.APPLY_NOW:
+                """
+                goal: commit what's staged, then exit
+
+                1. re-fetch fresh inputs for consistency:
+                    - active roster
+                    - active ids
+                    - gradebook_status_map
+
+                2. build apply payload:
+                    - changes = stager.pending(active_ids, gradebook_status_map) (diff-only, active-only)
+                    - if not changes: show "nothing to apply" and continue
+
+                3. response = gradebook.batch_mark_attendance(class_date, changes)
+                    - on failure, show failure detail, stay in the loop
+                    - on success, show tallies
+                        - if failed, list names & reasons, optionally offer retry failed only
+
+                4. stager.clear()
+
+                5. helpers.returning_to() and exit orchestrator
+                """
+                pass
+            # TODO:
+            case GatewayResponse.CLEAR_DATE:
+                """
+                goal: wipe gradebook marks for ALL students, leave staging as the user chooses
+
+                1. if stager.is_empty():
+                    - confirm "clear attendance for {date} for all students"
+                    - if confirmed: gradebook.clear_attendance_for_date(class_date)
+                        - on success: toast "cleared" -> continue (rebuilds)
+                        - on failure: show error -> continue
+
+                2. if staging exists:
+                    - preserve staged and clear gradebook -> call clear; keep stager; continue
+                    - discard staged and clear -> stager.clear(); then clear gb; continue
+                    - cancel -> do nothing, continue
+
+                3. prompt to apply changes now?
+                """
+                pass
+            # TODO:
+            case GatewayResponse.CANCEL:
+                """
+                goal: exit or resolve staged work
+
+                1. if stager.is_empty() -> helpers.returning_without_changes() and exit
+
+                2. if staging exists:
+                    - apply now -> run apply_now branch and exit
+                    - discard staged -> stager.clear(), helpers.returning_without_changes()
+                    - return to gateway -> do nothing, continue
+                """
+                pass
+            case _:
+                raise RuntimeError(
+                    f"Unexpected GatewayResponse recieved: {gateway_response}"
+                )
 
 
 # TODO: review and docstring
@@ -1028,64 +1269,123 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
-# TODO: checkpoint
-def record_attendance_deprecated(gradebook: Gradebook) -> None:
-    # perhaps offer to select date from course schedule, or better yet,
-    # the next date in the course schedule that does not have attendance recorded
+def build_gateway_options(
+    gateway_state: GatewayState,
+) -> list[tuple[str, GatewayResponse]]:
+    options = []
 
-    print("\nSelect which date to record attendance for:")
+    if gateway_state.can_start_unmarked:
+        options.append(("Start recording unmarked", GatewayResponse.START_UNMARKED))
 
-    class_date = prompt_class_date_or_cancel()
-
-    if class_date is MenuSignal.CANCEL:
-        return
-    class_date = cast(datetime.date, class_date)
-
-    print(
-        f"\nYou are recording attendance for {formatters.format_class_date_long(class_date)}."
-    )
-
-    if class_date not in gradebook.class_dates:
-        print(
-            f"\n{formatters.format_class_date_short(class_date)} is not in the course schedule yet."
+    if gateway_state.can_mark_remaining_present:
+        options.append(
+            ("Mark remaining Present", GatewayResponse.STAGE_REMAINING_PRESENT)
         )
 
-        if not helpers.confirm_action(
-            "Do you want to add it to the schedule and proceed with recording attendance?"
-        ):
-            helpers.returning_without_changes()
-            return
+    if gateway_state.can_mark_remaining_absent:
+        options.append(
+            ("Mark remaining Absent", GatewayResponse.STAGE_REMAINING_ABSENT)
+        )
 
-        add_response = gradebook.add_class_date(class_date)
+    if gateway_state.can_edit_existing:
+        options.append(("Edit existing statuses", GatewayResponse.EDIT_EXISTING))
 
-        if not add_response.success:
-            helpers.display_response_failure(add_response)
-            print("\nCould not record attendance.")
-            helpers.returning_without_changes()
-            return
+    if gateway_state.can_apply_now:
+        options.append(("Apply staged changes now", GatewayResponse.APPLY_NOW))
 
-        print(f"\n{add_response.detail}")
+    options.append(
+        ("Clear all attendance data for this date", GatewayResponse.CLEAR_DATE)
+    )
 
-    students_response = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+    return options
 
-    if not students_response.success:
-        helpers.display_response_failure(students_response)
-        print("\nCould not retrieve active student roster.")
+
+def prompt_gateway_response(
+    gateway_state: GatewayState,
+) -> GatewayResponse:
+    if gateway_state.active_roster_count == 0:
+        print("There are no active students.")
         helpers.returning_without_changes()
-        return
+        return GatewayResponse.CANCEL
 
-    active_students = students_response.data["records"]
+    # TODO:
+    # "There is/are 14 students remaining unmarked."
+    # "(e.g., Potter, Weasley, Grainger and 4 more)"
+    helpers.display_remaining_unmarked_preview(gateway_state)
 
-    if not active_students:
-        print("\nThere are no active students.")
-        helpers.returning_without_changes()
-        return
+    title = f"Attendance options for {gateway_state.date_label_long}:"
+    options = build_gateway_options(gateway_state)
+    zero_option = "Cancel"
 
-    for student in sorted(active_students, key=lambda x: (x.last_name, x.first_name)):
-        # record attendance sequence here
-        pass
+    menu_response = helpers.display_menu(title, options, zero_option)
 
-    helpers.display_attendance_summary(class_date, gradebook)
+    if menu_response is MenuSignal.EXIT:
+        return GatewayResponse.CANCEL
+
+    elif isinstance(menu_response, GatewayResponse):
+        return menu_response
+
+    else:
+        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+
+# def record_attendance_deprecated(gradebook: Gradebook) -> None:
+#     # perhaps offer to select date from course schedule, or better yet,
+#     # the next date in the course schedule that does not have attendance recorded
+#
+#     print("\nSelect which date to record attendance for:")
+#
+#     class_date = prompt_class_date_or_cancel()
+#
+#     if class_date is MenuSignal.CANCEL:
+#         return
+#     class_date = cast(datetime.date, class_date)
+#
+#     print(
+#         f"\nYou are recording attendance for {formatters.format_class_date_long(class_date)}."
+#     )
+#
+#     if class_date not in gradebook.class_dates:
+#         print(
+#             f"\n{formatters.format_class_date_short(class_date)} is not in the course schedule yet."
+#         )
+#
+#         if not helpers.confirm_action(
+#             "Do you want to add it to the schedule and proceed with recording attendance?"
+#         ):
+#             helpers.returning_without_changes()
+#             return
+#
+#         add_response = gradebook.add_class_date(class_date)
+#
+#         if not add_response.success:
+#             helpers.display_response_failure(add_response)
+#             print("\nCould not record attendance.")
+#             helpers.returning_without_changes()
+#             return
+#
+#         print(f"\n{add_response.detail}")
+#
+#     students_response = gradebook.get_records(gradebook.students, lambda x: x.is_active)
+#
+#     if not students_response.success:
+#         helpers.display_response_failure(students_response)
+#         print("\nCould not retrieve active student roster.")
+#         helpers.returning_without_changes()
+#         return
+#
+#     active_students = students_response.data["records"]
+#
+#     if not active_students:
+#         print("\nThere are no active students.")
+#         helpers.returning_without_changes()
+#         return
+#
+#     for student in sorted(active_students, key=lambda x: (x.last_name, x.first_name)):
+#         # record attendance sequence here
+#         pass
+#
+#     helpers.display_attendance_summary(class_date, gradebook)
 
 
 # === edit attendance ===

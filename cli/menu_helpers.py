@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Any, Callable, Iterable
 
 import cli.formatters as formatters
+from cli.menus.attendance_menu import GatewayState
 from core.response import Response
 from models.assignment import Assignment
 from models.category import Category
@@ -37,7 +38,7 @@ class MenuSignal(Enum):
 
 def display_menu(
     title: str,
-    options: list[tuple[str, Callable[..., Any]]],
+    options: list[tuple[str, Any]],
     zero_option: str = "Return",
 ) -> MenuSignal | Callable[..., Any]:
     """
@@ -200,21 +201,16 @@ def sort_and_display_course_dates(
         print(f"   {formatters.format_class_date_short(current_date)}")
 
 
-# TODO: many problems here:
-# Gradebook will never return an empty {} on success,
-# and will soon return dict[str, AttendanceStatus] rather than [str, str]
-# this helper should manage the conversion from AttendanceStatus to str
-# may very well be other problems
 def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) -> None:
     """
-    Displays the attendance summary for a specific class date.
+    Displays the attendance summary for active students only on a specific class date.
 
     Args:
         class_date (datetime.date): The target date to summarize attendance for.
         gradebook (Gradebook): The active `Gradebook` containing attendance and student records.
 
     Notes:
-        - If no attendance has been recorded, a message is shown.
+        - If no attendance has been recorded, a message is shown. However, `gradebook.get_attendance_for_date()` should never return an empty dictionary. This is defensive.
         - If student lookups fail, those entries are skipped silently.
         - Output includes student names and their corresponding attendance status.
     """
@@ -232,17 +228,22 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
     print(f"\nAttendance summary for {formatters.format_class_date_long(class_date)}:")
 
     if attendance_summary == {}:
-        print(
-            f"Attendance has not been recorded yet for {formatters.format_class_date_short(class_date)}."
-        )
+        print(f"Attendance has not been recorded yet for this date.")
+        return
 
-    for id, attendance in attendance_summary:
-        student_response = gradebook.find_student_by_uuid(id)
+    for student_id, attendance in attendance_summary.items():
+        student_response = gradebook.find_student_by_uuid(student_id)
 
         student = student_response.data["record"] if student_response.success else None
+        status = attendance.value
 
         if student is not None:
-            print(f"... {student.full_name:<20} | {attendance}")
+            print(f"... {student.full_name:<20} | {status}")
+
+
+# TODO:
+def display_remaining_unmarked_preview(gateway_state: GatewayState) -> None:
+    print("TODO: IMPLEMENT DISPLAY_REMAINING_UNMARKED_PREVIEW")
 
 
 # === prompt user input methods ===

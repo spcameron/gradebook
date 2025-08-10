@@ -746,7 +746,7 @@ class Gradebook:
                     - 200 on success
                     - 404 if the date is invalid or no active students exist
                     - 400 on internal failure
-                - data (dict[str, dict[str, AttendanceStatus]] | None): Payload with the following keys:
+                - data (dict | None): Payload with the following keys:
                     - On success:
                         - "attendance" (dict[str, AttendanceStatus]): A dictionary mapping student IDs to AttendanceStatus for the given date.
                     - On failure:
@@ -796,7 +796,6 @@ class Gradebook:
             },
         )
 
-    # TODO: update to match get_attendance_for_date, namely enum not string
     def get_attendance_for_student(self, student: Student) -> Response:
         """
         Generates an attendance report for the given student across all scheduled class dates.
@@ -819,7 +818,7 @@ class Gradebook:
                     - 404 if the student is not found
                 - data (dict | None):
                     - On success:
-                        - "attendance" (dict[datetime.date, str]): A dictionary mapping `datetime.date` objects to attendance status strings.
+                        - "attendance" (dict[datetime.date, AttendanceReport]): A dictionary mapping `datetime.date` objects to AttendanceStatus.
                     - On failure:
                         - None
 
@@ -839,11 +838,7 @@ class Gradebook:
         attendance_report = {}
 
         for class_date in sorted(self.class_dates):
-            # TODO: map datetime.date -> AttendanceStatus ... NOT string
-            status = student.attendance_on(class_date)
-            attendance_report[class_date] = (
-                "[UNMARKED]" if status == AttendanceStatus.UNMARKED else status.value
-            )
+            attendance_report[class_date] = student.attendance_on(class_date)
 
         return Response.succeed(
             data={
@@ -2683,30 +2678,30 @@ class Gradebook:
                     - On fast-failure, a human-readable description of the error.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.VALIDATION_FAILED` if one or more submissions were skipped due to duplicates or validation issues.
-                    - `ErrorCode.INTERNAL_ERROER` if an unexpected error interrupts the batch process.
+                    - `ErrorCode.INTERNAL_ERROR` if an unexpected error interrupts the batch process.
                 - status_code (int | None):
                     - 200 if all submissions were added successfully
                     - 400 on failure
                 - data (dict | None):
-                    - "added" (list[Submission]): Submissions that were successfully added.
-                    - "skipped" (list[Submission]): Submissions that were not added due to validation failure.
+                    - "success" (list[Submission]): Submissions that were successfully added.
+                    - "failure" (list[Submission]): Submissions that were not added due to validation failure.
 
         Notes:
             - Each call to `add_submission()` will invoke `_mark_dirty()` if the addition succeeds.
             - This method does not attempt to roll back or rety failed additions.
         """
-        added = []
-        skipped = []
+        success = []
+        failure = []
 
         try:
             for submission in submissions:
                 add_response = self.add_submission(submission)
 
                 if add_response.success:
-                    added.append(submission)
+                    success.append(submission)
 
                 elif add_response.error is ErrorCode.VALIDATION_FAILED:
-                    skipped.append(submission)
+                    failure.append(submission)
 
                 else:
                     return add_response
@@ -2716,18 +2711,18 @@ class Gradebook:
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
                 data={
-                    "added": added,
-                    "skipped": skipped,
+                    "success": success,
+                    "failure": failure,
                 },
             )
 
         else:
-            if len(added) == len(submissions):
+            if len(success) == len(submissions):
                 return Response.succeed(
                     detail="All submissions successfully added to the gradebook.",
                     data={
-                        "added": added,
-                        "skipped": skipped,
+                        "success": success,
+                        "failure": failure,
                     },
                 )
 
@@ -2736,8 +2731,8 @@ class Gradebook:
                     detail="Not all submissions could be successfully added to the gradebook.",
                     error=ErrorCode.VALIDATION_FAILED,
                     data={
-                        "added": added,
-                        "skipped": skipped,
+                        "success": success,
+                        "failure": failure,
                     },
                 )
 
@@ -2909,7 +2904,7 @@ class Gradebook:
             self._mark_dirty_if_tracked(submission)
 
             return Response.succeed(
-                detail=f"Submission late status sucessfully updated to: {submission.late_status}.",
+                detail=f"Submission late status successfully updated to: {submission.late_status}.",
                 data={
                     "record": submission,
                 },
@@ -3176,25 +3171,25 @@ class Gradebook:
                     - 200 if all dates were added successfully
                     - 400 on failure
                 - data (dict | None): A payload describing the operation result:
-                    - "added" (list[datetime.date]): Dates that were successfully added.
-                    - "skipped" (list[datetime.date]): Dates that were not added due to validation failure.
+                    - "success" (list[datetime.date]): Dates that were successfully added.
+                    - "failure" (list[datetime.date]): Dates that were not added due to validation failure.
 
         Notes:
             - Each call to `add_class_date()` will invoke `_mark_dirty()` if the addition succeeds.
             - This method does not attempt to roll back or retry failed additions.
         """
-        added = []
-        skipped = []
+        success = []
+        failure = []
 
         try:
             for class_date in class_dates:
                 add_response = self.add_class_date(class_date)
 
                 if add_response.success:
-                    added.append(class_date)
+                    success.append(class_date)
 
                 elif add_response.error is ErrorCode.VALIDATION_FAILED:
-                    skipped.append(class_date)
+                    failure.append(class_date)
 
                 else:
                     return add_response
@@ -3204,28 +3199,28 @@ class Gradebook:
                 detail=f"Unexpected error: {e}",
                 error=ErrorCode.INTERNAL_ERROR,
                 data={
-                    "added": added,
-                    "skipped": skipped,
+                    "success": success,
+                    "failure": failure,
                 },
             )
 
         else:
-            if len(added) == len(class_dates):
+            if len(success) == len(class_dates):
                 return Response.succeed(
                     detail="All class dates successfully added to the gradebook.",
                     data={
-                        "added": added,
-                        "skipped": skipped,
+                        "success": success,
+                        "failure": failure,
                     },
                 )
 
             else:
                 return Response.fail(
-                    detail="Not all class dates could be sucessfully added to the gradebook.",
+                    detail="Not all class dates could be successfully added to the gradebook.",
                     error=ErrorCode.VALIDATION_FAILED,
                     data={
-                        "added": added,
-                        "skipped": skipped,
+                        "success": success,
+                        "failure": failure,
                     },
                 )
 
@@ -3261,13 +3256,19 @@ class Gradebook:
         try:
             if class_date not in self.class_dates:
                 return Response.fail(
-                    detail=f"No matching date could be found in the course schedule: {class_date.isoformat()}",
+                    detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
                     error=ErrorCode.NOT_FOUND,
                     status_code=404,
                 )
 
-            for student in self.students.values():
-                student.clear_attendance(class_date)
+            clear_data_response = self.clear_roster_attendance_for_date(class_date)
+
+            if not clear_data_response.success:
+                return Response.fail(
+                    detail=f"Could not clear attendance data: {clear_data_response.detail}",
+                    error=clear_data_response.error,
+                    status_code=clear_data_response.status_code,
+                )
 
             self.class_dates.discard(class_date)
 
@@ -3281,7 +3282,7 @@ class Gradebook:
             self._mark_dirty()
 
             return Response.succeed(
-                detail="Class date and attendance records successfully removed from the gradebook."
+                detail=f"Class date and attendance records for {formatters.format_class_date_short(class_date)} successfully removed from the gradebook.",
             )
 
     def remove_all_class_dates(self) -> Response:
@@ -3302,23 +3303,81 @@ class Gradebook:
                     - 200 on success
                     - 400 on failure
                 - data (dict | None):
-                    - Always None, this method does not return any payload.
+                    - "success": (list[datetime.date]): Class dates that were successfully removed.
+                    - "failure": (list[datetime.date]): Class dates that were not removed due to errors (e.g., could not find date in course schedule, or roster attendance data could not be erased).
 
         Notes:
-            - Each call to `remove_class_date()` will invoke `_mark_dirty()` if the addition succeeds.
+            - Each call to `remove_class_date()` will invoke `_mark_dirty()` if the removal succeeds.
         """
+        success = []
+        failure = []
+
         try:
             if not self.class_dates:
                 return Response.succeed(detail="The course schedule is already empty.")
 
             for class_date in list(self.class_dates):
-                self.remove_class_date(class_date)
+                remove_response = self.remove_class_date(class_date)
 
-            if len(self.class_dates) != 0:
-                return Response.fail(
-                    detail="Failed to clear all class dates.",
-                    error=ErrorCode.INTERNAL_ERROR,
+                if remove_response.success:
+                    success.append(class_date)
+
+                else:
+                    failure.append(class_date)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "success": success,
+                    "failure": failure,
+                },
+            )
+
+        else:
+            if len(self.class_dates) == 0:
+                return Response.succeed(
+                    detail="All class dates and attendance records successfully removed from the gradebook.",
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
                 )
+
+            else:
+                return Response.fail(
+                    detail="Not all class dates could be successfully removed from the gradebook.",
+                    error=ErrorCode.INTERNAL_ERROR,
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+    # TODO: docstring
+    def mark_student_attendance_for_date(
+        self, class_date: datetime.date, student: Student, status: AttendanceStatus
+    ) -> Response:
+        if student.attendance_on(class_date) == status:
+            return Response.succeed(
+                detail="The attendance status provided matches the current attendance status. No changes made.",
+                data={
+                    "record": student,
+                },
+            )
+
+        # TODO: defensive check that class_date in course schedule
+
+        try:
+            if student.id not in self.students:
+                return Response.fail(
+                    detail=f"No matching student could be found: {student.full_name}",
+                    error=ErrorCode.NOT_FOUND,
+                    status_code=404,
+                )
+
+            student.mark_attendance(class_date, status)
 
         except Exception as e:
             return Response.fail(
@@ -3327,75 +3386,115 @@ class Gradebook:
             )
 
         else:
+            self._mark_dirty()
+
             return Response.succeed(
-                detail="All class dates and attendance records successfully removed from the gradebook."
+                detail=f"{student.full_name} marked '{status.value}' on {formatters.format_class_date_short(class_date)}.",
+                data={
+                    "record": student,
+                },
             )
 
-    # TODO:
-    def mark_student_attendance(
-        self, student: Student, status: AttendanceStatus
+    # def mark_student_present(self, student: Student) -> Response:
+    #     pass
+    #
+    # def mark_student_absent(self, student: Student) -> Response:
+    #     pass
+    #
+    # def mark_student_excused(self, student: Student) -> Response:
+    #     pass
+    #
+    # def mark_student_late(self, student: Student) -> Response:
+    #     pass
+
+    # TODO: doc string
+    def clear_student_attendance_for_date(
+        self, class_date: datetime.date, student: Student
     ) -> Response:
-        pass
+        if student.attendance_on(class_date) == AttendanceStatus.UNMARKED:
+            return Response.succeed(
+                detail="The attendance status for this date is already 'Unmarked'. No changes made.",
+                data={
+                    "record": student,
+                },
+            )
+
+        try:
+            if student.id not in self.students:
+                return Response.fail(
+                    detail=f"No matching student could be found: {student.full_name}",
+                    error=ErrorCode.NOT_FOUND,
+                    status_code=404,
+                )
+
+            student.clear_attendance(class_date)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            self._mark_dirty()
+
+            return Response.succeed(
+                detail=f"Attendance data for {student.full_name} on {formatters.format_class_date_short(class_date)} successfully erased from the gradebook.",
+                data={
+                    "record": student,
+                },
+            )
+
+    # TODO: docstring
+    def clear_roster_attendance_for_date(self, class_date: datetime.date) -> Response:
+        success = []
+        failure = []
+
+        try:
+            for student in self.students.values():
+                clear_data_response = self.clear_student_attendance_for_date(
+                    class_date, student
+                )
+
+                if clear_data_response.success:
+                    success.append(student)
+
+                else:
+                    failure.append(student)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "success": success,
+                    "failure": failure,
+                },
+            )
+
+        else:
+            if len(success) == len(self.students):
+                return Response.succeed(
+                    detail=f"All student attendance data on {formatters.format_class_date_short(class_date)} successfully erased.",
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+            else:
+                return Response.fail(
+                    detail=f"Not all student attendance data on {formatters.format_class_date_short(class_date)} could be successfully erased from the gradebook.",
+                    error=ErrorCode.INTERNAL_ERROR,
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
 
     # TODO:
-    def mark_student_present(self, student: Student) -> Response:
-        pass
-
-    # TODO:
-    def mark_student_absent(self, student: Student) -> Response:
-        pass
-
-    # TODO:
-    def mark_student_excused(self, student: Student) -> Response:
-        pass
-
-    # TODO:
-    def mark_student_late(self, student: Student) -> Response:
-        pass
-
-    # TODO:
-    def clear_student_attendance(self, student: Student) -> Response:
-        pass
-
-    # TODO: reconsider with the new AttendanceReport
-
-    # def mark_student_absent(self, student: Student, class_date: datetime.date) -> bool:
-    #     if student.id not in self.students:
-    #         raise ValueError(
-    #             f"Cannot mark absence: {student.full_name} is not enrolled in this course."
-    #         )
-    #
-    #     if class_date not in self.class_dates:
-    #         raise ValueError(
-    #             f"Cannot mark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
-    #         )
-    #
-    #     if student.mark_absent(class_date):
-    #         self.mark_dirty()
-    #         return True
-    #
-    #     return False
-
-    # TODO: reconsider with the new AttendanceReport
-
-    # def unmark_student_absent(
-    #     self, student: Student, class_date: datetime.date
-    # ) -> bool:
-    #     if student.id not in self.students:
-    #         raise ValueError(
-    #             f"Cannot unmark absence: {student.full_name} is not enrolled in this course."
-    #         )
-    #
-    #     if class_date not in self.class_dates:
-    #         raise ValueError(
-    #             f"Cannot unmark absence: {class_date.strftime('%Y-%m-%d')} is not in the class schedule."
-    #         )
-    #
-    #     if student.remove_absence(class_date):
-    #         self.mark_dirty()
-    #         return True
-    #
-    #     return False
+    def scrub_orphaned_attendance(self) -> Response:
+        # scan students for any dates not in self.class_dates and clear them
 
     # === data validators ===
 

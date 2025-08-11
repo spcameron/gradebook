@@ -13,9 +13,10 @@ from __future__ import annotations
 import calendar
 import datetime
 from collections import Counter
+from collections.abc import Callable
 from enum import Enum
 from textwrap import dedent
-from typing import cast
+from typing import Any, cast
 
 import cli.formatters as formatters
 import cli.menu_helpers as helpers
@@ -174,15 +175,15 @@ class GatewayState:
 
     @property
     def active_roster(self) -> list[Student]:
-        return self._active_roster
+        return self._active_roster.copy()
 
     @property
     def active_ids(self) -> set[str]:
-        return self._active_ids
+        return self._active_ids.copy()
 
     @property
     def active_roster_by_id(self) -> dict[str, Student]:
-        return self._active_roster_by_id
+        return self._active_roster_by_id.copy()
 
     @property
     def active_roster_count(self) -> int:
@@ -802,9 +803,61 @@ def prompt_class_date_or_cancel() -> datetime.date | MenuSignal:
             print("Please try again.")
 
 
-# TODO: method, review, and docstring
+# TODO: review and docstring
 def prompt_class_date_from_schedule(gradebook: Gradebook) -> datetime.date | MenuSignal:
-    pass
+    def format_class_dates_with_completed_status(class_date: datetime.date) -> str:
+        formatted_date = formatters.format_class_date_long(class_date)
+
+        students_response = gradebook.get_records(
+            gradebook.students,
+            lambda x: x.is_active,
+        )
+
+        active_students = (
+            students_response.data["records"] if students_response.success else None
+        )
+
+        has_unmarked = (
+            any(
+                student.attendance_on(class_date) == AttendanceStatus.UNMARKED
+                for student in active_students
+            )
+            if active_students
+            else True
+        )
+
+        return f"{formatted_date:<20}{'[ATTENDANCE TAKEN]' if not has_unmarked else ''}"
+
+    def sort_date_by_iso_format(class_date: datetime.date) -> str:
+        return class_date.isoformat()
+
+    class_dates = sorted(gradebook.class_dates, key=sort_date_by_iso_format)
+
+    if not class_dates:
+        print("\nThere are no class dates in the course schedule to choose from.")
+        print(
+            "Please enter a date manually and add it to the gradebook before proceeding."
+        )
+        return MenuSignal.CANCEL
+
+    formatter = format_class_dates_with_completed_status
+
+    while True:
+        print(f"\n{formatters.format_banner_text('Course Schedule')}")
+
+        helpers.display_results(class_dates, True, formatter)
+
+        choice = helpers.prompt_user_input("Select an option (0 to cancel):")
+
+        if choice == "0":
+            return MenuSignal.CANCEL
+
+        try:
+            index = int(choice) - 1
+            return class_dates[index]
+
+        except (ValueError, IndexError):
+            print("\nInvalid selection. Please try again.")
 
 
 def prompt_start_and_end_dates() -> tuple[datetime.date, datetime.date] | MenuSignal:
@@ -1036,12 +1089,158 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 
 # TODO: checkpoint
 def record_attendance(gradebook: Gradebook) -> None:
+    # TODO: docstring
+    def refresh_state(date: datetime.date) -> GatewayState | None:
+        students_response = gradebook.get_records(
+            dictionary=gradebook.students,
+            predicate=lambda x: x.is_active,
+        )
+
+        if not students_response.success:
+            helpers.display_response_failure(students_response)
+            print("Unable to retrieve active students.")
+            helpers.returning_without_changes()
+            return
+
+        active_students = students_response.data["records"]
+
+        attendance_response = gradebook.get_attendance_for_date(
+            class_date=date,
+            active_only=True,
+        )
+
+        if not attendance_response.success:
+            helpers.display_response_failure(attendance_response)
+            print(f"\nUnable to retrieve attendance data.")
+            helpers.returning_without_changes()
+            return
+
+        gradebook_status_map = attendance_response.data["attendance"]
+
+        return GatewayState(
+            class_date=date,
+            active_roster=active_students,
+            gradebook_status_map=gradebook_status_map,
+            staged_status_map=stager.status_map,
+        )
+
+    # TODO: docstring
+    def start_unmarked(state: GatewayState) -> None:
+        snapshot = stager.status_map
+
+        target_ids = state.unmarked_ids
+        roster_by_id = state.active_roster_by_id
+
+        if not target_ids:
+            print("All students are marked. Nothing to record.")
+            return
+
+        staged_count = 0
+
+        banner = f"Attendance for {state.date_label_short}"
+        print(f"\n{formatters.format_banner_text(banner)}")
+
+        for student_id in target_ids:
+            student = roster_by_id[student_id]
+
+            title = f"{student.full_name}:"
+            options = [
+                ("Present", lambda: AttendanceStatus.PRESENT),
+                ("Absent", lambda: AttendanceStatus.ABSENT),
+                ("Excused", lambda: AttendanceStatus.EXCUSED_ABSENCE),
+                ("Late", lambda: AttendanceStatus.LATE),
+                ("Skip This Student", MenuSignal.SKIP),
+            ]
+            zero_option = "Cancel and Stop Recording Attendance"
+
+            while True:
+                menu_response = helpers.display_menu(title, options, zero_option)
+
+                if menu_response is MenuSignal.EXIT:
+                    if staged_count == 0:
+                        helpers.returning_without_changes()
+                        return
+
+                    print(
+                        f"You have {staged_count} staged {'change' if staged_count == 1 else 'changes'} for {state.date_label_short}."
+                    )
+
+                    bail_title = "What would you like to do with these staged changes?"
+                    bail_options = [
+                        (
+                            "Apply These Changes Now and Return",
+                            lambda: MenuSignal.APPLY,
+                        ),
+                        (
+                            "Discard These Changes and Return",
+                            lambda: MenuSignal.DISCARD,
+                        ),
+                        ("Keep These Changes and Return", lambda: MenuSignal.KEEP),
+                    ]
+                    bail_zero_option = "Continue Recording Attendance"
+
+                    bail_response = helpers.display_menu(
+                        bail_title, bail_options, bail_zero_option
+                    )
+
+                    if bail_response is MenuSignal.EXIT:
+                        continue
+
+                    elif callable(bail_response):
+                        bail_signal = bail_response()
+
+                        match bail_signal:
+                            case MenuSignal.APPLY:
+                                apply_now()
+                                return
+                            case MenuSignal.DISCARD:
+                                stager.revert_to_snapshot(snapshot)
+                                return
+                            case MenuSignal.KEEP:
+                                return
+
+                elif menu_response is MenuSignal.SKIP:
+                    break
+
+                elif callable(menu_response):
+                    status = menu_response()
+                    stager.stage(student_id, status)
+                    staged_count += 1
+                    break
+
+                else:
+                    raise RuntimeError(
+                        f"Unexpected MenuResponse received: {menu_response}"
+                    )
+
+        if staged_count > 0:
+            print(
+                f"\nStaged updates for {staged_count} {'student' if staged_count == 1 else 'students'} on {state.date_label_short}."
+            )
+            print("These changes are not immediately applied to the gradebook.")
+
+            if helpers.confirm_action("Would you like to apply these changes now?"):
+                apply_now()
+                return
+
+            else:
+                print(
+                    "You may apply these changes later by selecting 'Apply Staged Changes Now' from the Record Attendance menu."
+                )
+                return
+
+    # TODO:
+    def apply_now() -> None:
+        pass
+
     # resolve class date
     class_date = resolve_class_date(gradebook)
 
     if class_date is MenuSignal.CANCEL:
+        print("\nDate selection canceled.")
         helpers.returning_without_changes()
         return
+
     class_date = cast(datetime.date, class_date)
 
     # initiate stager object
@@ -1070,43 +1269,14 @@ def record_attendance(gradebook: Gradebook) -> None:
     """
 
     while True:
-        students_response = gradebook.get_records(
-            dictionary=gradebook.students,
-            predicate=lambda x: x.is_active,
-        )
+        gateway_state = refresh_state(class_date)
 
-        if not students_response.success:
-            helpers.display_response_failure(students_response)
-            print("Unable to retrieve active students.")
-            helpers.returning_without_changes()
+        if gateway_state is None:
             return
-
-        active_students = students_response.data["records"]
-
-        attendance_response = gradebook.get_attendance_for_date(
-            class_date=class_date,
-            active_only=True,
-        )
-
-        if not attendance_response.success:
-            helpers.display_response_failure(attendance_response)
-            print(f"\nUnable to retrieve attendance data.")
-            helpers.returning_without_changes()
-            return
-
-        gradebook_status_map = attendance_response.data["attendance"]
-
-        gateway_state = GatewayState(
-            class_date=class_date,
-            active_roster=active_students,
-            gradebook_status_map=gradebook_status_map,
-            staged_status_map=stager.status_map(),
-        )
 
         gateway_response = prompt_gateway_response(gateway_state)
 
         match gateway_response:
-            # TODO:
             case GatewayResponse.START_UNMARKED:
                 """
                 goal: one-by-one pass over the unmarked students
@@ -1121,10 +1291,11 @@ def record_attendance(gradebook: Gradebook) -> None:
                     - view buckets?
 
                 continue
-
                 """
-                pass
-            # TODO:
+                start_unmarked(gateway_state)
+                continue
+
+            # TODO: review, docstring, probably extract generalized version
             case GatewayResponse.STAGE_REMAINING_PRESENT:
                 """
                 goal: bulk stage Present for unmarked students
@@ -1135,13 +1306,47 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 continue
                 """
-                pass
-            # TODO:
+                target_ids = gateway_state.unmarked_ids
+
+                stager.bulk_stage(
+                    student_ids=target_ids,
+                    status=AttendanceStatus.PRESENT,
+                    overwrite=True,
+                )
+
+                count = len(target_ids)
+
+                print(
+                    f"\nStaged {count} {'student' if count == 1 else 'students'} as 'Present'."
+                )
+
+                # helpers.staged_changes_warning()
+
+                continue
+
+            # TODO: review, docstring, probably extract generalized version
             case GatewayResponse.STAGE_REMAINING_ABSENT:
                 """
-                identical to above but ABSENT
+                Identical to above but ABSENT
                 """
-                pass
+                target_ids = gateway_state.unmarked_ids
+
+                stager.bulk_stage(
+                    student_ids=target_ids,
+                    status=AttendanceStatus.ABSENT,
+                    overwrite=True,
+                )
+
+                count = len(target_ids)
+
+                print(
+                    f"\nStaged {count} {'student' if count == 1 else 'students'} as 'Absent'."
+                )
+
+                # helpers.staged_changes_warning()
+
+                continue
+
             # TODO:
             case GatewayResponse.EDIT_EXISTING:
                 """
@@ -1159,6 +1364,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                     - on return, do nothing else here; the next loop rebuild picks up changes
                 """
                 pass
+
             # TODO:
             case GatewayResponse.APPLY_NOW:
                 """
@@ -1183,6 +1389,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                 5. helpers.returning_to() and exit orchestrator
                 """
                 pass
+
             # TODO:
             case GatewayResponse.CLEAR_DATE:
                 """
@@ -1202,6 +1409,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                 3. prompt to apply changes now?
                 """
                 pass
+
             # TODO:
             case GatewayResponse.CANCEL:
                 """
@@ -1215,6 +1423,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                     - return to gateway -> do nothing, continue
                 """
                 pass
+
             case _:
                 raise RuntimeError(
                     f"Unexpected GatewayResponse recieved: {gateway_response}"
@@ -1233,73 +1442,89 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
     ]
     zero_option = "Return and cancel recording attendance"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-
-    elif callable(menu_response):
-        class_date = menu_response()
-
-        if not isinstance(class_date, datetime.date):
+        if menu_response is MenuSignal.EXIT:
             return MenuSignal.CANCEL
 
-        if class_date not in gradebook.class_dates:
-            print(
-                f"\n{formatters.format_class_date_long(class_date)} is not in the course schedule."
-            )
+        elif callable(menu_response):
+            class_date = menu_response()
 
-            if not helpers.confirm_action(
-                "Do you want to add it to the schedule and proceed with recording attendance?"
-            ):
-                return MenuSignal.CANCEL
+            if isinstance(class_date, MenuSignal):
+                print("\nDate selection canceled.")
 
-            gradebook_response = gradebook.add_class_date(class_date)
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
 
-            if not gradebook_response.success:
-                helpers.display_response_failure(gradebook_response)
-                print("\nUnable to record attendance for this date.")
-                return MenuSignal.CANCEL
+                else:
+                    continue
 
-            print(f"\n{gradebook_response.detail}")
+            if class_date not in gradebook.class_dates:
+                print(
+                    f"\n{formatters.format_class_date_long(class_date)} is not in the course schedule."
+                )
 
-        return class_date
+                if not helpers.confirm_action(
+                    "Do you want to add it to the schedule and proceed with recording attendance?"
+                ):
+                    return MenuSignal.CANCEL
 
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+                gradebook_response = gradebook.add_class_date(class_date)
+
+                if not gradebook_response.success:
+                    helpers.display_response_failure(gradebook_response)
+                    print("\nUnable to record attendance for this date.")
+                    return MenuSignal.CANCEL
+
+                print(f"\n{gradebook_response.detail}")
+
+            return class_date
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
+# TODO: docstring
 def build_gateway_options(
     gateway_state: GatewayState,
-) -> list[tuple[str, GatewayResponse]]:
+) -> list[tuple[str, Callable[..., Any]]]:
     options = []
 
     if gateway_state.can_start_unmarked:
-        options.append(("Start recording unmarked", GatewayResponse.START_UNMARKED))
+        options.append(
+            ("Start Recording Unmarked", lambda: GatewayResponse.START_UNMARKED)
+        )
 
     if gateway_state.can_mark_remaining_present:
         options.append(
-            ("Mark remaining Present", GatewayResponse.STAGE_REMAINING_PRESENT)
+            (
+                "Mark Remaining 'Present'",
+                lambda: GatewayResponse.STAGE_REMAINING_PRESENT,
+            )
         )
 
     if gateway_state.can_mark_remaining_absent:
         options.append(
-            ("Mark remaining Absent", GatewayResponse.STAGE_REMAINING_ABSENT)
+            ("Mark Remaining 'Absent'", lambda: GatewayResponse.STAGE_REMAINING_ABSENT)
         )
 
     if gateway_state.can_edit_existing:
-        options.append(("Edit existing statuses", GatewayResponse.EDIT_EXISTING))
+        options.append(
+            ("Edit Existing Statuses", lambda: GatewayResponse.EDIT_EXISTING)
+        )
 
     if gateway_state.can_apply_now:
-        options.append(("Apply staged changes now", GatewayResponse.APPLY_NOW))
+        options.append(("Apply Staged Changes Now", lambda: GatewayResponse.APPLY_NOW))
 
     options.append(
-        ("Clear all attendance data for this date", GatewayResponse.CLEAR_DATE)
+        ("Clear All Attendance Data For This Date", lambda: GatewayResponse.CLEAR_DATE)
     )
 
     return options
 
 
+# TODO: docstring
 def prompt_gateway_response(
     gateway_state: GatewayState,
 ) -> GatewayResponse:
@@ -1322,8 +1547,8 @@ def prompt_gateway_response(
     if menu_response is MenuSignal.EXIT:
         return GatewayResponse.CANCEL
 
-    elif isinstance(menu_response, GatewayResponse):
-        return menu_response
+    elif callable(menu_response):
+        return menu_response()
 
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
@@ -1420,6 +1645,7 @@ def reset_attendance_data(gradebook: Gradebook):
 # === finder methods ===
 
 
+# TODO: review and docstring
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     title = formatters.format_banner_text("Student Selection")
     options = [

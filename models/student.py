@@ -139,6 +139,10 @@ class Student:
 
     # --- attendance methods ---
 
+    @property
+    def attendance_records(self) -> dict[datetime.date, AttendanceStatus]:
+        return self._attendance.copy()
+
     def attendance_on(self, date: datetime.date) -> AttendanceStatus:
         return self._attendance.get(date, AttendanceStatus.UNMARKED)
 

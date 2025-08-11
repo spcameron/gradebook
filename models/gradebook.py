@@ -52,23 +52,23 @@ class Gradebook:
 
     @property
     def students(self) -> dict[str, Student]:
-        return self._students
+        return self._students.copy()
 
     @property
     def categories(self) -> dict[str, Category]:
-        return self._categories
+        return self._categories.copy()
 
     @property
     def assignments(self) -> dict[str, Assignment]:
-        return self._assignments
+        return self._assignments.copy()
 
     @property
     def submissions(self) -> dict[str, Submission]:
-        return self._submissions
+        return self._submissions.copy()
 
     @property
     def class_dates(self) -> set[datetime.date]:
-        return self._class_dates
+        return self._class_dates.copy()
 
     # --- metadata fields ---
 
@@ -3241,6 +3241,7 @@ class Gradebook:
                     - On success, a simple confirmation message.
                 - error (ErrorCode | str | None):
                     - `ErrorCode.NOT_FOUND` if the date is not in `gradebook.class_dates`.
+                    - `ErrorCode.VALIDATION_FAILED` if the call to `clear_roster_attendance_for_date()` fails to erase all data.
                     - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
                 - status_code (int | None):
                     - 200 on success
@@ -3251,7 +3252,6 @@ class Gradebook:
 
         Notes:
             - This method mutates `Gradebook` and `Student` states, and calls `_mark_dirty()` if successful.
-            - Attendance cleanup uses `student.clear_attendance` which does not raise on missing entries.
         """
         try:
             if class_date not in self.class_dates:
@@ -3298,7 +3298,8 @@ class Gradebook:
                     - On failure, a human-readable description of the error.
                     - On success, a simple confirmation message.
                 - error (ErrorCode | str | None):
-                    - `ErrorCode.INTERNAL_ERROR` if `class_dates` wasn't fully cleared
+                    - `ErrorCode.VALIDATION_FAILED` if some dates were not removed for `NOT_FOUND` or `VALIDATION_ERROR` error codes.
+                    - `ErrorCode.INTERNAL_ERROR` if `class_dates` wasn't fully cleared due to unexpected errors.
                 - status_code (int | None):
                     - 200 on success
                     - 400 on failure
@@ -3322,8 +3323,14 @@ class Gradebook:
                 if remove_response.success:
                     success.append(class_date)
 
-                else:
+                elif (
+                    remove_response.error == ErrorCode.NOT_FOUND
+                    or remove_response.error == ErrorCode.VALIDATION_FAILED
+                ):
                     failure.append(class_date)
+
+                else:
+                    return remove_response
 
         except Exception as e:
             return Response.fail(
@@ -3348,7 +3355,7 @@ class Gradebook:
             else:
                 return Response.fail(
                     detail="Not all class dates could be successfully removed from the gradebook.",
-                    error=ErrorCode.INTERNAL_ERROR,
+                    error=ErrorCode.VALIDATION_FAILED,
                     data={
                         "success": success,
                         "failure": failure,
@@ -3367,9 +3374,14 @@ class Gradebook:
                 },
             )
 
-        # TODO: defensive check that class_date in course schedule
-
         try:
+            if class_date not in self.class_dates:
+                return Response.fail(
+                    detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
+                    error=ErrorCode.NOT_FOUND,
+                    status_code=404,
+                )
+
             if student.id not in self.students:
                 return Response.fail(
                     detail=f"No matching student could be found: {student.full_name}",
@@ -3459,8 +3471,11 @@ class Gradebook:
                 if clear_data_response.success:
                     success.append(student)
 
-                else:
+                elif clear_data_response.error == ErrorCode.NOT_FOUND:
                     failure.append(student)
+
+                else:
+                    return clear_data_response
 
         except Exception as e:
             return Response.fail(
@@ -3485,16 +3500,44 @@ class Gradebook:
             else:
                 return Response.fail(
                     detail=f"Not all student attendance data on {formatters.format_class_date_short(class_date)} could be successfully erased from the gradebook.",
-                    error=ErrorCode.INTERNAL_ERROR,
+                    error=ErrorCode.VALIDATION_FAILED,
                     data={
                         "success": success,
                         "failure": failure,
                     },
                 )
 
-    # TODO:
+    # TODO: docstring
     def scrub_orphaned_attendance(self) -> Response:
         # scan students for any dates not in self.class_dates and clear them
+        try:
+            scrubbed_count = 0
+
+            for student in self.students.values():
+                for class_date in student.attendance_records.keys():
+                    if class_date not in self.class_dates:
+                        # operates directly becuase gradebook.clear_attendance_* presumes the date is in class_dates and returns no-op success if record is unmarked. direct access guarantees dict.pop(date, None) will be called.
+                        student.clear_attendance(class_date)
+                        scrubbed_count += 1
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            if scrubbed_count > 0:
+                self._mark_dirty()
+
+                return Response.succeed(
+                    detail=f"A total of {scrubbed_count} orphaned {'date' if scrubbed_count == 1 else 'dates'} successfully erased from student attendance records.",
+                )
+
+            else:
+                return Response.succeed(
+                    detail="No orphaned dates were found. No changes made."
+                )
 
     # === data validators ===
 

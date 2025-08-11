@@ -39,6 +39,16 @@ class AttendanceStager:
     def __init__(self):
         self._staged: dict[str, AttendanceStatus] = {}
 
+    @property
+    def status_map(self) -> dict[str, AttendanceStatus]:
+        """
+        Get a shallow copy of the staged changes.
+
+        Returns:
+            dict[str, AttendanceStatus]: A copy of the staging dictionary.
+        """
+        return self._staged.copy()
+
     def stage(self, student_id: str, status: AttendanceStatus) -> None:
         """
         Stage or replace a single attendance change.
@@ -84,6 +94,10 @@ class AttendanceStager:
         """Remove all staged changes."""
         self._staged.clear()
 
+    def revert_to_snapshot(self, snapshot: dict[str, AttendanceStatus]) -> None:
+        self._staged.clear()
+        self._staged.update(snapshot)
+
     def is_empty(self) -> bool:
         """
         Check whether the stager contains any staged changes.
@@ -92,15 +106,6 @@ class AttendanceStager:
             bool: True if no staged changes exist, False otherwise.
         """
         return not self._staged
-
-    def status_map(self) -> dict[str, AttendanceStatus]:
-        """
-        Get a shallow copy of the staged changes.
-
-        Returns:
-            dict[str, AttendanceStatus]: A copy of the staging dictionary.
-        """
-        return self._staged.copy()
 
     def pending(
         self,

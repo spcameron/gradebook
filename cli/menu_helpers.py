@@ -28,9 +28,13 @@ from models.types import RecordType
 
 
 class MenuSignal(Enum):
+    APPLY = "APPLY"
     CANCEL = "CANCEL"
     DEFAULT = "DEFAULT"
+    DISCARD = "DISCARD"
     EXIT = "EXIT"
+    KEEP = "KEEP"
+    SKIP = "SKIP"
 
 
 # === display methods ===
@@ -38,7 +42,7 @@ class MenuSignal(Enum):
 
 def display_menu(
     title: str,
-    options: list[tuple[str, Any]],
+    options: list[tuple[str, Callable[..., Any]]],
     zero_option: str = "Return",
 ) -> MenuSignal | Callable[..., Any]:
     """
@@ -343,8 +347,6 @@ def prompt_selection_from_list(
     if not list_data:
         print(f"\nThere are no {list_description.lower()}.")
         return
-
-    print(f"\nThere are {len(list_data)} {list_description.lower()}.")
 
     sorted_list = sorted(list_data, key=sort_key)
 

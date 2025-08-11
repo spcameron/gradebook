@@ -18,7 +18,6 @@ import json
 import os
 from typing import Any, Callable
 
-import cli.model_formatters as model_formatters
 import core.formatters as formatters
 from core.response import ErrorCode, Response
 from models.assignment import Assignment

@@ -8,7 +8,6 @@ as well as the Generate Reports menu and an option to save the gradebook.
 """
 
 import cli.menu_helpers as helpers
-import cli.model_formatters as model_formatters
 import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from cli.menus import (

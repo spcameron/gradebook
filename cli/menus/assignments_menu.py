@@ -16,8 +16,9 @@ Control flow adheres to structured CLI menu patterns with clear terminal-level f
 import datetime
 from typing import Callable, cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from core.utils import generate_uuid
 from models.assignment import Assignment
@@ -164,7 +165,7 @@ def preview_and_confirm_assignment(
         True if user confirms the `Assignment` details, and False otherwise.
     """
     print("\nYou are about to create the following assignment:")
-    print(formatters.format_assignment_multiline(assignment, gradebook))
+    print(model_formatters.format_assignment_multiline(assignment, gradebook))
 
     if helpers.confirm_action(
         "Would you like to edit this assignment first (change the name, points possible, due date, or linked category)?"
@@ -343,7 +344,7 @@ def edit_assignment(
         - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following assignment:")
-    print(formatters.format_assignment_multiline(assignment, gradebook))
+    print(model_formatters.format_assignment_multiline(assignment, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
@@ -617,7 +618,7 @@ def remove_assignment(assignment: Assignment, gradebook: Gradebook) -> None:
         - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
     print("\nYou are viewing the following assignment:")
-    print(formatters.format_assignment_oneline(assignment))
+    print(model_formatters.format_assignment_oneline(assignment))
 
     title = "What would you like to do?"
     options = [
@@ -664,7 +665,7 @@ def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> None:
     """
     helpers.caution_banner()
     print("You are about to permanently delete the following assignment:")
-    print(formatters.format_assignment_multiline(assignment, gradebook))
+    print(model_formatters.format_assignment_multiline(assignment, gradebook))
     print("\nThis will also delete all linked submissions.")
 
     confirm_deletion = helpers.confirm_action(
@@ -706,7 +707,7 @@ def confirm_and_archive(assignment: Assignment, gradebook: Gradebook) -> None:
         "\nArchiving an assignment is a safe way to deactivate an assignment without losing data."
     )
     print("\nYou are about to archive the following assignment:")
-    print(formatters.format_assignment_multiline(assignment, gradebook))
+    print(model_formatters.format_assignment_multiline(assignment, gradebook))
     print("\nThis will preserve all linked submissions,")
     print("but they will no longer appear in reports or grade calculations.")
 
@@ -745,7 +746,7 @@ def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> None
         return
 
     print("\nYou are about to reactivate the following assignment:")
-    print(formatters.format_assignment_multiline(assignment, gradebook))
+    print(model_formatters.format_assignment_multiline(assignment, gradebook))
 
     confirm_reactivate = helpers.confirm_action(
         "Are you sure you want to reactivate this assignment?"
@@ -823,12 +824,12 @@ def view_individual_assignment(gradebook: Gradebook) -> None:
     assignment = cast(Assignment, assignment)
 
     print("\nYou are viewing the following assignment:")
-    print(formatters.format_assignment_oneline(assignment))
+    print(model_formatters.format_assignment_oneline(assignment))
 
     if helpers.confirm_action(
         "Would you like to see an expanded view of this assignment?"
     ):
-        print(formatters.format_assignment_multiline(assignment, gradebook))
+        print(model_formatters.format_assignment_multiline(assignment, gradebook))
 
 
 def view_active_assignments(gradebook: Gradebook) -> None:
@@ -862,7 +863,7 @@ def view_active_assignments(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=active_assignments,
         sort_key=make_assignment_sort_key(gradebook),
-        formatter=formatters.format_assignment_oneline,
+        formatter=model_formatters.format_assignment_oneline,
     )
 
 
@@ -897,7 +898,7 @@ def view_inactive_assignments(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=inactive_assignments,
         sort_key=make_assignment_sort_key(gradebook),
-        formatter=formatters.format_assignment_oneline,
+        formatter=model_formatters.format_assignment_oneline,
     )
 
 
@@ -930,7 +931,7 @@ def view_all_assignments(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=all_assignments,
         sort_key=make_assignment_sort_key(gradebook),
-        formatter=formatters.format_assignment_oneline,
+        formatter=model_formatters.format_assignment_oneline,
     )
 
 

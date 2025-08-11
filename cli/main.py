@@ -10,8 +10,9 @@ import os
 from textwrap import dedent
 from typing import cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from cli.menus import course_menu
 from cli.path_utils import dir_is_empty, resolve_save_dir

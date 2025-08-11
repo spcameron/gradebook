@@ -15,9 +15,10 @@ Control flow adheres to structured CLI menu patterns with clear terminal-level f
 
 from typing import Callable, cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
 import cli.menus.weights_menu as weights_menu
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from core.utils import generate_uuid
 from models.category import Category
@@ -143,7 +144,7 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
         True if user confirms the `Category` details, and False otherwise.
     """
     print("\nYou are about to create the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
+    print(model_formatters.format_category_multiline(category, gradebook))
 
     if helpers.confirm_action(
         "Would you like to edit this category first (change the name or mark as archived)?"
@@ -246,7 +247,7 @@ def edit_category(
         - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
+    print(model_formatters.format_category_multiline(category, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
@@ -371,7 +372,7 @@ def remove_category(category: Category, gradebook: Gradebook) -> None:
         - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
     print("\nYou are viewing the following category:")
-    print(formatters.format_category_oneline(category))
+    print(model_formatters.format_category_oneline(category))
 
     title = "What would you like to do?"
     options = [
@@ -421,7 +422,7 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
     """
     helpers.caution_banner()
     print("You are about to permanently delete the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
+    print(model_formatters.format_category_multiline(category, gradebook))
     print("\nThis will also delete all linked assignments and submissions.")
 
     confirm_deletion = helpers.confirm_action(
@@ -463,7 +464,7 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
         "\nArchiving a category is a safe way to deactivate a category without losing data."
     )
     print("\nYou are about to archive the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
+    print(model_formatters.format_category_multiline(category, gradebook))
     print("\nThis will preserve all linked assignments and submissions,")
     print("but they will no longer appear in reports or grade calculations.")
 
@@ -502,7 +503,7 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
         return
 
     print("\nYou are about to reactivate the following category:")
-    print(formatters.format_category_multiline(category, gradebook))
+    print(model_formatters.format_category_multiline(category, gradebook))
 
     confirm_reactivate = helpers.confirm_action(
         "Are you sure you want to reactivate this category?"
@@ -580,12 +581,12 @@ def view_individual_category(gradebook: Gradebook) -> None:
     category = cast(Category, category)
 
     print("\nYou are viewing the following category:")
-    print(formatters.format_category_oneline(category))
+    print(model_formatters.format_category_oneline(category))
 
     if helpers.confirm_action(
         "Would you like to see an expanded view of this category?"
     ):
-        print(formatters.format_category_multiline(category, gradebook))
+        print(model_formatters.format_category_multiline(category, gradebook))
 
 
 def view_active_categories(gradebook: Gradebook) -> None:
@@ -619,7 +620,7 @@ def view_active_categories(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=active_categories,
         sort_key=lambda x: x.name,
-        formatter=formatters.format_category_oneline,
+        formatter=model_formatters.format_category_oneline,
     )
 
 
@@ -654,7 +655,7 @@ def view_inactive_categories(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=inactive_categories,
         sort_key=lambda x: x.name,
-        formatter=formatters.format_category_oneline,
+        formatter=model_formatters.format_category_oneline,
     )
 
 
@@ -687,7 +688,7 @@ def view_all_categories(gradebook: Gradebook) -> None:
     helpers.sort_and_display_records(
         records=all_categories,
         sort_key=lambda x: x.name,
-        formatter=formatters.format_category_oneline,
+        formatter=model_formatters.format_category_oneline,
     )
 
 

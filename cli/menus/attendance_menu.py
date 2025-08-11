@@ -18,8 +18,9 @@ from enum import Enum
 from textwrap import dedent
 from typing import Any, cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from core.attendance_stager import AttendanceStager
 from core.response import ErrorCode

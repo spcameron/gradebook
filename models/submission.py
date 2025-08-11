@@ -59,9 +59,7 @@ class Submission:
 
     @points_earned.setter
     def points_earned(self, points_earned: float) -> None:
-        if points_earned < 0:
-            raise ValueError("Points earned cannot be less than zero.")
-        self._points_earned = points_earned
+        self._points_earned = Submission.validate_points_input(points_earned)
 
     @property
     def is_late(self) -> bool:

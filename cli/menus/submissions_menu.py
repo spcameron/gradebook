@@ -15,8 +15,9 @@ Control flow adheres to traditional CLI menu patterns with clear terminal-level 
 
 from typing import Callable, cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from core.response import ErrorCode
 from core.utils import generate_uuid
@@ -179,7 +180,7 @@ def preview_and_confirm_submission(
         True if user confirms the `Submission` details, and False otherwise.
     """
     print("\nYou are about to create the following submission:")
-    print(formatters.format_submission_multiline(submission, gradebook))
+    print(model_formatters.format_submission_multiline(submission, gradebook))
 
     if helpers.confirm_action(
         "Would you like to edit this submission first (change the score, mark late, or mark exempt)?"
@@ -514,7 +515,7 @@ def edit_queued_submissions(
             break
 
         print(f"\nYou are viewing the following submission:")
-        print(formatters.format_submission_multiline(submission, gradebook))
+        print(model_formatters.format_submission_multiline(submission, gradebook))
 
         title = "What would you like to do with this submission?"
         options = [
@@ -641,14 +642,14 @@ def review_skipped_students(
             list_data=skipped_students,
             list_description="Skipped Students",
             sort_key=lambda x: (x.last_name, x.first_name),
-            formatter=formatters.format_student_oneline,
+            formatter=model_formatters.format_student_oneline,
         )
 
         if student is None:
             break
 
         print(f"\nYou are viewing the following student:")
-        print(formatters.format_student_oneline(student))
+        print(model_formatters.format_student_oneline(student))
 
         title = "What would you like to do with this student?"
         options = [
@@ -902,7 +903,7 @@ def edit_submission(
         - The `return_context` label is used to display a confirmation message when exiting the edit menu.
     """
     print("\nYou are editing the following submission:")
-    print(formatters.format_submission_multiline(submission, gradebook))
+    print(model_formatters.format_submission_multiline(submission, gradebook))
 
     title = formatters.format_banner_text("Editable Fields")
     options = get_editable_fields()
@@ -1070,7 +1071,7 @@ def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
         - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
     print(f"\nYou are viewing the following submission:")
-    print(formatters.format_submission_oneline(submission, gradebook))
+    print(model_formatters.format_submission_oneline(submission, gradebook))
 
     title = "What would you like to do?"
     options = [
@@ -1116,7 +1117,7 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
     """
     helpers.caution_banner()
     print("You are about to permanently delete the following submission:")
-    print(formatters.format_submission_multiline(submission, gradebook))
+    print(model_formatters.format_submission_multiline(submission, gradebook))
 
     confirm_deletion = helpers.confirm_action(
         "Are you sure you want to permanently delete this submission? This action cannot be undone."
@@ -1164,7 +1165,7 @@ def delete_queued_submission(
 
     helpers.caution_banner()
     print("You are about to permanently delete the following submission:")
-    print(formatters.format_submission_multiline(submission, gradebook))
+    print(model_formatters.format_submission_multiline(submission, gradebook))
 
     confirm_deletion = helpers.confirm_action(
         "Are you sure you want to permanently delete this submission? This action cannot be undone."
@@ -1238,12 +1239,12 @@ def view_individual_submission(gradebook: Gradebook) -> None:
     submission = cast(Submission, submission)
 
     print("\nYou are viewing the following submission:")
-    print(formatters.format_submission_oneline(submission, gradebook))
+    print(model_formatters.format_submission_oneline(submission, gradebook))
 
     if helpers.confirm_action(
         "Would you like to see an expanded view of this submission?"
     ):
-        print(formatters.format_submission_multiline(submission, gradebook))
+        print(model_formatters.format_submission_multiline(submission, gradebook))
 
 
 def view_submissions_by_assignment(gradebook: Gradebook) -> None:
@@ -1298,7 +1299,7 @@ def view_submissions_by_assignment(gradebook: Gradebook) -> None:
         submissions=submissions,
         gradebook=gradebook,
         sort_key=sort_key_student_name,
-        formatter=formatters.format_submission_oneline,
+        formatter=model_formatters.format_submission_oneline,
     )
 
 
@@ -1359,7 +1360,7 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
         submissions=submissions,
         gradebook=gradebook,
         sort_key=sort_key_assignment_due_date,
-        formatter=formatters.format_submission_oneline,
+        formatter=model_formatters.format_submission_oneline,
     )
 
 

@@ -21,8 +21,9 @@ state mutation (handled by the `Gradebook`) and user input/flow control (handled
 import math
 from typing import cast
 
-import cli.formatters as formatters
 import cli.menu_helpers as helpers
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menu_helpers import MenuSignal
 from models.category import Category
 from models.gradebook import Gradebook
@@ -161,7 +162,7 @@ def assign_weights(gradebook: Gradebook) -> bool:
     banner = formatters.format_banner_text("Current Category Weights")
     print(f"\n{banner}")
     for category in active_categories:
-        print(f"... {formatters.format_category_oneline(category)}")
+        print(f"... {model_formatters.format_category_oneline(category)}")
 
     if not helpers.confirm_action(
         "Would you like to remove these values and reassign weights for all categories?"
@@ -328,7 +329,7 @@ def view_current_weights(gradebook: Gradebook) -> None:
     print(f"\n{banner}")
 
     for category in active_categories:
-        print(formatters.format_category_oneline(category))
+        print(model_formatters.format_category_oneline(category))
 
 
 # complete
@@ -420,7 +421,7 @@ def validate_weights(gradebook: Gradebook) -> bool:
 
         print("\nThe following categories have a '0.0' weight.")
         for category in zero_weights:
-            print(formatters.format_category_oneline(category))
+            print(model_formatters.format_category_oneline(category))
 
     print("\nValidation check completed successfully.")
     return True
@@ -521,7 +522,7 @@ def handle_missing_weights(
 
     print("\nThe following active categories are missing assigned weights:")
     for category in categories_missing_weights:
-        print(formatters.format_category_oneline(category))
+        print(model_formatters.format_category_oneline(category))
     print("\nAll active categories must have a defined weight to proceed.")
 
     banner = "Resolving Missing Weights"

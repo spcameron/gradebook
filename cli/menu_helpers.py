@@ -18,7 +18,8 @@ from enum import Enum
 from re import A
 from typing import Any, Callable, Iterable
 
-import cli.formatters as formatters
+import cli.model_formatters as model_formatters
+import core.formatters as formatters
 from cli.menus.attendance_menu import GatewayState
 from core.response import Response
 from models.assignment import Assignment
@@ -453,7 +454,7 @@ def prompt_student_selection_from_search(
     return prompt_selection_from_search(
         search_results,
         lambda x: (x.last_name, x.first_name),
-        formatters.format_student_oneline,
+        model_formatters.format_student_oneline,
     )
 
 
@@ -464,7 +465,7 @@ def prompt_student_selection_from_list(
         list_data,
         list_description,
         lambda x: (x.last_name, x.first_name),
-        formatters.format_student_oneline,
+        model_formatters.format_student_oneline,
     )
 
 
@@ -566,7 +567,7 @@ def prompt_category_selection_from_search(
     search_results: list[Category],
 ) -> Category | None:
     return prompt_selection_from_search(
-        search_results, lambda x: x.name, formatters.format_category_oneline
+        search_results, lambda x: x.name, model_formatters.format_category_oneline
     )
 
 
@@ -577,7 +578,7 @@ def prompt_category_selection_from_list(
         list_data,
         list_description,
         lambda x: x.name,
-        formatters.format_category_oneline,
+        model_formatters.format_category_oneline,
     )
 
 
@@ -683,7 +684,7 @@ def prompt_assignment_selection_from_search(
     search_results: list[Assignment],
 ) -> Assignment | None:
     return prompt_selection_from_search(
-        search_results, lambda x: x.name, formatters.format_assignment_oneline
+        search_results, lambda x: x.name, model_formatters.format_assignment_oneline
     )
 
 
@@ -694,7 +695,7 @@ def prompt_assignment_selection_from_list(
         list_data,
         list_description,
         lambda x: (x.category_id, x.due_date_iso),
-        formatters.format_assignment_oneline,
+        model_formatters.format_assignment_oneline,
     )
 
 

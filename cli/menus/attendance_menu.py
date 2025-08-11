@@ -1150,9 +1150,9 @@ def record_attendance(gradebook: Gradebook) -> None:
                 ("Absent", lambda: AttendanceStatus.ABSENT),
                 ("Excused", lambda: AttendanceStatus.EXCUSED_ABSENCE),
                 ("Late", lambda: AttendanceStatus.LATE),
-                ("Skip This Student", MenuSignal.SKIP),
+                ("Skip this student", MenuSignal.SKIP),
             ]
-            zero_option = "Cancel and Stop Recording Attendance"
+            zero_option = "Cancel and stop recording attendance"
 
             while True:
                 menu_response = helpers.display_menu(title, options, zero_option)
@@ -1169,16 +1169,16 @@ def record_attendance(gradebook: Gradebook) -> None:
                     bail_title = "What would you like to do with these staged changes?"
                     bail_options = [
                         (
-                            "Apply These Changes Now and Return",
+                            "Apply these changes now and return",
                             lambda: MenuSignal.APPLY,
                         ),
                         (
-                            "Discard These Changes and Return",
+                            "Discard these changes and return",
                             lambda: MenuSignal.DISCARD,
                         ),
                         ("Keep These Changes and Return", lambda: MenuSignal.KEEP),
                     ]
-                    bail_zero_option = "Continue Recording Attendance"
+                    bail_zero_option = "Continue recording attendance"
 
                     bail_response = helpers.display_menu(
                         bail_title, bail_options, bail_zero_option
@@ -1346,10 +1346,10 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 title = "What would you like to do with these failed changes?"
                 options = [
-                    ("Retry Now", lambda: MenuSignal.APPLY),
-                    ("Discard and Return", lambda: MenuSignal.DISCARD),
+                    ("Retry now", lambda: MenuSignal.APPLY),
+                    ("Discard and return", lambda: MenuSignal.DISCARD),
                 ]
-                zero_option = "Do Nothing and Return"
+                zero_option = "Do nothing and return"
 
                 menu_response = helpers.display_menu(title, options, zero_option)
 
@@ -1576,13 +1576,13 @@ def record_attendance(gradebook: Gradebook) -> None:
 def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
     title = "\nSelect which date to record attendance for:"
     options = [
-        ("Enter the date manually", lambda: prompt_class_date_or_cancel()),
+        ("Enter a date manually", lambda: prompt_class_date_or_cancel()),
         (
             "Choose a date from the course schedule",
             lambda: prompt_class_date_from_schedule(gradebook),
         ),
     ]
-    zero_option = "Return and cancel recording attendance"
+    zero_option = "Return and cancel"
 
     while True:
         menu_response = helpers.display_menu(title, options, zero_option)
@@ -1635,32 +1635,32 @@ def build_gateway_options(
 
     if gateway_state.can_start_unmarked:
         options.append(
-            ("Start Recording Unmarked", lambda: GatewayResponse.START_UNMARKED)
+            ("Start recording unmarked", lambda: GatewayResponse.START_UNMARKED)
         )
 
     if gateway_state.can_mark_remaining_present:
         options.append(
             (
-                "Mark Remaining 'Present'",
+                "Mark remaining 'Present'",
                 lambda: GatewayResponse.STAGE_REMAINING_PRESENT,
             )
         )
 
     if gateway_state.can_mark_remaining_absent:
         options.append(
-            ("Mark Remaining 'Absent'", lambda: GatewayResponse.STAGE_REMAINING_ABSENT)
+            ("Mark remaining 'Absent'", lambda: GatewayResponse.STAGE_REMAINING_ABSENT)
         )
 
     if gateway_state.can_edit_existing:
         options.append(
-            ("Edit Existing Statuses", lambda: GatewayResponse.EDIT_EXISTING)
+            ("Edit existing statuses", lambda: GatewayResponse.EDIT_EXISTING)
         )
 
     if gateway_state.can_apply_now:
-        options.append(("Apply Staged Changes Now", lambda: GatewayResponse.APPLY_NOW))
+        options.append(("Apply staged changes now", lambda: GatewayResponse.APPLY_NOW))
 
     options.append(
-        ("Clear All Attendance Data For This Date", lambda: GatewayResponse.CLEAR_DATE)
+        ("Clear all attendance data for this date", lambda: GatewayResponse.CLEAR_DATE)
     )
 
     return options
@@ -1758,9 +1758,214 @@ def prompt_gateway_response(
 # === edit attendance ===
 
 
-# TODO:
-def edit_attendance(gradebook: Gradebook):
-    pass
+# complete
+def edit_attendance(gradebook: Gradebook) -> None:
+    """
+    Entry point for editing attendance records from the Manage Attendance menu.
+
+    Presents the user with two editing workflows:
+        1. Edit attendance by class date.
+        2. Edit attendance by student.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Raises:
+        RuntimeError: If the menu response type is unrecognized.
+
+    Notes:
+        - This function delegates to `edit_by_date()` or `edit_by_student()` depending on the user's selection.
+        - The loop continues until the user selects the zero option ("Return and cancel"), at which point control returns to the Manage Attendance menu.
+    """
+    title = "Choose either a date or a student to begin editing attendance:"
+    options = [
+        (
+            "Edit attendance by class date",
+            lambda: edit_by_date(class_date=None, gradebook=gradebook),
+        ),
+        (
+            "Edit attendance by student",
+            lambda: edit_by_student(student=None, gradebook=gradebook),
+        ),
+    ]
+    zero_option = "Return and cancel"
+
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response is MenuSignal.EXIT:
+            break
+
+        elif callable(menu_response):
+            menu_response()
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+    helpers.returning_to("Manage Attendance menu")
+
+
+# complete
+def edit_by_date(class_date: datetime.date | None, gradebook: Gradebook) -> None:
+    """
+    Edit attendance for a single class date.
+
+    If `class_date` is None, prompts the user to select a date (with support for off‑schedule dates per policy). Then repeatedly prompts for a `Student` and opens the edit flow for that student/date pair until the user cancels or declines to continue.
+
+    Args:
+        class_date (datetime.date | None): The class date to edit. When None, the user is prompted to choose a date first.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Student selection uses `prompt_find_student()`; selecting the zero option returns to the caller.
+        - Each student edit is delegated to `edit_attendance_record()`.
+        - After each edit, the user is asked whether to continue editing for the same date.
+    """
+    if class_date is None:
+        user_selection = prompt_find_class_date(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            return
+        class_date = cast(datetime.date, user_selection)
+
+    print("\nYou are editing attendance records for the following date:")
+    print(formatters.format_class_date_long(class_date))
+
+    while True:
+        user_selection = prompt_find_student(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            break
+        student = cast(Student, user_selection)
+
+        edit_attendance_record(student, class_date, gradebook)
+
+        if not helpers.confirm_action(
+            f"Would you like to keep editing attendance records for {formatters.format_class_date_short(class_date)}?"
+        ):
+            break
+
+
+# complete
+def edit_by_student(student: Student | None, gradebook: Gradebook) -> None:
+    """
+    Edit attendance for a single student.
+
+    If student is None, prompts the user to select a `Student`. Then repeatedly prompts for a class date (allowing off‑schedule dates per policy) and opens the edit flow for that student/date pair until the user cancels or declines to continue.
+
+    Args:
+        student (Student | None): The target `Student`. When None, the user is prompted to choose a student first.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Date selection uses `prompt_find_class_date()`; selecting the zero option returns to the caller.
+        - Each edit is delegated to `edit_attendance_record()`.
+        - After each edit, the user is asked whether to continue editing for the same student.
+    """
+    if student is None:
+        user_selection = prompt_find_student(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            return
+        student = cast(Student, user_selection)
+
+    print("\nYou are editing attendance records for the following student:")
+    print(model_formatters.format_student_oneline(student))
+
+    while True:
+        user_selection = prompt_find_class_date(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            break
+        class_date = cast(datetime.date, user_selection)
+
+        edit_attendance_record(student, class_date, gradebook)
+
+        if not helpers.confirm_action(
+            f"Would you like to keep editing attendance records for {student.full_name}?"
+        ):
+            break
+
+
+# complete
+def edit_attendance_record(
+    student: Student, class_date: datetime.date, gradebook: Gradebook
+) -> None:
+    """
+    Edit a single attendance record for a given student and class date.
+
+    Shows the current status, then prompts the user to mark Present, Absent, Excused, Late, or clear the record. Delegates the write to the `Gradebook`, displays the resulting message, and returns to the caller.
+
+    Args:
+        student (Student): The target `Student`.
+        class_date (datetime.date): The class date being edited.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Raises:
+        RuntimeError: If the menu response type is unrecognized.
+
+    Notes:
+        - The underlying Gradebook methods are expected to enforce policy (e.g., recording on off‑schedule dates is not allowed; clearing is allowed).
+        - On failure, a formatted error is displayed and no changes are made.
+        - No retry loop is performed here; the caller controls whether to continue editing.
+    """
+    print(
+        f"\n{student.full_name} is currently recorded as '{student.attendance_on(class_date).value}' on {formatters.format_class_date_long(class_date)}."
+    )
+
+    title = "How would you like to mark this student now?"
+    options = [
+        (
+            "Present",
+            lambda: gradebook.mark_student_attendance_for_date(
+                class_date, student, AttendanceStatus.PRESENT
+            ),
+        ),
+        (
+            "Absent",
+            lambda: gradebook.mark_student_attendance_for_date(
+                class_date, student, AttendanceStatus.ABSENT
+            ),
+        ),
+        (
+            "Excused",
+            lambda: gradebook.mark_student_attendance_for_date(
+                class_date, student, AttendanceStatus.EXCUSED_ABSENCE
+            ),
+        ),
+        (
+            "Late",
+            lambda: gradebook.mark_student_attendance_for_date(
+                class_date, student, AttendanceStatus.LATE
+            ),
+        ),
+        (
+            "Clear attendance record",
+            lambda: gradebook.clear_student_attendance_for_date(class_date, student),
+        ),
+    ]
+    zero_option = "Cancel editing and return"
+
+    menu_response = helpers.display_menu(title, options, zero_option)
+
+    if menu_response is MenuSignal.EXIT:
+        helpers.returning_without_changes()
+        return
+
+    elif callable(menu_response):
+        gradebook_response = menu_response()
+
+        if not gradebook_response.success:
+            helpers.display_response_failure(gradebook_response)
+            print(
+                f"\nCould not update the attendance record for {student.full_name} on {formatters.format_class_date_short(class_date)}. No changes made."
+            )
+            return
+
+        print(f"\n{gradebook_response.detail}")
+
+    else:
+        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
 # === view attendance ===
@@ -1787,20 +1992,125 @@ def reset_attendance_data(gradebook: Gradebook):
 # === finder methods ===
 
 
-# TODO: review and docstring
+# complete
+def prompt_find_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
+    """
+    Prompts the user to select a class date by manual entry or from the course schedule, with a retry loop.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Returns:
+        datetime.date | MenuSignal:
+            - A selected class date on success.
+            - `MenuSignal.CANCEL` if the user cancels or declines to retry after a failed attempt.
+
+    Raises:
+        RuntimeError: If an unexpected menu response type is returned.
+
+    Notes:
+        - Dates not in the course schedule are permitted for erase-only operations. The user is warned and can choose to continue or retry.
+        - This function enforces a single escape hatch (CANCEL) and a consistent retry pattern.
+    """
+    title = formatters.format_banner_text("Class Date Selection")
+    options = [
+        ("Enter a date manually", lambda: prompt_class_date_or_cancel()),
+        (
+            "Choose a date from the course schedule",
+            lambda: prompt_class_date_from_schedule(gradebook),
+        ),
+    ]
+    zero_option = "Return and cancel"
+
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            class_date = menu_response()
+
+            if class_date is MenuSignal.CANCEL:
+                print("\nClass date selection canceled.")
+
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
+
+                else:
+                    continue
+
+            if class_date not in gradebook.class_dates:
+                print("\nYou have selected a date not found in the course schedule.")
+                print(
+                    "You will be able to erase attendance data for this date, but you cannot record attendance data until it has been added to the course schedule."
+                )
+
+                if not helpers.confirm_action(
+                    "Would you like to continue with this off-schedule date?"
+                ):
+                    if not helpers.confirm_action(
+                        "Date discarded. Would you like to try choosing a date again?"
+                    ):
+                        return MenuSignal.CANCEL
+
+                    else:
+                        continue
+
+            return class_date
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+
+# complete
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
+    """
+    Prompts the user to locate a `Student` record by search or list selection, with a retry loop.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Returns:
+        Student | MenuSignal:
+            - The selected `Student` on success.
+            - `MenuSignal.CANCEL` if the user cancels or declines to retry after a failed attempt.
+
+    Raises:
+        RuntimeError: If the menu response is unrecognized.
+
+    Notes:
+        - Offers search, active list, and inactive list as selection methods.
+        - Assumes each helper return either a `Student` or `MenuSignal.CANCEL`.
+        - Returns early if the user chooses to cancel or no selection is made.
+    """
     title = formatters.format_banner_text("Student Selection")
     options = [
         ("Search for a student", helpers.find_student_by_search),
         ("Select from active students", helpers.find_active_student_from_list),
+        ("Select from inactive students", helpers.find_inactive_student_from_list),
     ]
     zero_option = "Return and cancel"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-    elif callable(menu_response):
-        return menu_response(gradebook)
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            student = menu_response(gradebook)
+
+            if student is MenuSignal.CANCEL:
+                print("\nStudent selection canceled.")
+
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
+
+                else:
+                    continue
+
+            return student
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

@@ -3462,18 +3462,6 @@ class Gradebook:
                     },
                 )
 
-    # def mark_student_present(self, student: Student) -> Response:
-    #     pass
-    #
-    # def mark_student_absent(self, student: Student) -> Response:
-    #     pass
-    #
-    # def mark_student_excused(self, student: Student) -> Response:
-    #     pass
-    #
-    # def mark_student_late(self, student: Student) -> Response:
-    #     pass
-
     # TODO: doc string
     def clear_student_attendance_for_date(
         self, class_date: datetime.date, student: Student
@@ -3571,7 +3559,7 @@ class Gradebook:
             for student in self.students.values():
                 for class_date in student.attendance_records.keys():
                     if class_date not in self.class_dates:
-                        # operates directly becuase gradebook.clear_attendance_* presumes the date is in class_dates and returns no-op success if record is unmarked. direct access guarantees dict.pop(date, None) will be called.
+                        # operates directly because gradebook.clear_attendance_* presumes the date is in class_dates and returns no-op success if record is unmarked. direct access guarantees dict.pop(date, None) will be called.
                         student.clear_attendance(class_date)
                         scrubbed_count += 1
 

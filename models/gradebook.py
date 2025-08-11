@@ -3407,6 +3407,61 @@ class Gradebook:
                 },
             )
 
+    # TODO: docstring
+    def batch_mark_student_attendance_for_date(
+        self,
+        class_date: datetime.date,
+        staged_changes: list[tuple[str, AttendanceStatus]],
+    ) -> Response:
+        success = []
+        failure = []
+
+        try:
+            for student_id, status in staged_changes:
+                student_response = self.find_student_by_uuid(student_id)
+
+                if not student_response.success:
+                    failure.append((student_id, status))
+                    continue
+
+                student = student_response.data["record"]
+
+                mark_response = self.mark_student_attendance_for_date(
+                    class_date, student, status
+                )
+
+                if not mark_response.success:
+                    failure.append((student_id, status))
+                    continue
+
+                success.append((student_id, status))
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+            )
+
+        else:
+            if len(success) == len(staged_changes):
+                return Response.succeed(
+                    detail="All staged changes successfully added to the gradebook.",
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+            else:
+                return Response.fail(
+                    detail="Not all staged changes could be successfully added to the gradebook.",
+                    error=ErrorCode.VALIDATION_FAILED,
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
     # def mark_student_present(self, student: Student) -> Response:
     #     pass
     #

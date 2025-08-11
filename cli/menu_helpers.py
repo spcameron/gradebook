@@ -13,7 +13,9 @@ These functions are shared across all menu modules to maintain consistent behavi
 """
 
 import datetime
+from collections import Counter
 from enum import Enum
+from re import A
 from typing import Any, Callable, Iterable
 
 import cli.formatters as formatters
@@ -22,7 +24,7 @@ from core.response import Response
 from models.assignment import Assignment
 from models.category import Category
 from models.gradebook import Gradebook
-from models.student import Student
+from models.student import AttendanceStatus, Student
 from models.submission import Submission
 from models.types import RecordType
 
@@ -243,6 +245,14 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
 
         if student is not None:
             print(f"... {student.full_name:<20} | {status}")
+
+
+def display_attendance_buckets(mappings: list[tuple[str, AttendanceStatus]]) -> None:
+    counts = Counter(item[1] for item in mappings)
+
+    parts = [f"{status.value}: {counts.get(status, 0)}" for status in AttendanceStatus]
+
+    print(f"[ {' | '.join(f'{part:<15}' for part in parts)} ]")
 
 
 # TODO:

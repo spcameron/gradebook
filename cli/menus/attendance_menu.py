@@ -1191,7 +1191,7 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                         match bail_signal:
                             case MenuSignal.APPLY:
-                                apply_now()
+                                apply_now(state.class_date)
                                 return
                             case MenuSignal.DISCARD:
                                 stager.revert_to_snapshot(snapshot)
@@ -1220,7 +1220,7 @@ def record_attendance(gradebook: Gradebook) -> None:
             print("These changes are not immediately applied to the gradebook.")
 
             if helpers.confirm_action("Would you like to apply these changes now?"):
-                apply_now()
+                apply_now(state.class_date)
                 return
 
             else:
@@ -1229,8 +1229,176 @@ def record_attendance(gradebook: Gradebook) -> None:
                 )
                 return
 
+    # TODO: docstring
+    def stage_remaining(status: AttendanceStatus, state: GatewayState) -> None:
+        target_ids = state.unmarked_ids
+
+        stager.bulk_stage(
+            student_ids=target_ids,
+            status=status,
+            overwrite=True,
+        )
+
+        staged_count = len(target_ids)
+
+        if staged_count > 0:
+            print(
+                f"\nStaged {staged_count} {'student' if staged_count == 1 else 'students'} as '{status.value}' on {state.date_label_short}."
+            )
+            print("These changes are not immediately applied to the gradebook.")
+
+            if helpers.confirm_action("Would you like to apply these changes now?"):
+                apply_now(state.class_date)
+                return
+
+            else:
+                print(
+                    "You may apply these changes later by selecting 'Apply Staged Changes Now' from the Record Attendance menu."
+                )
+                return
+
+    # TODO: docstring
+    def apply_now(date: datetime.date) -> None:
+        nonlocal should_display_gateway
+
+        prev_failed_count = -1
+
+        while True:
+            state = refresh_state(date)
+
+            if state is None:
+                print("Failed to refresh the roster or gradebook state.")
+                helpers.returning_without_changes()
+                return
+
+            changes = stager.pending(
+                active_ids=state.active_ids,
+                gradebook_status_map=state.gradebook_map,
+            )
+
+            if not changes:
+                print(
+                    f"There are no staged changes to apply for {state.date_label_short}."
+                )
+                helpers.returning_without_changes()
+                return
+
+            gradebook_response = gradebook.batch_mark_student_attendance_for_date(
+                date, changes
+            )
+
+            if (
+                not gradebook_response.success
+                and gradebook_response.error == ErrorCode.INTERNAL_ERROR
+            ):
+                helpers.display_response_failure(gradebook_response)
+                print(
+                    "\nFailed to apply staged changes. Returning to Record Attendance menu with all staged changes."
+                )
+                return
+
+            success = gradebook_response.data["success"]
+            failure = gradebook_response.data["failure"]
+
+            if len(failure) == prev_failed_count:
+                print(
+                    f"Unable to resolve any of the failed change attempts. Clearing {len(failure)} staged {'change' if len(failure) == 1 else 'changes'} and returning."
+                )
+
+                stager.clear()
+                return
+
+            if success:
+                print("\nThe following changes were successfully applied:")
+                helpers.display_attendance_buckets(success)
+
+                for student_id, _ in success:
+                    stager.unstage(student_id)
+
+            if failure:
+                prev_failed_count = len(failure)
+
+                print("\nThe following changes could not be applied:")
+                helpers.display_attendance_buckets(failure)
+
+                if helpers.confirm_action(
+                    "Would you like to view the failed changes individually?"
+                ):
+                    print(
+                        "\nThe following staged changes could not be applied to the gradebook:"
+                    )
+
+                    for student_id, status in failure:
+                        student_response = gradebook.find_student_by_uuid(student_id)
+
+                        student = (
+                            student_response.data["record"]
+                            if student_response.success
+                            else None
+                        )
+
+                        student_name = (
+                            student.full_name if student else "[MISSING STUDENT]"
+                        )
+
+                        print(f"... {student_name:<20} | {status.value}")
+
+                title = "What would you like to do with these failed changes?"
+                options = [
+                    ("Retry Now", lambda: MenuSignal.APPLY),
+                    ("Discard and Return", lambda: MenuSignal.DISCARD),
+                ]
+                zero_option = "Do Nothing and Return"
+
+                menu_response = helpers.display_menu(title, options, zero_option)
+
+                if menu_response is MenuSignal.EXIT:
+                    print(
+                        "\nPreserving failed staged changes and returning to Record Attendance menu."
+                    )
+                    return
+
+                elif callable(menu_response):
+                    match menu_response():
+                        case MenuSignal.APPLY:
+                            print("\nAttempting to resolve the failed staged changes.")
+                            continue
+
+                        case MenuSignal.DISCARD:
+                            print(
+                                "\nDiscarding failed staged changes and returning to Record Attendance menu."
+                            )
+
+                            stager.clear()
+                            return
+
+                        case _:
+                            raise RuntimeError(
+                                f"Unexpected MenuResponse received: {menu_response}"
+                            )
+
+                else:
+                    raise RuntimeError(
+                        f"Unexpected MenuResponse received: {menu_response}"
+                    )
+
+            break
+
+        if helpers.confirm_action(
+            f"Are you finished recording attendance for {state.date_label_short}?"
+        ):
+            should_display_gateway = False
+
     # TODO:
-    def apply_now() -> None:
+    def edit_existing() -> None:
+        pass
+
+    # TODO:
+    def clear_date() -> None:
+        pass
+
+    # TODO:
+    def exit_gateway() -> None:
         pass
 
     # resolve class date
@@ -1245,6 +1413,9 @@ def record_attendance(gradebook: Gradebook) -> None:
 
     # initiate stager object
     stager = AttendanceStager()
+
+    # flag for terminating loop
+    should_display_gateway = True
 
     # main loop
 
@@ -1268,7 +1439,7 @@ def record_attendance(gradebook: Gradebook) -> None:
         - CANCEL -> if no staging, returning_without_changes() and exit; if staging, offer the three-way Apply now (apply & exit) / Discard (clear stager & exit) / Return (back to step 1)
     """
 
-    while True:
+    while should_display_gateway:
         gateway_state = refresh_state(class_date)
 
         if gateway_state is None:
@@ -1295,7 +1466,6 @@ def record_attendance(gradebook: Gradebook) -> None:
                 start_unmarked(gateway_state)
                 continue
 
-            # TODO: review, docstring, probably extract generalized version
             case GatewayResponse.STAGE_REMAINING_PRESENT:
                 """
                 goal: bulk stage Present for unmarked students
@@ -1306,45 +1476,16 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 continue
                 """
-                target_ids = gateway_state.unmarked_ids
 
-                stager.bulk_stage(
-                    student_ids=target_ids,
-                    status=AttendanceStatus.PRESENT,
-                    overwrite=True,
-                )
-
-                count = len(target_ids)
-
-                print(
-                    f"\nStaged {count} {'student' if count == 1 else 'students'} as 'Present'."
-                )
-
-                # helpers.staged_changes_warning()
-
+                stage_remaining(AttendanceStatus.PRESENT, gateway_state)
                 continue
 
-            # TODO: review, docstring, probably extract generalized version
             case GatewayResponse.STAGE_REMAINING_ABSENT:
                 """
                 Identical to above but ABSENT
                 """
-                target_ids = gateway_state.unmarked_ids
 
-                stager.bulk_stage(
-                    student_ids=target_ids,
-                    status=AttendanceStatus.ABSENT,
-                    overwrite=True,
-                )
-
-                count = len(target_ids)
-
-                print(
-                    f"\nStaged {count} {'student' if count == 1 else 'students'} as 'Absent'."
-                )
-
-                # helpers.staged_changes_warning()
-
+                stage_remaining(AttendanceStatus.ABSENT, gateway_state)
                 continue
 
             # TODO:
@@ -1365,7 +1506,6 @@ def record_attendance(gradebook: Gradebook) -> None:
                 """
                 pass
 
-            # TODO:
             case GatewayResponse.APPLY_NOW:
                 """
                 goal: commit what's staged, then exit
@@ -1388,7 +1528,8 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 5. helpers.returning_to() and exit orchestrator
                 """
-                pass
+                apply_now(gateway_state.class_date)
+                continue
 
             # TODO:
             case GatewayResponse.CLEAR_DATE:

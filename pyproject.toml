@@ -7,3 +7,19 @@ requires-python = ">=3.13"
 dependencies = [
     "pytest>=8.4.1",
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E203", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "models", "cli"]
+combine-as-imports = true

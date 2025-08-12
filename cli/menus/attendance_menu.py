@@ -1128,7 +1128,7 @@ def prompt_no_class_dates() -> list[datetime.date]:
                 return []
 
         else:
-            print(f"\nYou have marked the following dates as 'No Class' dates:")
+            print("\nYou have marked the following dates as 'No Class' dates:")
             helpers.sort_and_display_course_dates(no_class_dates, "'No Class' Dates")
 
         if helpers.confirm_action(
@@ -1221,7 +1221,7 @@ def record_attendance(gradebook: Gradebook) -> None:
 
         if not attendance_response.success:
             helpers.display_response_failure(attendance_response)
-            print(f"\nUnable to retrieve attendance data.")
+            print("\nUnable to retrieve attendance data.")
             helpers.returning_without_changes()
             return
 
@@ -2550,7 +2550,7 @@ def reset_all_attendance_data(gradebook: Gradebook) -> None:
 
     if not clear_response.success:
         helpers.display_response_failure(clear_response)
-        print(f"\nCould not completely clear all attendance data in the gradebook.")
+        print("\nCould not completely clear all attendance data in the gradebook.")
         return
 
     print(f"\n{clear_response.detail}")

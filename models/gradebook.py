@@ -3794,7 +3794,7 @@ class Gradebook:
         else:
             if len(failure) > 0:
                 return Response.fail(
-                    detail=f"Not all attendance data could be successfully erased from the gradebook.",
+                    detail="Not all attendance data could be successfully erased from the gradebook.",
                     error=ErrorCode.VALIDATION_FAILED,
                     data={
                         "success": success,
@@ -3932,7 +3932,7 @@ class Gradebook:
             for s in self.submissions.values()
         ):
             raise ValueError(
-                f"A submission the same linked student and assignment already exists."
+                "A submission the same linked student and assignment already exists."
             )
 
     def require_unique_class_date(self, class_date: datetime.date) -> None:
@@ -3947,7 +3947,7 @@ class Gradebook:
         """
         if class_date in self.class_dates:
             raise ValueError(
-                f"This class date is already found in the course schedule."
+                "This class date is already found in the course schedule."
             )
 
     # TODO: create secondary submissions index with (s_id, a_id) tuple as key

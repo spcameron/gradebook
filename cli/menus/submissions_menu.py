@@ -514,7 +514,7 @@ def edit_queued_submissions(
         if submission is None:
             break
 
-        print(f"\nYou are viewing the following submission:")
+        print("\nYou are viewing the following submission:")
         print(model_formatters.format_submission_multiline(submission, gradebook))
 
         title = "What would you like to do with this submission?"
@@ -648,7 +648,7 @@ def review_skipped_students(
         if student is None:
             break
 
-        print(f"\nYou are viewing the following student:")
+        print("\nYou are viewing the following student:")
         print(model_formatters.format_student_oneline(student))
 
         title = "What would you like to do with this student?"
@@ -1070,7 +1070,7 @@ def remove_submission(submission: Submission, gradebook: Gradebook) -> None:
         - All remove and edit operations are dispatched the `Gradebook` to ensure proper mutation and state tracking.
         - Changes are not saved automatically. If the gradebook is marked dirty, the user will be prompted to save before returning to the previous menu.
     """
-    print(f"\nYou are viewing the following submission:")
+    print("\nYou are viewing the following submission:")
     print(model_formatters.format_submission_oneline(submission, gradebook))
 
     title = "What would you like to do?"
@@ -1292,7 +1292,7 @@ def view_submissions_by_assignment(gradebook: Gradebook) -> None:
     submissions = submissions_response.data["records"]
 
     if not submissions:
-        print(f"There are no submissions linked to this assignment yet.")
+        print("There are no submissions linked to this assignment yet.")
         return
 
     helpers.sort_and_display_submissions(
@@ -1353,7 +1353,7 @@ def view_submissions_by_student(gradebook: Gradebook) -> None:
     submissions = submissions_response.data["records"]
 
     if not submissions:
-        print(f"There are no submissions linked to this student yet.")
+        print("There are no submissions linked to this student yet.")
         return
 
     helpers.sort_and_display_submissions(

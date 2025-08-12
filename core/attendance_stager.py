@@ -18,7 +18,6 @@ The stager supports:
     - Calculating an overlay of staged + Gradebook values for preview purposes
 """
 
-from collections import Counter
 from collections.abc import Collection
 
 from models.student import AttendanceStatus

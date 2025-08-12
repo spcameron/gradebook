@@ -32,7 +32,7 @@ def test_assignment_from_dict():
     assert assignment.name == "test_assignment"
     assert assignment.category_id == "c001"
     assert assignment.points_possible == 50.0
-    assert assignment.is_extra_credit == False
+    assert not assignment.is_extra_credit
     assert assignment.due_date_iso == "1987-06-21T23:59:00"
 
 

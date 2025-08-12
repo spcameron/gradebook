@@ -10,7 +10,7 @@ def test_student_to_dict(sample_student):
     assert data["first_name"] == "Sean"
     assert data["last_name"] == "Cameron"
     assert data["email"] == "scameron@mmm.edu"
-    assert data["active"] == True
+    assert data["active"]
 
 
 def test_student_from_dict():

@@ -8,8 +8,8 @@ def test_unweighted_category_to_dict(sample_unweighted_category):
 
     assert data["id"] == "c001"
     assert data["name"] == "test_category"
-    assert data["weight"] == None
-    assert data["active"] == True
+    assert data["weight"] is None
+    assert data["active"]
 
 
 def test_weighted_category_to_dict(sample_weighted_category):
@@ -18,7 +18,7 @@ def test_weighted_category_to_dict(sample_weighted_category):
     assert data["id"] == "c002"
     assert data["name"] == "test_category"
     assert data["weight"] == 100.0
-    assert data["active"] == True
+    assert data["active"]
 
 
 def test_unweighted_category_from_dict():

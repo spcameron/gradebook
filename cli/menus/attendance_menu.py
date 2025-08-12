@@ -1,11 +1,62 @@
 # cli/attendance_menu.py
 
-# TODO: update file docstring
 """
 Manage Attendance menu for the Gradebook CLI.
 
-Provides functions for entering & editing the class schedule; recording & editing attendance;
-displaying attendance by date or by student; and resetting attendance data.
+Summary:
+- Provides interactive workflows to record, edit, view, and reset attendance for a selected class date.
+- Includes a schedule manager to view, add, remove, clear, and generate recurring class dates.
+- Separates UI/staging from persistence: gradebook writes occur only in explicit commit paths.
+
+Key concepts:
+- AttendanceStager: in-memory diff layer for per-student status changes prior to commit.
+- GatewayState: immutable snapshot of the active roster, gradebook map, staged map, preview map, counts, and flags.
+- Gateway loop: rebuild state → render options → dispatch action → repeat until exit.
+
+Main entry points:
+- run(gradebook): top-level Manage Attendance loop; always prompts to save on exit.
+- record_attendance(gradebook): orchestrates the gateway for a single date with staging and apply/clear/edit flows.
+- manage_class_schedule(gradebook): submenu to view and mutate the course schedule, including a recurring schedule generator.
+
+Record Attendance actions (GatewayResponse):
+- START_UNMARKED: walk unmarked students, stage Present/Absent/Excused/Late (skip and cancel supported).
+- STAGE_REMAINING_PRESENT / STAGE_REMAINING_ABSENT: bulk-stage remaining unmarked students.
+- EDIT_EXISTING: resolve any staging, then enter immediate-write edit flow for existing marks.
+- APPLY_NOW: compute diff-only payload and commit via batch API with retry/keep/discard for failures.
+- CLEAR_DATE: clear all gradebook marks for the date (active and inactive); staging can be preserved or discarded; optional apply-now.
+- CANCEL: resolve staged work (apply/discard/cancel) and exit the gateway.
+
+Schedule tools:
+- view_current_schedule: read-only monthly view of class dates.
+- add_class_date / remove_class_date / confirm_and_clear_schedule: single-date and bulk destructive operations with confirmations.
+- generate_recurring_schedule: wizard to build dates over a start–end range by weekdays, with optional “No Class” exceptions and preview.
+- populate_candidate_schedule: inclusive range generator using ISO weekday numbers (0=Mon … 6=Sun).
+- preview_and_confirm_course_schedule: interactive add/remove adjustments before batch add.
+
+Input helpers:
+- resolve_class_date: choose a date by manual entry or from the schedule; can add missing dates with confirmation.
+- prompt_class_date_or_cancel: strict YYYY-MM-DD input parsed via date.fromisoformat; blank cancels.
+- prompt_class_date_from_schedule: pick from scheduled dates with an optional “[ATTENDANCE TAKEN]” badge (all active students marked).
+- prompt_start_and_end_dates / prompt_weekdays_or_cancel / prompt_no_class_dates: data entry steps used by the recurring generator.
+
+Guarantees and policies:
+- Gradebook mutations occur only in APPLY_NOW, edit-by-date (via EDIT_EXISTING), schedule add/remove/clear, and recurring batch add.
+- Destructive actions are confirmation-gated; staging is never implicitly committed or discarded.
+- Staged changes persist across gateway passes until explicitly applied or cleared.
+- Counts, badges, and option gating derive from GatewayState; inactive students are excluded from maps and counts.
+
+Cancellation and errors:
+- User cancel paths return cleanly to the prior menu; staged changes are preserved unless explicitly discarded.
+- Response failures from gradebook queries/commands display feedback and abort the current operation without partial, silent writes.
+- KeyboardInterrupt/EOFError bubble to the caller by design; the parent menu handles unsaved-change prompts.
+
+Side effects:
+- Writes prompts and summaries to stdout; adheres to a consistent “returning to …” messaging pattern on exits.
+- The top-level Manage Attendance loop enforces a save-check on exit; some flows may prompt to save immediately after batch operations.
+
+Module dependencies:
+- Uses `helpers` for menus, prompts, display, and standard banners; uses `formatters` for date labels.
+- Relies on Gradebook batch/single operations and Response contracts for success/failure signaling.
 """
 
 from __future__ import annotations
@@ -16,7 +67,7 @@ from collections import Counter
 from collections.abc import Callable
 from enum import Enum
 from textwrap import dedent
-from typing import Any, cast
+from typing import cast
 
 import cli.menu_helpers as helpers
 import cli.model_formatters as model_formatters
@@ -30,7 +81,6 @@ from models.student import AttendanceStatus, Student
 
 class GatewayResponse(str, Enum):
     START_UNMARKED = "START_UNMARKED"
-    # STAGE_ALL_PRESENT = "STAGE_ALL_PRESENT"
     STAGE_REMAINING_PRESENT = "STAGE_REMAINING_PRESENT"
     STAGE_REMAINING_ABSENT = "STAGE_REMAINING_ABSENT"
     EDIT_EXISTING = "EDIT_EXISTING"
@@ -41,15 +91,45 @@ class GatewayResponse(str, Enum):
 
 class GatewayState:
     """
-    Immutable snapshot for the Record Attendance gateway screen.
+    Immutable, read-only snapshot for the Record Attendance gateway screen.
 
-    Build from:
-    - class_date (datetime.date): date being recorded
-    - active_roster (list[Student]): today's active students (objects for names/sorting)
-    - gradebook_status_map (dict[str, AttendanceStatus]): Gradebook truth for the given date
-    - staged_status_map (dict[str, AttendanceStatus]): Session staging
+    This object is built once per render and exposes a consistent view of:
+    - the selected class date,
+    - the active roster (order: last name, first name),
+    - the gradebook's current statuses for that date (active students only),
+    - the session's staged changes (active students only, diffs vs. gradebook),
+    - the effective preview after overlaying staged diffs on the gradebook view,
+    - counts and convenience flags for menu gating.
 
-    All derived fields (preview counts, flags, samples) are computed once at init.
+    Args:
+        class_date (datetime.date): The date being recorded.
+        active_roster (list[Student]): Active students for the date. Used for names, sorting, and ID indexing.
+        gradebook_status_map (dict[str, AttendanceStatus]): The gradebook’s truth for the date (may include non‑active IDs).
+        staged_status_map (dict[str, AttendanceStatus]): Per‑session staging (may include non‑active IDs and no‑ops).
+
+    Derived attributes (all filtered to active students):
+        - gradebook_map (dict[str, AttendanceStatus]): Current gradebook statuses.
+        - staged_map (dict[str, AttendanceStatus]): Only entries that differ from `gradebook_map`.
+        - effective_map (dict[str, AttendanceStatus]): `gradebook_map` overlaid with `staged_map`.
+            - Iteration order follows the sorted active roster (last name, first name).
+        - gradebook_counts (dict[AttendanceStatus, int]): Counts by status in `gradebook_map`.
+        - staged_counts (dict[AttendanceStatus, int]): Counts by status in `staged_map`.
+        - effective_counts (dict[AttendanceStatus, int]): Counts by status in `effective_map`.
+        - unmarked_ids (list[str]): Active student IDs whose effective status is `UNMARKED` (sorted by name).
+        - unmarked_count (int): Length of `unmarked_ids`.
+
+    Flags:
+        - is_complete_preview (bool): True if no effective statuses are `UNMARKED`.
+        - has_staging (bool): True if at least one staged diff exists.
+        - can_apply_now (bool): Alias for `has_staging`.
+        - can_start_unmarked (bool): True if any `UNMARKED` remain.
+        - can_mark_remaining_present/absent (bool): True if any `UNMARKED` remain.
+        - can_edit_existing (bool): True if any active student has a non‑`UNMARKED` status in the gradebook.
+
+    Notes:
+        - Missing entries in inputs are treated as `UNMARKED`.
+        - Inactive students are excluded from maps, counts, and samples.
+        - External immutability is enforced by returning defensive copies from accessors.
     """
 
     def __init__(
@@ -115,21 +195,6 @@ class GatewayState:
             if status == AttendanceStatus.UNMARKED
         }
 
-        # sample_names = []
-        #
-        # for student_id in sorted(
-        #     unmarked_ids,
-        #     key=lambda x: (roster_by_id[x].last_name, roster_by_id[x].first_name),
-        # ):
-        #     sample_names.append(
-        #         f"{roster_by_id[student_id].last_name}, {roster_by_id[student_id].first_name}"
-        #     )
-        #
-        #     if len(sample_names) >= 10:
-        #         break
-        #
-        # sample_remaining = max(0, len(unmarked_ids) - len(sample_names))
-
         # --- store frozen snapshot ---
         self._active_roster_by_id: dict[str, Student] = roster_by_id
 
@@ -150,8 +215,6 @@ class GatewayState:
             key=lambda x: (roster_by_id[x].last_name, roster_by_id[x].first_name),
         )
         self._unmarked_count: int = len(unmarked_ids)
-        # self._unmarked_sample_names: list[str] = sample_names
-        # self._unmarked_sample_remaining: int = sample_remaining
 
         self._is_complete_preview: bool = self._unmarked_count == 0
         self._has_staging: bool = bool(staged_map_filtered)
@@ -251,14 +314,6 @@ class GatewayState:
     def unmarked_count(self) -> int:
         return self._unmarked_count
 
-    # @property
-    # def unmarked_sample_names(self) -> list[str]:
-    #     return self._unmarked_sample_names
-    #
-    # @property
-    # def unmarked_sample_remaining(self) -> int:
-    #     return self._unmarked_sample_remaining
-
     # --- statuses ---
 
     @property
@@ -342,7 +397,7 @@ def run(gradebook: Gradebook) -> None:
 
 def manage_class_schedule(gradebook: Gradebook):
     """
-    Interactive submenu for managing the course's class schedule.
+    Interactive sub-menu for managing the course's class schedule.
 
     Args:
         gradebook (Gradebook): The active `Gradebook`.
@@ -358,7 +413,6 @@ def manage_class_schedule(gradebook: Gradebook):
     options = [
         ("View Current Schedule", view_current_schedule),
         ("Add a Class Date", add_class_date),
-        ("Remove a Class Date", remove_class_date),
         ("Clear Entire Schedule", confirm_and_clear_schedule),
         ("Generate a Recurring Schedule", generate_recurring_schedule),
     ]
@@ -379,14 +433,18 @@ def manage_class_schedule(gradebook: Gradebook):
 
 def view_current_schedule(gradebook: Gradebook) -> None:
     """
-    Displays the current class schedule, sorted and grouped by month.
+    Displays the current course schedule in a read-only, month-grouped view.
+
+    This is a thin pass-through to `helpers.sort_and_display_course_dates`, which:
+        - Prints a banner heading.
+        - Groups dates by month/year and sorts them ascending.
+        - Shows a "No dates to display" message if the schedule is empty.
 
     Args:
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
-        - Delegates to `sort_and_display_course_dates()` to render the schedule.
-        - If no class dates exist, a message will be shown instead.
+        - Writes the formatted schedule (or empty message) to stdout.
     """
     helpers.sort_and_display_course_dates(gradebook.class_dates, "Course Schedule")
 
@@ -404,21 +462,21 @@ def add_class_date(gradebook: Gradebook) -> None:
         - After each addition, the user is prompted to continue or return to the Manage Class Schedule menu.
     """
     while True:
-        new_date = prompt_class_date_or_cancel()
+        user_input = prompt_class_date_or_cancel()
 
-        if new_date is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             break
-        new_date = cast(datetime.date, new_date)
+
+        new_date = cast(datetime.date, user_input)
 
         if preview_and_confirm_class_date(new_date):
-            gradebook_response = gradebook.add_class_date(new_date)
+            add_response = gradebook.add_class_date(new_date)
 
-            if not gradebook_response.success:
-                helpers.display_response_failure(gradebook_response)
+            if not add_response.success:
+                helpers.display_response_failure(add_response)
                 print("\nClass date was not added.")
-
             else:
-                print(f"\n{gradebook_response.detail}")
+                print(f"\n{add_response.detail}")
 
         if not helpers.confirm_action(
             "Would you like to continue adding dates to the course schedule?"
@@ -448,12 +506,10 @@ def preview_and_confirm_class_date(class_date: datetime.date) -> bool:
 
     if helpers.confirm_action("Would you like to add this date?"):
         return True
-
     else:
         print(
             f"\nDiscarding class date: {formatters.format_class_date_short(class_date)}"
         )
-
         return False
 
 
@@ -476,21 +532,21 @@ def remove_class_date(gradebook: Gradebook) -> None:
         return
 
     while True:
-        target_date = prompt_class_date_or_cancel()
+        user_input = prompt_class_date_or_cancel()
 
-        if target_date is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             break
-        target_date = cast(datetime.date, target_date)
+
+        target_date = cast(datetime.date, user_input)
 
         if confirm_and_remove_class_date(target_date, gradebook):
-            gradebook_response = gradebook.remove_class_date(target_date)
+            remove_response = gradebook.remove_class_date(target_date)
 
-            if not gradebook_response.success:
-                helpers.display_response_failure(gradebook_response)
+            if not remove_response.success:
+                helpers.display_response_failure(remove_response)
                 print("\nClass date was not removed.")
-
             else:
-                print(f"\n{gradebook_response.detail}")
+                print(f"\n{remove_response.detail}")
 
         if not helpers.confirm_action(
             "Would you like to continue removing dates from the course schedule?"
@@ -536,7 +592,6 @@ def confirm_and_remove_class_date(
         "Would you like to remove this date? This action cannot be undone."
     ):
         return True
-
     else:
         helpers.returning_without_changes()
         return False
@@ -550,6 +605,7 @@ def confirm_and_clear_schedule(gradebook: Gradebook) -> None:
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
+        - This is a global destructive action; there is no undo.
         - If the schedule is empty, the method exits early.
         - Displays a warning and confirmation prompt before proceeding.
         - If the user cancels or the operation fails, no changes are made.
@@ -568,14 +624,13 @@ def confirm_and_clear_schedule(gradebook: Gradebook) -> None:
     if helpers.confirm_action(
         "Are you sure you want to erase all dates from the course schedule? This action cannot be undone."
     ):
-        gradebook_response = gradebook.remove_all_class_dates()
+        remove_all_response = gradebook.remove_all_class_dates()
 
-        if not gradebook_response.success:
-            helpers.display_response_failure(gradebook_response)
+        if not remove_all_response.success:
+            helpers.display_response_failure(remove_all_response)
             print("\nCould not clear the course schedule.")
-
         else:
-            print(f"\n{gradebook_response.detail}")
+            print(f"\n{remove_all_response.detail}")
 
     else:
         helpers.returning_without_changes()
@@ -587,35 +642,37 @@ def generate_recurring_schedule(gradebook: Gradebook) -> None:
     """
     Guides the user through creating a recurring class schedule within a specified date range.
 
+    Workflow:
+        - Prompt for a start/end date (inclusive).
+        - Prompt for weekday to include (e.g., Mon/Wed/Fri).
+        - Generate candidate dates across the range matching those weekdays.
+        - Optionally mark exceptions ("No Class" days), removing them from candidates.
+        - Preview the resulting schedule; allow manual add/remove adjustments.
+        - On confirmation, persist via `gradebook.batch_add_class_dates()` and report results.
+
     Args:
         gradebook (Gradebook): The active `Gradebook`.
 
     Notes:
-        - The user first selects a start and end date, then chooses which weekdays to include.
-        - A list of candidate class dates is generated based on the recurring weekday pattern.
-        - The user is optionally prompted to mark individual dates as "No Class" days (e.g., holidays).
-        - The resulting schedule is previewed, and the user may manually add or remove dates.
-        - Upon confirmation, the finalized dates are added to the gradebook using a batch operation.
-        - Partial success is reported if some dates fail validation (e.g., due to duplicates).
         - If the user cancels at any step or declines the final confirmation, no changes are made.
         - A prompt to save is shown at the end if changes were made.
     """
     banner = formatters.format_banner_text("Recurring Schedule Generator")
     print(f"\n{banner}\n")
 
-    range_response = prompt_start_and_end_dates()
+    user_input = prompt_start_and_end_dates()
 
-    if range_response is MenuSignal.CANCEL:
+    if user_input is MenuSignal.CANCEL:
         return
-    range_response = cast(tuple[datetime.date, datetime.date], range_response)
 
-    start_date, end_date = range_response
+    start_date, end_date = cast(tuple[datetime.date, datetime.date], user_input)
 
-    weekdays = prompt_weekdays_or_cancel()
+    user_input = prompt_weekdays_or_cancel()
 
-    if weekdays is MenuSignal.CANCEL:
+    if user_input is MenuSignal.CANCEL:
         return
-    weekdays = cast(list[int], weekdays)
+
+    weekdays = cast(list[int], user_input)
 
     candidate_schedule = populate_candidate_schedule(start_date, end_date, weekdays)
 
@@ -624,42 +681,40 @@ def generate_recurring_schedule(gradebook: Gradebook) -> None:
     if helpers.confirm_action(
         "Would you like to mark some of these dates as 'No Class' dates (holidays, etc.)?"
     ):
-        no_classes_dates = prompt_no_classes_dates()
+        no_classes_dates = prompt_no_class_dates()
 
     if no_classes_dates:
         for off_day in no_classes_dates:
             candidate_schedule.remove(off_day)
 
     if preview_and_confirm_course_schedule(candidate_schedule, no_classes_dates):
-        gradebook_response = gradebook.batch_add_class_dates(candidate_schedule)
+        batch_add_response = gradebook.batch_add_class_dates(candidate_schedule)
 
-        added_dates = gradebook_response.data["success"]
-        skipped_dates = gradebook_response.data["failure"]
+        added_dates = batch_add_response.data["success"]
+        skipped_dates = batch_add_response.data["failure"]
 
-        if not gradebook_response.success:
-            helpers.display_response_failure(gradebook_response)
+        if not batch_add_response.success:
+            helpers.display_response_failure(batch_add_response)
 
-            if gradebook_response.error is ErrorCode.VALIDATION_FAILED:
+            if batch_add_response.error is ErrorCode.VALIDATION_FAILED:
                 print(
                     f"{len(added_dates)} of {len(candidate_schedule)} dates were added."
                 )
                 print(
                     f"{len(skipped_dates)} dates were skipped due to validation errors."
                 )
-
             else:
                 print(
                     f"Batch entry failed after adding {len(added_dates)} of {len(skipped_dates)} dates."
                 )
 
         else:
-            print(f"\n{gradebook_response.detail}")
+            print(f"\n{batch_add_response.detail}")
 
     else:
         print(f"\nDiscarding {len(candidate_schedule)} dates. No changes made.")
 
     helpers.prompt_if_dirty(gradebook)
-
     helpers.returning_to("Manage Class Schedule menu")
 
 
@@ -716,18 +771,17 @@ def preview_and_confirm_course_schedule(
 
     if off_days:
         print("\nThe following dates have been marked as 'No Class' dates:")
-        helpers.sort_and_display_course_dates(off_days)
+        helpers.sort_and_display_course_dates(set(off_days))
 
     if helpers.confirm_action("Would you like to add any dates to this schedule?"):
         while True:
             print("\nSelect a new date to add to the schedule:")
-            new_date = prompt_class_date_or_cancel()
+            user_input = prompt_class_date_or_cancel()
 
-            if new_date is MenuSignal.CANCEL:
+            if user_input is MenuSignal.CANCEL:
                 break
-
-            elif new_date not in course_schedule:
-                course_schedule.append(cast(datetime.date, new_date))
+            elif user_input not in course_schedule:
+                course_schedule.append(cast(datetime.date, user_input))
 
             if not helpers.confirm_action(
                 "Would you like to continue adding dates to the schedule?"
@@ -737,14 +791,13 @@ def preview_and_confirm_course_schedule(
     if helpers.confirm_action("Would you like to remove any dates from this schedule?"):
         while True:
             print("\nSelect an existing date to remove from the schedule:")
-            remove_date = prompt_class_date_or_cancel()
+            user_input = prompt_class_date_or_cancel()
 
-            if remove_date is MenuSignal.CANCEL:
+            if user_input is MenuSignal.CANCEL:
                 break
-
-            elif remove_date in course_schedule:
-                course_schedule.remove(cast(datetime.date, remove_date))
-                off_days.append(cast(datetime.date, remove_date))
+            elif user_input in course_schedule:
+                course_schedule.remove(cast(datetime.date, user_input))
+                off_days.append(cast(datetime.date, user_input))
 
             if not helpers.confirm_action(
                 "Would you like to continue removing dates from the schedule?"
@@ -756,15 +809,11 @@ def preview_and_confirm_course_schedule(
 
     if off_days:
         print("\nThe following dates have been marked as 'No Class' dates:")
-        helpers.sort_and_display_course_dates(off_days)
+        helpers.sort_and_display_course_dates(set(off_days))
 
-    if helpers.confirm_action(
+    return helpers.confirm_action(
         "Would you like to add these dates to the course schedule?"
-    ):
-        return True
-
-    else:
-        return False
+    )
 
 
 # === data input helpers ===
@@ -791,8 +840,7 @@ def prompt_class_date_or_cancel() -> datetime.date | MenuSignal:
             return user_input
 
         try:
-            return datetime.datetime.strptime(user_input, "%Y-%m-%d").date()
-
+            return datetime.date.fromisoformat(user_input)
         except (ValueError, TypeError):
             print(
                 "\nInvalid input. Enter the date as YYYY-MM-DD or leave blank to cancel."
@@ -800,35 +848,39 @@ def prompt_class_date_or_cancel() -> datetime.date | MenuSignal:
             print("Please try again.")
 
 
-# TODO: review and docstring
 def prompt_class_date_from_schedule(gradebook: Gradebook) -> datetime.date | MenuSignal:
-    def format_class_dates_with_completed_status(class_date: datetime.date) -> str:
-        formatted_date = formatters.format_class_date_long(class_date)
+    """
+    Let the user pick an existing class date from the schedule, with a completion badge.
 
-        students_response = gradebook.get_records(
-            gradebook.students,
-            lambda x: x.is_active,
-        )
+    The menu lists scheduled dates in ascending order. Each line shows the long-form date and, when applicable, the “[ATTENDANCE TAKEN]” badge indicating that all active students have a non-UNMARKED attendance status for that date.
 
-        active_students = (
-            students_response.data["records"] if students_response.success else None
-        )
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
 
-        has_unmarked = (
-            any(
-                student.attendance_on(class_date) == AttendanceStatus.UNMARKED
-                for student in active_students
+    Returns:
+        datetime.date: The selected class date.
+        MenuSignal.CANCEL: If the schedule is empty or the user cancels.
+
+    Notes:
+        - If no dates exist, prints guidance and returns CANCEL immediately.
+        - Displays a numbered list of dates; “0” cancels.
+        - Invalid selections re-prompt without mutation.
+        - Badge computation considers only active students; if active-roster lookup fails, the badge is omitted (conservative default).
+        - Prints to stdout only; does not modify gradebook state.
+    """
+
+    def build_formatter(badges_enabled: bool, completed_dates: set[datetime.date]):
+        def _format(date: datetime.date) -> str:
+            label = formatters.format_class_date_long(date)
+            return (
+                f"{label:<20} [ATTENDANCE TAKEN]"
+                if badges_enabled and date in completed_dates
+                else f"{label:<20}"
             )
-            if active_students
-            else True
-        )
 
-        return f"{formatted_date:<20}{'[ATTENDANCE TAKEN]' if not has_unmarked else ''}"
+        return _format
 
-    def sort_date_by_iso_format(class_date: datetime.date) -> str:
-        return class_date.isoformat()
-
-    class_dates = sorted(gradebook.class_dates, key=sort_date_by_iso_format)
+    class_dates = sorted(gradebook.class_dates)
 
     if not class_dates:
         print("\nThere are no class dates in the course schedule to choose from.")
@@ -837,11 +889,33 @@ def prompt_class_date_from_schedule(gradebook: Gradebook) -> datetime.date | Men
         )
         return MenuSignal.CANCEL
 
-    formatter = format_class_dates_with_completed_status
+    completed_dates = set()
+    badges_enabled = False
+
+    students_response = gradebook.get_records(
+        gradebook.students,
+        lambda x: x.is_active,
+    )
+
+    active_students = (
+        students_response.data["records"] if students_response.success else None
+    )
+
+    if active_students:
+        badges_enabled = True
+        for class_date in class_dates:
+            all_marked = True
+            for student in active_students:
+                if student.attendance_on(class_date) == AttendanceStatus.UNMARKED:
+                    all_marked = False
+                    break
+            if all_marked:
+                completed_dates.add(class_date)
+
+    formatter = build_formatter(badges_enabled, completed_dates)
 
     while True:
         print(f"\n{formatters.format_banner_text('Course Schedule')}")
-
         helpers.display_results(class_dates, True, formatter)
 
         choice = helpers.prompt_user_input("Select an option (0 to cancel):")
@@ -852,7 +926,6 @@ def prompt_class_date_from_schedule(gradebook: Gradebook) -> datetime.date | Men
         try:
             index = int(choice) - 1
             return class_dates[index]
-
         except (ValueError, IndexError):
             print("\nInvalid selection. Please try again.")
 
@@ -876,21 +949,28 @@ def prompt_start_and_end_dates() -> tuple[datetime.date, datetime.date] | MenuSi
 
         print("\nWhat is the first class date?")
 
-        start_date = prompt_class_date_or_cancel()
+        user_input = prompt_class_date_or_cancel()
 
-        if start_date is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             print("\nDiscarding dates and canceling schedule creator.")
             return MenuSignal.CANCEL
-        start_date = cast(datetime.date, start_date)
+
+        start_date = cast(datetime.date, user_input)
 
         print("\nWhat is the last class date?")
 
-        end_date = prompt_class_date_or_cancel()
+        user_input = prompt_class_date_or_cancel()
 
-        if end_date is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             print("\nDiscarding dates and canceling schedule creator.")
             return MenuSignal.CANCEL
-        end_date = cast(datetime.date, end_date)
+
+        end_date = cast(datetime.date, user_input)
+
+        if not start_date < end_date:
+            print("\nInvalid entry. The end date must come after the start date.")
+            print("Please try again.")
+            continue
 
         start_date_str = formatters.format_class_date_long(start_date)
         end_date_str = formatters.format_class_date_long(end_date)
@@ -899,21 +979,14 @@ def prompt_start_and_end_dates() -> tuple[datetime.date, datetime.date] | MenuSi
         print(f"... Beginning on {start_date_str}")
         print(f"... Ending on {end_date_str}")
 
-        if not start_date < end_date:
-            print("\nInvalid entry. The end date must come after the start date.")
-            print("Please try again.")
-            continue
-
         if helpers.confirm_action("Would you like to proceed using this date range?"):
             return (start_date, end_date)
-
         elif helpers.confirm_action(
             "Would you like to start over and try choosing dates again?"
         ):
             continue
-
         else:
-            print("\nDiscarding dates and canceling schedule creator.")
+            print("\nDiscarding dates and canceling schedule generator.")
             return MenuSignal.CANCEL
 
 
@@ -922,7 +995,7 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
     Prompts the user to select one or more weekdays for the recurring class schedule.
 
     Returns:
-        - A sorted list of integers representing weekdays (0=Monday to 6=Sunday) if confirmed.
+        - A sorted, de-duplicated list of integers representing weekdays (0=Monday to 6=Sunday) if confirmed.
         - `MenuSignal.CANCEL` if the user cancels during input or confirmation.
 
     Notes:
@@ -944,9 +1017,8 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
     zero_option = "Cancel without adding a new day"
 
     while True:
-        print("\nSelect which days of the week you meet for class:")
-
         weekdays = set()
+        print("\nSelect which days of the week you meet for class:")
 
         while True:
             if weekdays:
@@ -958,10 +1030,8 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 weekdays.add(menu_response())
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -975,9 +1045,8 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
 
             if helpers.confirm_action("Would you like to start over and try again?"):
                 continue
-
             else:
-                print("\nDiscarding days and canceling schedule creator.")
+                print("\nDiscarding days and canceling schedule generator.")
                 return MenuSignal.CANCEL
 
         else:
@@ -989,23 +1058,21 @@ def prompt_weekdays_or_cancel() -> list[int] | MenuSignal:
             "Would you like to use these days for your recurring schedule?"
         ):
             return list(sorted(weekdays))
-
         elif helpers.confirm_action(
             "Would you like to start over and try choosing days again?"
         ):
             continue
-
         else:
-            print("\nDiscarding days and canceling schedule creator.")
+            print("\nDiscarding days and canceling schedule generator.")
             return MenuSignal.CANCEL
 
 
-def prompt_no_classes_dates() -> list[datetime.date]:
+def prompt_no_class_dates() -> list[datetime.date]:
     """
     Prompts the user to mark specific dates as 'No Class' days to exclude from the recurring schedule.
 
     Returns:
-        A sorted list of `datetime.date` objects marked for omission.
+        A sorted, de-duplicated list of `datetime.date` objects marked for omission.
 
     Notes:
         - Dates are entered one at a time using the standard date prompt.
@@ -1013,6 +1080,7 @@ def prompt_no_classes_dates() -> list[datetime.date]:
         - Duplicate entries are ignored.
         - If no dates are selected, the user may choose to retry or proceed with none.
         - Dates are not validated against the generated schedule in this prompt.
+        - Cancel during selection returns to confirmation with the current selection; cancel at the final prompt returns an empty list.
     """
     print(
         dedent(
@@ -1027,9 +1095,8 @@ def prompt_no_classes_dates() -> list[datetime.date]:
     )
 
     while True:
-        print("\nSelect which dates to omit from the recurring schedule:")
-
         no_class_dates = set()
+        print("\nSelect which dates to omit from the recurring schedule:")
 
         while True:
             if no_class_dates:
@@ -1043,7 +1110,6 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 
             if new_off_day is MenuSignal.CANCEL:
                 break
-
             else:
                 no_class_dates.add(new_off_day)
 
@@ -1057,7 +1123,6 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 
             if helpers.confirm_action("Would you like to start over and try again?"):
                 continue
-
             else:
                 print("\nReturning to schedule generator without any 'No Class' dates.")
                 return []
@@ -1070,12 +1135,10 @@ def prompt_no_classes_dates() -> list[datetime.date]:
             "Would you like to exclude these dates from your recurring schedule?"
         ):
             return list(sorted(no_class_dates))
-
         elif helpers.confirm_action(
             "Would you like to start over and try choosing 'No Class' dates again?"
         ):
             continue
-
         else:
             print("\nReturning to schedule generator without any 'No Class' dates.")
             return []
@@ -1084,10 +1147,60 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 # === record attendance ===
 
 
-# TODO: docstring
 def record_attendance(gradebook: Gradebook) -> None:
-    # TODO: docstring
+    """
+    Orchestrate the “Record Attendance” workflow for a single class date.
+
+    High-level flow:
+        1) Resolve the target date via `resolve_class_date(gradebook)`. If canceled, exit.
+        2) Initialize an `AttendanceStager` and enter the gateway loop.
+        3) On each pass:
+            - Build a fresh `GatewayState` with `refresh_state(date)`. If this fails, show failure details and exit without changes.
+            - Show the gateway menu with `prompt_gateway_response(state)` and dispatch on the returned `GatewayResponse`:
+                - START_UNMARKED
+                    - Run `start_unmarked(state)` to walk unmarked students one-by-one, staging selections (Present/Absent/Excused/Late). Offers an apply/discard/keep guard if the user cancels mid-pass.
+                - STAGE_REMAINING_PRESENT / STAGE_REMAINING_ABSENT
+                    - Run `stage_remaining(status, state)` to bulk-stage the chosen status for all currently unmarked students, with an optional apply-now prompt.
+                - EDIT_EXISTING
+                    - Run `edit_existing(date)`, which first forces staged-change resolution (apply or discard) and then dispatches to the immediate-write edit flow (`edit_by_date`).
+                - APPLY_NOW
+                    - Run `apply_now(date, prompt_to_exit=True)` to commit all staged diffs (with retry/keep/discard handling for failures) and optionally exit the gateway on success.
+                - CLEAR_DATE
+                    - Run `clear_date(date)` to wipe all gradebook marks for the date (active and inactive students). If staging exists, the user chooses to preserve or discard it before the clear; optional apply-now prompt may follow.
+                - CANCEL
+                    - Run `exit_gateway(date)`, which resolves any staged changes (apply/discard/cancel) and, when staging is empty, terminates the gateway loop.
+        4) After the loop ends, optionally offer to display the attendance summary for the date, then return to the Manage Attendance menu.
+
+    Guarantees & responsibilities:
+        - Gradebook mutations occur only through explicit branches:
+            - `apply_now(...)`, `edit_by_date(...)` (via `edit_existing`), and `clear_date(...)`.
+            - All other paths operate on the in-memory stager and UI only.
+        - Destructive or persistent actions are gated behind confirmations.
+        - Staged changes persist across gateway passes until applied or discarded.
+
+    Side effects:
+        Prints menus, prompts, and summaries to stdout; may mutate gradebook state depending on the chosen actions. `KeyboardInterrupt`/`EOFError` are not intercepted here and bubble to the caller by design.
+
+    Raises:
+        RuntimeError: If an unexpected menu response is encountered during dispatch.
+    """
+
     def refresh_state(date: datetime.date) -> GatewayState | None:
+        """
+        Build a `GatewayState` snapshot for the given date, or bail with user feedback.
+
+        Pulls:
+            - Active students via `gradebook.get_records(..., is_active)`.
+            - Gradebook attendance map for the date via `gradebook.get_attendance_for_date(active_only=True)`.
+            - Current staged map from the outer `stager`.
+
+        Returns:
+            GatewayState: Frozen snapshot used to render the gateway.
+            None: If prerequisites cannot be retrieved; prints failure details and a “returning without changes” message before exiting.
+
+        Notes:
+            - Prints error/diagnostic messages on failure. Does not mutate gradebook state.
+        """
         students_response = gradebook.get_records(
             dictionary=gradebook.students,
             predicate=lambda x: x.is_active,
@@ -1121,10 +1234,28 @@ def record_attendance(gradebook: Gradebook) -> None:
             staged_status_map=stager.status_map,
         )
 
-    # TODO: docstring
     def start_unmarked(state: GatewayState) -> None:
-        snapshot = stager.status_map
+        """
+        Walk the unmarked roster for `state.class_date`, staging per-student choices.
 
+        Behavior:
+            - Iterates `state.unmarked_ids` in roster order and prompts: Present / Absent / Excused / Late / Skip.
+            - On “Cancel” during the pass:
+                - If nothing staged: prints “returning without changes” and exits.
+                - If staged changes exist: offers a three-way choice:
+                    - Apply now (commit and exit),
+                    - Discard (revert to the entry snapshot and exit),
+                    - Keep (retain staging and exit to gateway).
+            - After finishing the pass:
+                - If any changes were staged, prints a summary and optionally applies now.
+                - Otherwise exits silently (no changes).
+
+        Notes:
+            - Uses an entry snapshot of the stager so “Discard” restores pre-loop staging.
+            - This function does not write to the gradebook; only `apply_now(...)` commits.
+            - `staged_count` reflects number of stage operations, not necessarily unique IDs.
+        """
+        snapshot = stager.status_map
         target_ids = state.unmarked_ids
         roster_by_id = state.active_roster_by_id
 
@@ -1172,7 +1303,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                             "Discard these changes and return",
                             lambda: MenuSignal.DISCARD,
                         ),
-                        ("Keep These Changes and Return", lambda: MenuSignal.KEEP),
+                        ("Keep these changes and return", lambda: MenuSignal.KEEP),
                     ]
                     bail_zero_option = "Continue recording attendance"
 
@@ -1182,17 +1313,17 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                     if bail_response is MenuSignal.EXIT:
                         continue
-
                     elif callable(bail_response):
                         bail_signal = bail_response()
-
                         match bail_signal:
                             case MenuSignal.APPLY:
                                 apply_now(state.class_date)
                                 return
+
                             case MenuSignal.DISCARD:
                                 stager.revert_to_snapshot(snapshot)
                                 return
+
                             case MenuSignal.KEEP:
                                 return
 
@@ -1201,8 +1332,19 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 elif callable(menu_response):
                     status = menu_response()
+
+                    gradebook_status = state.gradebook_map.get(
+                        student_id, AttendanceStatus.UNMARKED
+                    )
+                    had_diff = (
+                        stager.status_map.get(student_id, gradebook_status)
+                        != gradebook_status
+                    )
+                    will_have_diff = status != gradebook_status
+                    if not had_diff and will_have_diff:
+                        staged_count += 1
+
                     stager.stage(student_id, status)
-                    staged_count += 1
                     break
 
                 else:
@@ -1219,23 +1361,35 @@ def record_attendance(gradebook: Gradebook) -> None:
             if helpers.confirm_action("Would you like to apply these changes now?"):
                 apply_now(state.class_date)
                 return
-
             else:
                 print(
                     "You may apply these changes later by selecting 'Apply Staged Changes Now' from the Record Attendance menu."
                 )
                 return
 
-    # TODO: docstring
     def stage_remaining(status: AttendanceStatus, state: GatewayState) -> None:
-        target_ids = state.unmarked_ids
+        """
+        Bulk-stage the given `status` for all currently unmarked students.
 
+        Args:
+            status (AttendanceStatus): The status to stage (e.g., PRESENT or ABSENT).
+            state (GatewayState): Snapshot providing `unmarked_ids` and date labels.
+
+        Behavior:
+            - Calls `stager.bulk_stage(state.unmarked_ids, status, overwrite=True)`.
+            - Prints a summary of how many students were staged and reminds that staging is not persisted.
+            - Offers to apply the changes immediately via `apply_now(state.class_date)`; otherwise returns to the gateway with staging intact.
+
+        Notes:
+            - No gradebook writes occur unless the user chooses to apply now.
+            - Count is based on the current unmarked set; if `bulk_stage` filters or skips any IDs, prefer its return value (if available).
+        """
+        target_ids = state.unmarked_ids
         stager.bulk_stage(
             student_ids=target_ids,
             status=status,
             overwrite=True,
         )
-
         staged_count = len(target_ids)
 
         if staged_count > 0:
@@ -1247,17 +1401,35 @@ def record_attendance(gradebook: Gradebook) -> None:
             if helpers.confirm_action("Would you like to apply these changes now?"):
                 apply_now(state.class_date)
                 return
-
             else:
                 print(
                     "You may apply these changes later by selecting 'Apply Staged Changes Now' from the Record Attendance menu."
                 )
                 return
 
-    # TODO: docstring
     def apply_now(date: datetime.date, prompt_to_exit: bool = False) -> None:
-        nonlocal should_display_gateway
+        """
+        Attempt to commit all staged attendance changes for `date`, with retry-on-fail.
 
+        Behavior:
+            - Rebuilds a fresh `GatewayState` each attempt.
+            - Computes `changes = stager.pending(active_ids, gradebook_map)` (diff-only).
+            - If there are no staged changes, prints a notice and returns.
+            - Calls `gradebook.batch_mark_student_attendance_for_date(date, changes)`.
+                - On INTERNAL_ERROR: show failure, preserve staging, and return.
+                - On partial success: print successes (and unstage them), print failures, and offer:
+                      - Retry now (re-run with the remaining failures),
+                      - Discard and return (clear remaining staged changes),
+                      - Do nothing and return (preserve remaining staged changes).
+                - On no progress across retries (failure count unchanged): clear remaining staged changes and return.
+                - On full success (no failures): exit the retry loop.
+
+            - If `prompt_to_exit` is True, optionally ask the user if they are finished recording for this date; on confirmation, flip the outer `should_display_gateway` flag to exit the gateway loop.
+
+        Notes:
+            - Writes to the gradebook; prints summaries; mutates the stager by un-staging successes and possibly clearing failures; may signal the outer loop to exit.
+        """
+        nonlocal should_display_gateway
         prev_failed_count = -1
 
         while True:
@@ -1280,28 +1452,27 @@ def record_attendance(gradebook: Gradebook) -> None:
                 helpers.returning_without_changes()
                 return
 
-            gradebook_response = gradebook.batch_mark_student_attendance_for_date(
+            batch_mark_response = gradebook.batch_mark_student_attendance_for_date(
                 date, changes
             )
 
             if (
-                not gradebook_response.success
-                and gradebook_response.error == ErrorCode.INTERNAL_ERROR
+                not batch_mark_response.success
+                and batch_mark_response.error == ErrorCode.INTERNAL_ERROR
             ):
-                helpers.display_response_failure(gradebook_response)
+                helpers.display_response_failure(batch_mark_response)
                 print(
                     "\nFailed to apply staged changes. Returning to Record Attendance menu with all staged changes."
                 )
                 return
 
-            success = gradebook_response.data["success"]
-            failure = gradebook_response.data["failure"]
+            success = batch_mark_response.data["success"]
+            failure = batch_mark_response.data["failure"]
 
             if len(failure) == prev_failed_count:
                 print(
                     f"Unable to resolve any of the failed change attempts. Clearing {len(failure)} staged {'change' if len(failure) == 1 else 'changes'} and returning."
                 )
-
                 stager.clear()
                 return
 
@@ -1327,13 +1498,11 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                     for student_id, status in failure:
                         student_response = gradebook.find_student_by_uuid(student_id)
-
                         student = (
                             student_response.data["record"]
                             if student_response.success
                             else None
                         )
-
                         student_name = (
                             student.full_name if student else "[MISSING STUDENT]"
                         )
@@ -1345,7 +1514,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                     ("Retry now", lambda: MenuSignal.APPLY),
                     ("Discard and return", lambda: MenuSignal.DISCARD),
                 ]
-                zero_option = "Do nothing and return"
+                zero_option = "Keep failed changes and return"
 
                 menu_response = helpers.display_menu(title, options, zero_option)
 
@@ -1365,7 +1534,6 @@ def record_attendance(gradebook: Gradebook) -> None:
                             print(
                                 "\nDiscarding failed staged changes and returning to Record Attendance menu."
                             )
-
                             stager.clear()
                             return
 
@@ -1386,8 +1554,22 @@ def record_attendance(gradebook: Gradebook) -> None:
         ):
             should_display_gateway = False
 
-    # TODO: docstring
     def edit_existing(date: datetime.date) -> None:
+        """
+        Gate the scalpel flow (edit-by-date) behind staged-change resolution.
+
+        Behavior:
+            - If staging is non-empty, require the user to either:
+                - Apply staged changes now (via `apply_now(date)`), or
+                - Discard staged changes (after confirmation).
+                - “Cancel and return” exits without entering edit.
+            - Re-prompts until staging is empty or the user cancels.
+            - When staging is empty, dispatches to `edit_by_date(date, gradebook)` which performs immediate gradebook writes.
+
+        Notes:
+            - `apply_now` may preserve failed changes (user choice or internal error). In that case, this loop will continue to prompt until staging is cleared.
+            - This function itself does not mutate the gradebook except via `apply_now`; the actual edit flow is delegated to `edit_by_date`.
+        """
         while not stager.is_empty():
             print(
                 "\nYou have staged changes that have not been applied to the gradebook yet."
@@ -1422,10 +1604,12 @@ def record_attendance(gradebook: Gradebook) -> None:
                         continue
 
                     case MenuSignal.DISCARD:
-                        # TODO: confirm discard
-                        print("\nDiscarding staged changes ...")
-                        stager.clear()
-                        continue
+                        if helpers.confirm_action(
+                            "Are you sure you want to discard the staged changes? This action cannot be undone."
+                        ):
+                            print("\nDiscarding staged changes ...")
+                            stager.clear()
+                            continue
 
                     case _:
                         raise RuntimeError(
@@ -1437,8 +1621,26 @@ def record_attendance(gradebook: Gradebook) -> None:
 
         edit_by_date(date, gradebook)
 
-    # TODO: docstring
     def clear_date(date: datetime.date) -> None:
+        """
+        Clear all gradebook attendance for `date`, coordinating with any staged changes.
+
+        Behavior:
+            - First, confirm the destructive action (clarifies that staged changes are not part of the clear).
+            - If staging exists, require a choice:
+                - Preserve staged changes and clear the gradebook.
+                - Discard staged changes and clear the gradebook (with an extra confirmation).
+                - Cancel and return (no changes).
+            - Take a snapshot of the stager, then call `gradebook.clear_all_attendance_data_for_date(date)`.
+                - On failure: show details and revert the stager to the snapshot.
+                - On success: print the gradebook detail and, if staging remains,
+                  optionally offer to `apply_now(date, True)`.
+
+        Notes:
+            - This function never writes staged changes to the gradebook; only `apply_now(...)` commits.
+            - The stager snapshot must be independent (defensive copy) for `revert_to_snapshot` to be reliable.
+            - “Discard” declined at the confirmation keeps staging and proceeds with the clear (same effect as “Preserve”).
+        """
         if not helpers.confirm_action(
             f"Are you certain you want to clear all attendance data{' (not including staged changes)' if not stager.is_empty() else ''} for {formatters.format_class_date_long(date)} for all students (active and inactive)? This action cannot be undone."
         ):
@@ -1451,7 +1653,6 @@ def record_attendance(gradebook: Gradebook) -> None:
             )
 
             title = "How would you like to handle these staged changes?"
-
             options = [
                 (
                     "Preserve staged changes and clear gradebook",
@@ -1462,7 +1663,6 @@ def record_attendance(gradebook: Gradebook) -> None:
                     lambda: MenuSignal.DISCARD,
                 ),
             ]
-
             zero_option = "Cancel and return"
 
             menu_response = helpers.display_menu(title, options, zero_option)
@@ -1476,9 +1676,11 @@ def record_attendance(gradebook: Gradebook) -> None:
                         print("\nPreserving staged changes ...")
 
                     case MenuSignal.DISCARD:
-                        # TODO: confirm discard
-                        print("\nDiscarding staged changes ...")
-                        stager.clear()
+                        if helpers.confirm_action(
+                            "Are you sure you want to discard the staged changes? This action cannot be undone."
+                        ):
+                            print("\nDiscarding staged changes ...")
+                            stager.clear()
 
                     case _:
                         raise RuntimeError(
@@ -1489,14 +1691,11 @@ def record_attendance(gradebook: Gradebook) -> None:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
         snapshot = stager.status_map
-
-        clear_response = gradebook.clear_roster_attendance_for_date(date)
+        clear_response = gradebook.clear_all_attendance_data_for_date(date)
 
         if not clear_response.success:
             helpers.display_response_failure(clear_response)
-
             print("\nRestoring staged changes to prior state.")
-
             stager.revert_to_snapshot(snapshot)
             return
 
@@ -1507,8 +1706,22 @@ def record_attendance(gradebook: Gradebook) -> None:
         ):
             apply_now(date, True)
 
-    # TODO:
     def exit_gateway(date: datetime.date) -> None:
+        """
+        Resolve any staged changes, then exit the Record Attendance gateway.
+
+        Behavior:
+            - If staging is non-empty, require a choice:
+                - Apply changes now and exit (delegates to `apply_now(date)`).
+                - Discard changes and exit (after confirmation).
+                - Cancel and return (keep staging; return to the gateway).
+            - Re-prompts until staging is empty or the user cancels.
+            - Once staging is empty, sets the outer `should_display_gateway = False` to terminate the gateway loop.
+
+        Notes:
+            - `apply_now(date)` may leave failures staged; in that case the prompt repeats.
+            - This function itself does not write to the gradebook except via `apply_now`.
+        """
         nonlocal should_display_gateway
 
         while not stager.is_empty():
@@ -1517,19 +1730,16 @@ def record_attendance(gradebook: Gradebook) -> None:
             )
 
             title = "How would you like to handle these staged changes?"
-
             options = [
                 ("Apply changes now and exit", lambda: MenuSignal.APPLY),
                 ("Discard changes and exit", lambda: MenuSignal.DISCARD),
             ]
-
             zero_option = "Cancel and return"
 
             menu_response = helpers.display_menu(title, options, zero_option)
 
             if menu_response is MenuSignal.EXIT:
                 return
-
             elif callable(menu_response):
                 match menu_response():
                     case MenuSignal.APPLY:
@@ -1538,10 +1748,12 @@ def record_attendance(gradebook: Gradebook) -> None:
                         continue
 
                     case MenuSignal.DISCARD:
-                        # TODO: confirm discard
-                        print("\nDiscarding staged changes ...")
-                        stager.clear()
-                        continue
+                        if helpers.confirm_action(
+                            "Are you sure you want to discard the staged changes? This action cannot be undone."
+                        ):
+                            print("\nDiscarding staged changes ...")
+                            stager.clear()
+                            continue
 
                     case _:
                         raise RuntimeError(
@@ -1553,43 +1765,16 @@ def record_attendance(gradebook: Gradebook) -> None:
 
         should_display_gateway = False
 
-    # resolve class date
-    class_date = resolve_class_date(gradebook)
+    user_input = resolve_class_date(gradebook)
 
-    if class_date is MenuSignal.CANCEL:
+    if user_input is MenuSignal.CANCEL:
         print("\nDate selection canceled.")
         helpers.returning_without_changes()
         return
 
-    class_date = cast(datetime.date, class_date)
-
-    # initiate stager object
+    class_date = cast(datetime.date, user_input)
     stager = AttendanceStager()
-
-    # flag for terminating loop
     should_display_gateway = True
-
-    # main loop
-
-    """
-    1. build gateway state
-        - pull DB truth for the date
-        - compute preview with stager overlay
-        - produce a simple GatewayStager object
-
-    2. show gateway
-        - render the menu from the state
-        - return a GatewayChoice
-
-    3. dispatch on choice
-        - START_UNMARKED -> run the unmarked loop (updates stager) then return to step 1
-        - STAGE_ALL_PRESENT/STAGE_REMAINING_ABSENT -> update stager, toast, return to step 1
-        - EDIT_EXISTING -> warn and clear stager, run edit flow, then return to step 1
-            - Edit prompts guardrail apply/discard/return
-        - CLEAR_DATE -> confirm, clear DB marks for the date, return to step 1
-        - APPLY_NOW -> apply batch with stager.pending(), show results, then exit
-        - CANCEL -> if no staging, returning_without_changes() and exit; if staging, offer the three-way Apply now (apply & exit) / Discard (clear stager & exit) / Return (back to step 1)
-    """
 
     while should_display_gateway:
         gateway_state = refresh_state(class_date)
@@ -1601,121 +1786,31 @@ def record_attendance(gradebook: Gradebook) -> None:
 
         match gateway_response:
             case GatewayResponse.START_UNMARKED:
-                """
-                goal: one-by-one pass over the unmarked students
-
-                1. compute target_ids = gateway_state.unmarked_ids
-                2. enter the per-student loop
-                    - present/absent/excused/late -> stager.stage(id, status)
-                    - skip -> no staging
-                    - cancel -> three-way: apply now / discard staged / return to loop
-                3. on exhausting the list: show a small toast
-                    - ("staged updates for N students")
-                    - view buckets?
-
-                continue
-                """
                 start_unmarked(gateway_state)
                 continue
 
             case GatewayResponse.STAGE_REMAINING_PRESENT:
-                """
-                goal: bulk stage Present for unmarked students
-
-                1. compute target_ids = gateway_state.unmarked_ids
-                2. stager.bulk_stage(target_ids, PRESENT, overwrite=True)
-                3. toast: "Staged Present for {len(target_ids)} students."
-
-                continue
-                """
-
                 stage_remaining(AttendanceStatus.PRESENT, gateway_state)
                 continue
 
             case GatewayResponse.STAGE_REMAINING_ABSENT:
-                """
-                Identical to above but ABSENT
-                """
-
                 stage_remaining(AttendanceStatus.ABSENT, gateway_state)
                 continue
 
             case GatewayResponse.EDIT_EXISTING:
-                """
-                goal: scapel flow; gradebook writes happen immediately
-
-                pre check:
-                    - if stager.is_empty() -> go straight to edit
-                    - else prompt:
-                        - apply staged now -> do the apply_now branch (below) and exit after results, force user to explicitly re-enter Edit
-                        - discard staged and enter edit -> stager.clear() then run Edit
-                        - stay in Record -> skip Edit; return to gateway loop
-
-                edit flow:
-                    - run edit_attendance_flow(class_date). It writes immediately.
-                    - on return, do nothing else here; the next loop rebuild picks up changes
-                """
                 pass
                 edit_existing(class_date)
                 continue
 
             case GatewayResponse.APPLY_NOW:
-                """
-                goal: commit what's staged, then exit
-
-                1. re-fetch fresh inputs for consistency:
-                    - active roster
-                    - active ids
-                    - gradebook_status_map
-
-                2. build apply payload:
-                    - changes = stager.pending(active_ids, gradebook_status_map) (diff-only, active-only)
-                    - if not changes: show "nothing to apply" and continue
-
-                3. response = gradebook.batch_mark_attendance(class_date, changes)
-                    - on failure, show failure detail, stay in the loop
-                    - on success, show tallies
-                        - if failed, list names & reasons, optionally offer retry failed only
-
-                4. stager.clear()
-
-                5. helpers.returning_to() and exit orchestrator
-                """
                 apply_now(gateway_state.class_date, True)
                 continue
 
             case GatewayResponse.CLEAR_DATE:
-                """
-                goal: wipe gradebook marks for ALL students, leave staging as the user chooses
-
-                1. if stager.is_empty():
-                    - confirm "clear attendance for {date} for all students"
-                    - if confirmed: gradebook.clear_attendance_for_date(class_date)
-                        - on success: toast "cleared" -> continue (rebuilds)
-                        - on failure: show error -> continue
-
-                2. if staging exists:
-                    - preserve staged and clear gradebook -> call clear; keep stager; continue
-                    - discard staged and clear -> stager.clear(); then clear gb; continue
-                    - cancel -> do nothing, continue
-
-                3. prompt to apply changes now?
-                """
                 clear_date(class_date)
                 continue
 
-            # TODO:
             case GatewayResponse.CANCEL:
-                """
-                goal: exit or resolve staged work
-
-                1. if stager.is_empty() -> helpers.returning_without_changes() and exit
-
-                2. if staging exists:
-                    - apply now -> run apply_now branch and exit
-                    - discard staged -> stager.clear(), helpers.returning_without_changes()
-                    - return to gateway -> do nothing, continue
-                """
                 exit_gateway(class_date)
                 continue
 
@@ -1732,8 +1827,28 @@ def record_attendance(gradebook: Gradebook) -> None:
     helpers.returning_to("Manage Attendance menu")
 
 
-# TODO: review and docstring
 def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
+    """
+    Select the date to record attendance for, via manual entry or by picking from the schedule.
+
+    Presents:
+      1) Enter a date manually (YYYY-MM-DD)
+      2) Choose a date from the course schedule
+      0) Return and cancel
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Returns:
+        datetime.date: The selected (or newly added) class date.
+        MenuSignal.CANCEL: If the user exits or declines required confirmations.
+
+    Notes:
+        - Manual entry and schedule pick both funnel to a single `datetime.date` value.
+        - If a sub-prompt is canceled, the user is offered a chance to try again; otherwise CANCEL is returned.
+        - If the chosen date is not in the schedule, the user may add it and proceed; failures are shown and the user may retry.
+        - On success (existing or newly added), the date is returned; no further mutation occurs here.
+    """
     title = "\nSelect which date to record attendance for:"
     options = [
         ("Enter a date manually", lambda: prompt_class_date_or_cancel()),
@@ -1748,6 +1863,7 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
         menu_response = helpers.display_menu(title, options, zero_option)
 
         if menu_response is MenuSignal.EXIT:
+            print("\nDate selection canceled.")
             return MenuSignal.CANCEL
 
         elif callable(menu_response):
@@ -1756,9 +1872,10 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
             if isinstance(class_date, MenuSignal):
                 print("\nDate selection canceled.")
 
-                if not helpers.confirm_action("Would you like to try again?"):
+                if not helpers.confirm_action(
+                    "Would you like to try selecting a date again?"
+                ):
                     return MenuSignal.CANCEL
-
                 else:
                     continue
 
@@ -1770,16 +1887,27 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
                 if not helpers.confirm_action(
                     "Do you want to add it to the schedule and proceed with recording attendance?"
                 ):
-                    return MenuSignal.CANCEL
+                    if not helpers.confirm_action(
+                        "Would you like to try selecting a date again?"
+                    ):
+                        return MenuSignal.CANCEL
+                    else:
+                        continue
 
-                gradebook_response = gradebook.add_class_date(class_date)
+                add_response = gradebook.add_class_date(class_date)
 
-                if not gradebook_response.success:
-                    helpers.display_response_failure(gradebook_response)
-                    print("\nUnable to record attendance for this date.")
-                    return MenuSignal.CANCEL
+                if not add_response.success:
+                    helpers.display_response_failure(add_response)
+                    print("\nUnable to add this date to the gradebook.")
 
-                print(f"\n{gradebook_response.detail}")
+                    if not helpers.confirm_action(
+                        "Would you like to try selecting a date again?"
+                    ):
+                        return MenuSignal.CANCEL
+                    else:
+                        continue
+
+                print(f"\n{add_response.detail}")
 
             return class_date
 
@@ -1787,10 +1915,29 @@ def resolve_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
-# TODO: docstring
 def build_gateway_options(
     gateway_state: GatewayState,
-) -> list[tuple[str, Callable[..., Any]]]:
+) -> list[tuple[str, Callable[[], GatewayResponse]]]:
+    """
+    Build the gateway menu options from the current state.
+
+    Inserts actions in a stable, intentional order:
+      - Start recording unmarked (per-student loop), when any unmarked remain.
+      - Bulk stage remaining as Present/Absent, when any unmarked remain.
+      - Edit existing statuses, when the gradebook already has marks.
+      - Apply staged changes, when staging is non-empty.
+      - Clear all attendance for this date (always available; destructive).
+
+    Args:
+        gateway_state (GatewayState): Snapshot used to gate which actions are shown.
+
+    Returns:
+        list[tuple[str, Callable[[], GatewayResponse]]]: Label/action pairs. Each action is a no-arg callable that returns a `GatewayResponse` sentinel for dispatch.
+
+    Notes:
+        - No I/O or mutation here; this only decides which options are visible.
+        - Relies on `GatewayState` convenience flags for gating semantics.
+    """
     options = []
 
     if gateway_state.can_start_unmarked:
@@ -1826,19 +1973,30 @@ def build_gateway_options(
     return options
 
 
-# TODO: docstring
 def prompt_gateway_response(
     gateway_state: GatewayState,
 ) -> GatewayResponse:
+    """
+    Display the gateway menu for a date and return the selected response.
+
+    Behavior:
+        - If there are no active students, prints a notice, calls `helpers.returning_without_changes()`, and returns `GatewayResponse.CANCEL`.
+        - Otherwise, renders options from `build_gateway_options(state)` and a zero option to cancel.
+        - Returns the chosen `GatewayResponse` sentinel; “0” yields `CANCEL`.
+
+    Args:
+        gateway_state (GatewayState): Snapshot providing date labels and gating flags.
+
+    Returns:
+        GatewayResponse: One of the dispatcher sentinels, or `CANCEL` on exit.
+
+    Raises:
+        RuntimeError: If the menu returns neither `MenuSignal.EXIT` nor a callable.
+    """
     if gateway_state.active_roster_count == 0:
         print("There are no active students.")
         helpers.returning_without_changes()
         return GatewayResponse.CANCEL
-
-    # TODO:
-    # "There is/are 14 students remaining unmarked."
-    # "(e.g., Potter, Weasley, Grainger and 4 more)"
-    helpers.display_remaining_unmarked_preview(gateway_state)
 
     title = f"Attendance options for {gateway_state.date_label_long}:"
     options = build_gateway_options(gateway_state)
@@ -1848,72 +2006,13 @@ def prompt_gateway_response(
 
     if menu_response is MenuSignal.EXIT:
         return GatewayResponse.CANCEL
-
     elif callable(menu_response):
         return menu_response()
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
-# def record_attendance_deprecated(gradebook: Gradebook) -> None:
-#     # perhaps offer to select date from course schedule, or better yet,
-#     # the next date in the course schedule that does not have attendance recorded
-#
-#     print("\nSelect which date to record attendance for:")
-#
-#     class_date = prompt_class_date_or_cancel()
-#
-#     if class_date is MenuSignal.CANCEL:
-#         return
-#     class_date = cast(datetime.date, class_date)
-#
-#     print(
-#         f"\nYou are recording attendance for {formatters.format_class_date_long(class_date)}."
-#     )
-#
-#     if class_date not in gradebook.class_dates:
-#         print(
-#             f"\n{formatters.format_class_date_short(class_date)} is not in the course schedule yet."
-#         )
-#
-#         if not helpers.confirm_action(
-#             "Do you want to add it to the schedule and proceed with recording attendance?"
-#         ):
-#             helpers.returning_without_changes()
-#             return
-#
-#         add_response = gradebook.add_class_date(class_date)
-#
-#         if not add_response.success:
-#             helpers.display_response_failure(add_response)
-#             print("\nCould not record attendance.")
-#             helpers.returning_without_changes()
-#             return
-#
-#         print(f"\n{add_response.detail}")
-#
-#     students_response = gradebook.get_records(gradebook.students, lambda x: x.is_active)
-#
-#     if not students_response.success:
-#         helpers.display_response_failure(students_response)
-#         print("\nCould not retrieve active student roster.")
-#         helpers.returning_without_changes()
-#         return
-#
-#     active_students = students_response.data["records"]
-#
-#     if not active_students:
-#         print("\nThere are no active students.")
-#         helpers.returning_without_changes()
-#         return
-#
-#     for student in sorted(active_students, key=lambda x: (x.last_name, x.first_name)):
-#         # record attendance sequence here
-#         pass
-#
-#     helpers.display_attendance_summary(class_date, gradebook)
-
+# TODO: REVIEW CHECKPOINT
 
 # === edit attendance ===
 
@@ -1955,10 +2054,8 @@ def edit_attendance(gradebook: Gradebook) -> None:
 
         if menu_response is MenuSignal.EXIT:
             break
-
         elif callable(menu_response):
             menu_response()
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -1986,6 +2083,7 @@ def edit_by_date(class_date: datetime.date | None, gradebook: Gradebook) -> None
 
         if user_selection is MenuSignal.CANCEL:
             return
+
         class_date = cast(datetime.date, user_selection)
 
     print("\nYou are editing attendance records for the following date:")
@@ -1996,6 +2094,7 @@ def edit_by_date(class_date: datetime.date | None, gradebook: Gradebook) -> None
 
         if user_selection is MenuSignal.CANCEL:
             break
+
         student = cast(Student, user_selection)
 
         edit_attendance_record(student, class_date, gradebook)
@@ -2027,6 +2126,7 @@ def edit_by_student(student: Student | None, gradebook: Gradebook) -> None:
 
         if user_selection is MenuSignal.CANCEL:
             return
+
         student = cast(Student, user_selection)
 
     print("\nYou are editing attendance records for the following student:")
@@ -2037,6 +2137,7 @@ def edit_by_student(student: Student | None, gradebook: Gradebook) -> None:
 
         if user_selection is MenuSignal.CANCEL:
             break
+
         class_date = cast(datetime.date, user_selection)
 
         edit_attendance_record(student, class_date, gradebook)
@@ -2131,22 +2232,328 @@ def edit_attendance_record(
 # === view attendance ===
 
 
-# TODO:
-def view_attendance_by_date(gradebook: Gradebook):
-    pass
+# complete
+def view_attendance_by_date(gradebook: Gradebook) -> None:
+    """
+    Display a single-date attendance report.
+
+    Prompts the user to choose a class date, fetches attendance recorded for that date, and prints a status summary followed by a per-student list.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Only dates explicitly selected by the user are queried.
+        - If no attendance has been recorded for the date, an empty-state message is shown and the function returns.
+        - Missing student records (e.g., orphaned IDs) are skipped without raising.
+        - Report ordering:
+            - Bucket summary is determined by `helpers.display_attendance_buckets()`.
+            - The per-student list is printed in the order provided by the gradebook (may be sorted upstream).
+    """
+    user_selection = prompt_find_class_date(gradebook)
+
+    if user_selection is MenuSignal.CANCEL:
+        return
+
+    class_date = cast(datetime.date, user_selection)
+
+    attendance_response = gradebook.get_attendance_for_date(class_date)
+
+    if not attendance_response.success:
+        helpers.display_response_failure(attendance_response)
+        print(
+            f"\nCould not generate the attendance report for {formatters.format_class_date_long(class_date)}."
+        )
+        return
+
+    attendance_report = attendance_response.data["attendance"]
+
+    print(f"\nAttendance report for {formatters.format_class_date_long(class_date)}:")
+
+    if attendance_report == {}:
+        print("Attendance has not been recorded yet for this date.")
+        return
+
+    helpers.display_attendance_buckets(attendance_report.items())
+
+    for student_id, attendance in attendance_report.items():
+        student_response = gradebook.find_student_by_uuid(student_id)
+
+        student = student_response.data["record"] if student_response.success else None
+        status = attendance.value
+
+        if student is not None:
+            print(f"... {student.full_name:<20} | {status}")
 
 
-# TODO:
-def view_attendance_by_student(gradebook: Gradebook):
-    pass
+# complete
+def view_attendance_by_student(gradebook: Gradebook) -> None:
+    """
+    Display a per-student attendance report across dates.
+
+    Prompts the user to choose a student, fetches that student's recorded attendance, and prints each class date with the corresponding status.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Only dates with recorded attendance are shown. If none exist, an empty-state message is shown.
+        - Date ordering reflects the underlying mapping.
+    """
+    user_selection = prompt_find_student(gradebook)
+
+    if user_selection is MenuSignal.CANCEL:
+        return
+
+    student = cast(Student, user_selection)
+
+    attendance_response = gradebook.get_attendance_for_student(student)
+
+    if not attendance_response.success:
+        helpers.display_response_failure(attendance_response)
+        print(f"\nCould not generate the attendance report for {student.full_name}.")
+        return
+
+    attendance_report = attendance_response.data["attendance"]
+
+    print(f"\nAttendance report for {student.full_name}:")
+
+    if attendance_report == {}:
+        print("No attendance has been recorded yet for this student.")
+        return
+
+    for class_date, attendance in attendance_report.items():
+        date = formatters.format_class_date_long(class_date)
+        status = attendance.value
+        print(f"... {date:<20} | {status}")
 
 
 # === reset attendance ===
 
 
-# TODO:
-def reset_attendance_data(gradebook: Gradebook):
-    pass
+# complete
+def reset_attendance_data(gradebook: Gradebook) -> None:
+    """
+    Presents destructive attendance reset options to the user.
+
+    Displays a menu to choose one of three actions:
+        1. Clear all attendance data for a single student.
+        2. Clear all attendance data for a single date.
+        3. Clear all attendance data in the gradebook.
+
+    After each action, the user is prompted whether to continue performing resets.
+    The loop ends when the user cancels or declines to continue.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Each sub-option handles its own confirmation and reporting.
+        - All changes are routed through the `Gradebook` API.
+        - Empty-state operations (no records to clear) are skipped with a message.
+        - The course schedule remains unchanged; only attendance data is affected.
+    """
+    title = "Reset Attendance Data"
+    options = [
+        (
+            "Clear all attendance data for a single student",
+            lambda: reset_attendance_data_by_student(student=None, gradebook=gradebook),
+        ),
+        (
+            "Clear all attendance data for a single date",
+            lambda: reset_attendance_data_by_date(class_date=None, gradebook=gradebook),
+        ),
+        (
+            "Delete all attendance data (entire gradebook)",
+            lambda: reset_all_attendance_data(gradebook=gradebook),
+        ),
+    ]
+    zero_option = "Cancel and return"
+
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
+
+        if menu_response is MenuSignal.EXIT:
+            break
+        elif callable(menu_response):
+            menu_response()
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+        if not helpers.confirm_action(
+            "Would you like to continue resetting attendance data?"
+        ):
+            break
+
+    helpers.returning_to("Manage Attendance menu")
+
+
+# complete
+def reset_attendance_data_by_student(
+    student: Student | None, gradebook: Gradebook
+) -> None:
+    """
+    Clears all recorded attendance data for a single student.
+
+    If `Student` is None, prompts the user to select one. Displays a count of affected dates before requiring confirmation. Skips the operation if no attendance data exists for the student.
+
+    Args:
+        student (Student | None): The target `Student` record, or None to prompt selection.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Includes records for inactive students and dates not currently in the course schedule.
+        - Treats "nothing to clear" as a successful no-op with explicit messaging.
+        - This action cannot be undone.
+    """
+    if student is None:
+        user_selection = prompt_find_student(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            return
+
+        student = cast(Student, user_selection)
+
+    attendance_response = gradebook.get_attendance_for_student(student)
+
+    if not attendance_response.success:
+        helpers.display_response_failure(attendance_response)
+        print(f"\nCould not retrieve the attendance data for {student.full_name}.")
+        return
+
+    attendance_report = attendance_response.data["attendance"]
+
+    if len(attendance_report) == 0:
+        print("\nThere is no attendance data to remove.")
+        return
+
+    print(
+        f"You are about to remove the attendance data for {student.full_name} across {len(attendance_report)} {'date' if len(attendance_report) == 1 else 'dates'}."
+    )
+
+    if not helpers.confirm_action(
+        "Are you sure you want to erase this data? This action cannot be undone."
+    ):
+        helpers.returning_without_changes()
+        return
+
+    clear_response = gradebook.clear_all_attendance_data_for_student(student)
+
+    if not clear_response.success:
+        helpers.display_response_failure(clear_response)
+        print(f"\nCould not clear all attendance data for {student.full_name}.")
+        return
+
+    print(f"\n{clear_response.detail}")
+
+
+# complete
+def reset_attendance_data_by_date(
+    class_date: datetime.date | None, gradebook: Gradebook
+) -> None:
+    """
+    Clears all recorded attendance data for a single class date.
+
+    If `class_date` is None, prompts the user to select one. Displays a count of affected students before requiring confirmation. Skips the operation if no attendance data exists for the date.
+
+    Args:
+        class_date (datetime.date | None): The target class date, or None to prompt selection.
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Includes records for inactive students and dates not currently in the course schedule.
+        - Treats "nothing to clear" as a successful no-op with explicit messaging.
+        - This action cannot be undone.
+    """
+    if class_date is None:
+        user_selection = prompt_find_class_date(gradebook)
+
+        if user_selection is MenuSignal.CANCEL:
+            return
+
+        class_date = cast(datetime.date, user_selection)
+
+    attendance_response = gradebook.get_attendance_for_date(class_date, False)
+
+    if not attendance_response.success:
+        helpers.display_response_failure(attendance_response)
+        print(
+            f"\nCould not retrieve the attendance data for {formatters.format_class_date_long(class_date)}."
+        )
+        return
+
+    attendance_report = attendance_response.data["attendance"]
+
+    if len(attendance_report) == 0:
+        print("\nThere is no attendance data to remove.")
+        return
+
+    print(
+        f"You are about to remove the attendance data for {formatters.format_class_date_long(class_date)} across {len(attendance_report)} {'student' if len(attendance_report) == 1 else 'students'}."
+    )
+
+    if not helpers.confirm_action(
+        "Are you sure you want to erase this data? This action cannot be undone."
+    ):
+        helpers.returning_without_changes()
+        return
+
+    clear_response = gradebook.clear_all_attendance_data_for_date(class_date)
+
+    if not clear_response.success:
+        helpers.display_response_failure(clear_response)
+        print(
+            f"\nCould not clear all attendance data for {formatters.format_class_date_long(class_date)}."
+        )
+        return
+
+    print(f"\n{clear_response.detail}")
+
+
+# complete
+def reset_all_attendance_data(gradebook: Gradebook) -> None:
+    """
+    Clears all attendance data in the gradebook.
+
+    Displays a warning with the scope of the operation, requires an initial yes/no confirmation, and then requires the user to type the word "DELETE" to proceed. Skips the operation if either confirmation is declined.
+
+    Args:
+        gradebook (Gradebook): The active `Gradebook`.
+
+    Notes:
+        - Deletes all attendance records for all students and all dates.
+        - The course schedule and other gradebook data remain intact.
+        - Treats "nothing to clear" as a successful no-op with explicit messaging.
+        - This action cannot be undone.
+    """
+    print(
+        "\nYou are about to delete all attendance data in the gradebook, erasing attendance records for all dates in the course schedule and all students in the class roster."
+    )
+
+    if not helpers.confirm_action(
+        "Are you sure you want to erase this data? This action cannot be undone."
+    ):
+        return
+
+    while True:
+        user_confirmation = helpers.prompt_user_input_or_cancel(
+            "Please type 'DELETE' to confirm this action."
+        )
+
+        if user_confirmation is MenuSignal.CANCEL:
+            print("Confirmation canceled. Returning without changes.")
+            return
+        elif user_confirmation == "DELETE":
+            break
+
+    clear_response = gradebook.clear_all_attendance_data_for_gradebook()
+
+    if not clear_response.success:
+        helpers.display_response_failure(clear_response)
+        print(f"\nCould not completely clear all attendance data in the gradebook.")
+        return
+
+    print(f"\n{clear_response.detail}")
 
 
 # === finder methods ===
@@ -2196,7 +2603,6 @@ def prompt_find_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
 
                 if not helpers.confirm_action("Would you like to try again?"):
                     return MenuSignal.CANCEL
-
                 else:
                     continue
 
@@ -2213,7 +2619,6 @@ def prompt_find_class_date(gradebook: Gradebook) -> datetime.date | MenuSignal:
                         "Date discarded. Would you like to try choosing a date again?"
                     ):
                         return MenuSignal.CANCEL
-
                     else:
                         continue
 
@@ -2266,7 +2671,6 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
 
                 if not helpers.confirm_action("Would you like to try again?"):
                     return MenuSignal.CANCEL
-
                 else:
                     continue
 

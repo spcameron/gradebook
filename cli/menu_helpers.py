@@ -19,7 +19,6 @@ from typing import Any, Callable, Iterable
 
 import cli.model_formatters as model_formatters
 import core.formatters as formatters
-from cli.menus.attendance_menu import GatewayState
 from core.response import Response
 from models.assignment import Assignment
 from models.category import Category
@@ -234,7 +233,7 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
     print(f"\nAttendance summary for {formatters.format_class_date_long(class_date)}:")
 
     if attendance_summary == {}:
-        print(f"Attendance has not been recorded yet for this date.")
+        print("Attendance has not been recorded yet for this date.")
         return
 
     display_attendance_buckets(attendance_summary.items())
@@ -249,10 +248,23 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
             print(f"... {student.full_name:<20} | {status}")
 
 
-# TODO: docstring
 def display_attendance_buckets(
     mappings: Iterable[tuple[str, AttendanceStatus]],
 ) -> None:
+    """
+    Print a single-line summary of attendance counts by status.
+
+    Args:
+        mappings (Iterable[tuple[str, AttendanceStatus]]): Iterable of (student_id, status)
+            pairs to tally.
+
+    Behavior:
+        - Counts every `AttendanceStatus` (including zeros) in enum order.
+        - Renders as: `[ Present: N | Absent: N | Excused: N | Late: N | Unmarked: N ]`
+          padded to fixed columns, with a dashed rule above and below.
+        - Writes to stdout; does not mutate gradebook state.
+        - Consumes the iterable; pass a reusable sequence if needed.
+    """
     counts = Counter(item[1] for item in mappings)
 
     parts = [f"{status.value}: {counts.get(status, 0)}" for status in AttendanceStatus]
@@ -260,11 +272,6 @@ def display_attendance_buckets(
     line = "-" * len(buckets)
 
     print(f"\n{line}{buckets}{line}\n")
-
-
-# TODO:
-def display_remaining_unmarked_preview(gateway_state: GatewayState) -> None:
-    print("TODO: IMPLEMENT DISPLAY_REMAINING_UNMARKED_PREVIEW")
 
 
 # === prompt user input methods ===

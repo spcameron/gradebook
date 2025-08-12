@@ -37,14 +37,13 @@ class Gradebook:
 
     def __init__(self, save_dir_path: str):
         self._metadata: dict[str, Any] = {}
+        self._unsaved_changes: bool = False
         self._students: dict[str, Student] = {}
         self._categories: dict[str, Category] = {}
         self._assignments: dict[str, Assignment] = {}
         self._submissions: dict[str, Submission] = {}
         self._class_dates: set[datetime.date] = set()
-        # _dir_path uses property setter
-        self.dir_path: str = save_dir_path
-        self._unsaved_changes: bool = False
+        self._dir_path: str = save_dir_path
 
     # === properties ===
 
@@ -85,13 +84,14 @@ class Gradebook:
         return self._metadata["uses_weighting"]
 
     @property
-    def path(self) -> str:
+    def dir_path(self) -> str:
         return self._dir_path
 
     # TODO: probably worth including validation and defense
-    @path.setter
-    def path(self, dir_path: str) -> None:
-        self._dir_path = dir_path
+
+    # @path.setter
+    # def path(self, dir_path: str) -> None:
+    #     self._dir_path = dir_path
 
     # --- status markers ---
 
@@ -720,7 +720,6 @@ class Gradebook:
 
     # --- attendance records ---
 
-    # TODO:
     def get_attendance_for_date(
         self, class_date: datetime.date, active_only: bool = True
     ) -> Response:
@@ -3261,7 +3260,7 @@ class Gradebook:
                     status_code=404,
                 )
 
-            clear_data_response = self.clear_roster_attendance_for_date(class_date)
+            clear_data_response = self.clear_all_attendance_data_for_date(class_date)
 
             if not clear_data_response.success:
                 return Response.fail(
@@ -3304,8 +3303,8 @@ class Gradebook:
                     - 200 on success
                     - 400 on failure
                 - data (dict | None):
-                    - "success": (list[datetime.date]): Class dates that were successfully removed.
-                    - "failure": (list[datetime.date]): Class dates that were not removed due to errors (e.g., could not find date in course schedule, or roster attendance data could not be erased).
+                    - "success" (list[datetime.date]): Class dates that were successfully removed.
+                    - "failure" (list[datetime.date]): Class dates that were not removed due to errors (e.g., could not find date in course schedule, or roster attendance data could not be erased).
 
         Notes:
             - Each call to `remove_class_date()` will invoke `_mark_dirty()` if the removal succeeds.
@@ -3362,10 +3361,36 @@ class Gradebook:
                     },
                 )
 
-    # TODO: docstring
     def mark_student_attendance_for_date(
         self, class_date: datetime.date, student: Student, status: AttendanceStatus
     ) -> Response:
+        """
+        Sets a student's attendance status for a specific class date.
+
+        Args:
+            class_date (datetime.date): The target date in the course schedule.
+            student (Student): The student to update.
+            status (AttendanceStatus): The new attendance status to set.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (including when the existing status already matches the requested status and no change was needed).
+                    - False if the date is not in the course schedule, the student is not in the roster, or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if the date is not in the schedule or the student cannot be found.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "record" (Student): The updated `Student` object.
+
+        Notes:
+            - Recording attendance requires the date to exist in the course schedule.
+            - If the provided status matches the current status, this is treated as a successful no-op.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
         if student.attendance_on(class_date) == status:
             return Response.succeed(
                 detail="The attendance status provided matches the current attendance status. No changes made.",
@@ -3407,16 +3432,52 @@ class Gradebook:
                 },
             )
 
-    # TODO: docstring
     def batch_mark_student_attendance_for_date(
         self,
         class_date: datetime.date,
         staged_changes: list[tuple[str, AttendanceStatus]],
     ) -> Response:
+        """
+        Applies multiple attendance updates for a single class date.
+
+        Processes a list of (student_id, status) pairs and attempts to mark each student for the given `class_date`. Aggregates per-student outcomes and reports overall success only if all staged changes are applied.
+
+        Args:
+            class_date (datetime.date): The target date in the course schedule.
+            staged_changes (list[tuple[str, AttendanceStatus]]): A list of (student_id, status) updates.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if all staged changes were applied successfully.
+                    - False if any update failed or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the issue.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if one or more updates could not be applied.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "success" (list[tuple[str, AttendanceStatus]]): Updates that were applied.
+                    - "failure" (list[tuple[str, AttendanceStatus]]): Updates that were not applied.
+
+        Notes:
+            - Each update uses `mark_student_attendance_for_date()` and inherits its validation and error semantics.
+            - If `class_date` is not in the schedule, all updates will fail.
+            - If the same student appears multiple times in `staged_changes`, later entries overwrite earlier ones.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
         success = []
         failure = []
 
         try:
+            if class_date not in self.class_dates:
+                return Response.fail(
+                    detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
+                    error=ErrorCode.NOT_FOUND,
+                    status_code=404,
+                )
+
             for student_id, status in staged_changes:
                 student_response = self.find_student_by_uuid(student_id)
 
@@ -3462,24 +3523,49 @@ class Gradebook:
                     },
                 )
 
-    # TODO: doc string
     def clear_student_attendance_for_date(
         self, class_date: datetime.date, student: Student
     ) -> Response:
-        if student.attendance_on(class_date) == AttendanceStatus.UNMARKED:
-            return Response.succeed(
-                detail="The attendance status for this date is already 'Unmarked'. No changes made.",
-                data={
-                    "record": student,
-                },
-            )
+        """
+        Removes the attendance record for a single student on a given class date.
 
+        Args:
+            class_date (datetime.date): The date whose attendance record will be deleted.
+            student (Student): The student whose attendance record will be deleted.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (even if the status was already `UNMARKED`).
+                    - False if no matching student could be found or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching student could be found.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "record" (Student): The updated `Student` object.
+
+        Notes:
+            - If the student's attendance status for the date is already `UNMARKED`, this is treated as a successful no-op.
+            - Includes records for inactive students and dates not present in the current schedule.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
         try:
             if student.id not in self.students:
                 return Response.fail(
                     detail=f"No matching student could be found: {student.full_name}",
                     error=ErrorCode.NOT_FOUND,
                     status_code=404,
+                )
+
+            if student.attendance_on(class_date) == AttendanceStatus.UNMARKED:
+                return Response.succeed(
+                    detail="The attendance status for this date is already 'Unmarked'. No changes made.",
+                    data={
+                        "record": student,
+                    },
                 )
 
             student.clear_attendance(class_date)
@@ -3500,8 +3586,116 @@ class Gradebook:
                 },
             )
 
-    # TODO: docstring
-    def clear_roster_attendance_for_date(self, class_date: datetime.date) -> Response:
+    def clear_all_attendance_data_for_student(self, student: Student) -> Response:
+        """
+        Removes all attendance records for a given student.
+
+        Args:
+            student (Student): The student whose attendance records will be deleted.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (even if no records were found).
+                    - False if no matching student could be found or unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.NOT_FOUND` if no matching student could be found.
+                    - `ErrorCode.VALIDATION_FAILED` if there are any failed `clear_student_attendance_for_date` attempts.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "success" (list[datetime.date]): Class dates that were successfully cleared.
+                    - "failure" (list[datetime.date]): Class dates that were not cleared due to errors.
+
+        Notes:
+            - Includes records for inactive students and for dates not present in the current schedule.
+            - A student with no attendance records will return success.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
+        if student.id not in self.students:
+            return Response.fail(
+                detail=f"No matching student could be found: {student.full_name}",
+                error=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+
+        success = []
+        failure = []
+
+        attendance_records = student.attendance_records
+
+        try:
+            for class_date in attendance_records.keys():
+                clear_response = self.clear_student_attendance_for_date(
+                    class_date, student
+                )
+
+                if clear_response.success:
+                    success.append(class_date)
+
+                else:
+                    failure.append(class_date)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "success": success,
+                    "failure": failure,
+                },
+            )
+
+        else:
+            if len(success) == len(attendance_records):
+                return Response.succeed(
+                    detail=f"All attendance data for {student.full_name} successfully erased from the gradebook.",
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+            else:
+                return Response.fail(
+                    detail=f"Not all attendance data for {student.full_name} could be successfully erased from the gradebook.",
+                    error=ErrorCode.VALIDATION_FAILED,
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+    def clear_all_attendance_data_for_date(self, class_date: datetime.date) -> Response:
+        """
+        Removes all attendance records for a given class date.
+
+        Args:
+            class_date (datetime.date): The date whose attendance records will be deleted.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (even if no records were found).
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.VALIDATION_FAILED` if there are any failed `clear_student_attendance_for_date` attempts.
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "success" (list[Student]): Student records that were successfully cleared for this date.
+                    - "failure" (list[Student]): Student records that were not cleared due to errors.
+
+        Notes:
+            - Includes records for inactive students.
+            - Dates not present in the course schedule are still valid targets.
+            - A date with no attendance records will return success.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
         success = []
         failure = []
 
@@ -3533,7 +3727,7 @@ class Gradebook:
         else:
             if len(success) == len(self.students):
                 return Response.succeed(
-                    detail=f"All student attendance data on {formatters.format_class_date_short(class_date)} successfully erased.",
+                    detail=f"All student attendance data on {formatters.format_class_date_short(class_date)} successfully erased from the gradebook.",
                     data={
                         "success": success,
                         "failure": failure,
@@ -3550,14 +3744,108 @@ class Gradebook:
                     },
                 )
 
-    # TODO: docstring
+    def clear_all_attendance_data_for_gradebook(self) -> Response:
+        """
+        Removes all attendance records in the gradebook.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (even if no records were found).
+                    - False if unexpected errors occur.
+                - detail (str | None):
+                    - On failure, a human-readable description of the error.
+                    - On success, a simple confirmation message.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - "success" (list[Student]): Students whose attendance was fully cleared.
+                    - "failure" (list[Student]): Students whose attendance could not be fully cleared.
+
+        Notes:
+            - Removes all attendance for all students and all dates.
+            - The course schedule and other gradebook data will remain intact.
+            - An empty gradebook will return success.
+            - This method never raises; unexpected errors are captured in a failed Response.
+        """
+
+        success = []
+        failure = []
+
+        try:
+            for student in self.students.values():
+                clear_response = self.clear_all_attendance_data_for_student(student)
+
+                if clear_response.success:
+                    success.append(student)
+                else:
+                    failure.append(student)
+
+        except Exception as e:
+            return Response.fail(
+                detail=f"Unexpected error: {e}",
+                error=ErrorCode.INTERNAL_ERROR,
+                data={
+                    "success": success,
+                    "failure": failure,
+                },
+            )
+
+        else:
+            if len(failure) > 0:
+                return Response.fail(
+                    detail=f"Not all attendance data could be successfully erased from the gradebook.",
+                    error=ErrorCode.VALIDATION_FAILED,
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+            else:
+                return Response.succeed(
+                    detail="All attendance data successfully erased from the gradebook.",
+                    data={
+                        "success": success,
+                        "failure": failure,
+                    },
+                )
+
+    # TODO: complete, but unsused
+    # after removing a class date
+    # once on load/import to catch legacy junk
+    # expose as manual maintenance option
+    # part of save and exit hook
     def scrub_orphaned_attendance(self) -> Response:
-        # scan students for any dates not in self.class_dates and clear them
+        """
+        Removes attendance records for dates not present in the current course schedule.
+
+        Iterates through all students and deletes any attendance entries whose date is not listed in `self.class_dates`. This is intended as a maintenance utility to clean up "orphaned" records after schedule edits.
+
+        Returns:
+            Response: A structured response with the following contract:
+                - success (bool):
+                    - True if the operation completed successfully (even if no records were removed).
+                    - False only if unexpected errors occur.
+                - detail (str | None):
+                    - On success, a message indicating the number of records removed or that no changes were needed.
+                    - On failure, a human-readable description of the error.
+                - error (ErrorCode | str | None):
+                    - `ErrorCode.INTERNAL_ERROR` for unexpected errors.
+                - data (dict | None):
+                    - None (current implementation does not return a breakdown of affected students or dates).
+
+        Notes:
+            - Operates directly on `Student.attendance_records` to bypass schedule membership checks in gradebook-level clear methods.
+            - Counts reflect the total number of date entries removed across all students.
+            - This method never raises; unexpected errors are captured in a failed Response.
+            - If no orphaned dates are found, the method returns success with no changes made.
+        """
         try:
             scrubbed_count = 0
 
             for student in self.students.values():
-                for class_date in student.attendance_records.keys():
+                for class_date in list(student.attendance_records.keys()):
                     if class_date not in self.class_dates:
                         # operates directly because gradebook.clear_attendance_* presumes the date is in class_dates and returns no-op success if record is unmarked. direct access guarantees dict.pop(date, None) will be called.
                         student.clear_attendance(class_date)
@@ -3574,12 +3862,12 @@ class Gradebook:
                 self._mark_dirty()
 
                 return Response.succeed(
-                    detail=f"A total of {scrubbed_count} orphaned {'date' if scrubbed_count == 1 else 'dates'} successfully erased from student attendance records.",
+                    detail=f"A total of {scrubbed_count} orphaned {'record' if scrubbed_count == 1 else 'records'} successfully erased from student attendance records.",
                 )
 
             else:
                 return Response.succeed(
-                    detail="No orphaned dates were found. No changes made."
+                    detail="No orphaned records were found. No changes made."
                 )
 
     # === data validators ===
@@ -3670,36 +3958,3 @@ class Gradebook:
         return input.strip().lower()
 
     # === dunder methods ===
-
-
-# docstring template for methods that return Response objects
-
-
-"""
-TEMPLATE FOR DOCSTRINGS THAT RETURN A RESPONSE
-
-<One-sentence summary of what this method does.>
-
-Args:
-    <param1> (<type>): <description>.
-    <param2> (<type>): <description>.
-    ...
-
-Returns:
-    Response: A structured response with the following contract:
-        - success (bool): True if the operation was successful.
-        - detail (str | None): Description of the result for display or logging.
-        - error (ErrorCode | str | None): A machine-readable error code, if any.
-        - status_code (int | None): HTTP-style status code (e.g., 200, 404). Optional in CLI.
-        - data (dict | None): Payload with the following keys:
-            - "<key1>" (<type>): <description of value>.
-            - "<key2>" (<type>): <description of value>.
-            ...
-
-Notes:
-    - <State if method is read-only or mutates gradebook state>.
-    - <Mention any expected preconditions or invariants>.
-    - <What does success/failure look like, if not clear from above?>
-    - <What assumptions must the caller uphold?>
-    - <Does this touch or cascade to other objects?>
-"""

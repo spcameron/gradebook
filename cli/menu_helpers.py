@@ -237,6 +237,8 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
         print(f"Attendance has not been recorded yet for this date.")
         return
 
+    display_attendance_buckets(attendance_summary.items())
+
     for student_id, attendance in attendance_summary.items():
         student_response = gradebook.find_student_by_uuid(student_id)
 
@@ -247,12 +249,17 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
             print(f"... {student.full_name:<20} | {status}")
 
 
-def display_attendance_buckets(mappings: list[tuple[str, AttendanceStatus]]) -> None:
+# TODO: docstring
+def display_attendance_buckets(
+    mappings: Iterable[tuple[str, AttendanceStatus]],
+) -> None:
     counts = Counter(item[1] for item in mappings)
 
     parts = [f"{status.value}: {counts.get(status, 0)}" for status in AttendanceStatus]
+    buckets = f"[ {' | '.join(f'{part:<15}' for part in parts)} ]"
+    line = "-" * len(buckets)
 
-    print(f"[ {' | '.join(f'{part:<15}' for part in parts)} ]")
+    print(f"\n{line}{buckets}{line}\n")
 
 
 # TODO:

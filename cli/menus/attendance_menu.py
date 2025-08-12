@@ -326,10 +326,8 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 menu_response(gradebook)
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -371,10 +369,8 @@ def manage_class_schedule(gradebook: Gradebook):
 
         if menu_response is MenuSignal.EXIT:
             break
-
         elif callable(menu_response):
             menu_response(gradebook)
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -1088,7 +1084,7 @@ def prompt_no_classes_dates() -> list[datetime.date]:
 # === record attendance ===
 
 
-# TODO: checkpoint
+# TODO: docstring
 def record_attendance(gradebook: Gradebook) -> None:
     # TODO: docstring
     def refresh_state(date: datetime.date) -> GatewayState | None:
@@ -1259,7 +1255,7 @@ def record_attendance(gradebook: Gradebook) -> None:
                 return
 
     # TODO: docstring
-    def apply_now(date: datetime.date) -> None:
+    def apply_now(date: datetime.date, prompt_to_exit: bool = False) -> None:
         nonlocal should_display_gateway
 
         prev_failed_count = -1
@@ -1385,22 +1381,177 @@ def record_attendance(gradebook: Gradebook) -> None:
 
             break
 
-        if helpers.confirm_action(
+        if prompt_to_exit and helpers.confirm_action(
             f"Are you finished recording attendance for {state.date_label_short}?"
         ):
             should_display_gateway = False
 
-    # TODO:
-    def edit_existing() -> None:
-        pass
+    # TODO: docstring
+    def edit_existing(date: datetime.date) -> None:
+        while not stager.is_empty():
+            print(
+                "\nYou have staged changes that have not been applied to the gradebook yet."
+            )
+            print(
+                "In order to proceed to the edit attendance menu, it is necessary to either apply these changes now or discard them."
+            )
+
+            title = "How would you like to handle these staged changes?"
+            options = [
+                (
+                    "Apply staged changes now and proceed to editing",
+                    lambda: MenuSignal.APPLY,
+                ),
+                (
+                    "Discard staged changes and proceed to editing",
+                    lambda: MenuSignal.DISCARD,
+                ),
+            ]
+            zero_option = "Cancel and return"
+
+            menu_response = helpers.display_menu(title, options, zero_option)
+
+            if menu_response is MenuSignal.EXIT:
+                return
+
+            elif callable(menu_response):
+                match menu_response():
+                    case MenuSignal.APPLY:
+                        print("\nApplying staged changes ...")
+                        apply_now(date)
+                        continue
+
+                    case MenuSignal.DISCARD:
+                        # TODO: confirm discard
+                        print("\nDiscarding staged changes ...")
+                        stager.clear()
+                        continue
+
+                    case _:
+                        raise RuntimeError(
+                            f"Unexpected MenuResponse received: {menu_response}"
+                        )
+
+            else:
+                raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+        edit_by_date(date, gradebook)
+
+    # TODO: docstring
+    def clear_date(date: datetime.date) -> None:
+        if not helpers.confirm_action(
+            f"Are you certain you want to clear all attendance data{' (not including staged changes)' if not stager.is_empty() else ''} for {formatters.format_class_date_long(date)} for all students (active and inactive)? This action cannot be undone."
+        ):
+            helpers.returning_without_changes()
+            return
+
+        if not stager.is_empty():
+            print(
+                "\nYou have staged changes that have not been applied to the gradebook yet."
+            )
+
+            title = "How would you like to handle these staged changes?"
+
+            options = [
+                (
+                    "Preserve staged changes and clear gradebook",
+                    lambda: MenuSignal.KEEP,
+                ),
+                (
+                    "Discard staged changes and clear gradebook",
+                    lambda: MenuSignal.DISCARD,
+                ),
+            ]
+
+            zero_option = "Cancel and return"
+
+            menu_response = helpers.display_menu(title, options, zero_option)
+
+            if menu_response is MenuSignal.EXIT:
+                return
+
+            elif callable(menu_response):
+                match menu_response():
+                    case MenuSignal.KEEP:
+                        print("\nPreserving staged changes ...")
+
+                    case MenuSignal.DISCARD:
+                        # TODO: confirm discard
+                        print("\nDiscarding staged changes ...")
+                        stager.clear()
+
+                    case _:
+                        raise RuntimeError(
+                            f"Unexpected MenuResponse received: {menu_response}"
+                        )
+
+            else:
+                raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+        snapshot = stager.status_map
+
+        clear_response = gradebook.clear_roster_attendance_for_date(date)
+
+        if not clear_response.success:
+            helpers.display_response_failure(clear_response)
+
+            print("\nRestoring staged changes to prior state.")
+
+            stager.revert_to_snapshot(snapshot)
+            return
+
+        print(f"\n{clear_response.detail}")
+
+        if not stager.is_empty() and helpers.confirm_action(
+            "Would you like to apply the staged changes now?"
+        ):
+            apply_now(date, True)
 
     # TODO:
-    def clear_date() -> None:
-        pass
+    def exit_gateway(date: datetime.date) -> None:
+        nonlocal should_display_gateway
 
-    # TODO:
-    def exit_gateway() -> None:
-        pass
+        while not stager.is_empty():
+            print(
+                "\nYou have staged changes that have not been applied to the gradebook yet."
+            )
+
+            title = "How would you like to handle these staged changes?"
+
+            options = [
+                ("Apply changes now and exit", lambda: MenuSignal.APPLY),
+                ("Discard changes and exit", lambda: MenuSignal.DISCARD),
+            ]
+
+            zero_option = "Cancel and return"
+
+            menu_response = helpers.display_menu(title, options, zero_option)
+
+            if menu_response is MenuSignal.EXIT:
+                return
+
+            elif callable(menu_response):
+                match menu_response():
+                    case MenuSignal.APPLY:
+                        print("\nApplying staged changes ...")
+                        apply_now(date)
+                        continue
+
+                    case MenuSignal.DISCARD:
+                        # TODO: confirm discard
+                        print("\nDiscarding staged changes ...")
+                        stager.clear()
+                        continue
+
+                    case _:
+                        raise RuntimeError(
+                            f"Unexpected MenuResponse received: {menu_response}"
+                        )
+
+            else:
+                raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+
+        should_display_gateway = False
 
     # resolve class date
     class_date = resolve_class_date(gradebook)
@@ -1489,7 +1640,6 @@ def record_attendance(gradebook: Gradebook) -> None:
                 stage_remaining(AttendanceStatus.ABSENT, gateway_state)
                 continue
 
-            # TODO:
             case GatewayResponse.EDIT_EXISTING:
                 """
                 goal: scapel flow; gradebook writes happen immediately
@@ -1506,6 +1656,8 @@ def record_attendance(gradebook: Gradebook) -> None:
                     - on return, do nothing else here; the next loop rebuild picks up changes
                 """
                 pass
+                edit_existing(class_date)
+                continue
 
             case GatewayResponse.APPLY_NOW:
                 """
@@ -1529,10 +1681,9 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 5. helpers.returning_to() and exit orchestrator
                 """
-                apply_now(gateway_state.class_date)
+                apply_now(gateway_state.class_date, True)
                 continue
 
-            # TODO:
             case GatewayResponse.CLEAR_DATE:
                 """
                 goal: wipe gradebook marks for ALL students, leave staging as the user chooses
@@ -1550,7 +1701,8 @@ def record_attendance(gradebook: Gradebook) -> None:
 
                 3. prompt to apply changes now?
                 """
-                pass
+                clear_date(class_date)
+                continue
 
             # TODO:
             case GatewayResponse.CANCEL:
@@ -1564,12 +1716,20 @@ def record_attendance(gradebook: Gradebook) -> None:
                     - discard staged -> stager.clear(), helpers.returning_without_changes()
                     - return to gateway -> do nothing, continue
                 """
-                pass
+                exit_gateway(class_date)
+                continue
 
             case _:
                 raise RuntimeError(
-                    f"Unexpected GatewayResponse recieved: {gateway_response}"
+                    f"Unexpected GatewayResponse received: {gateway_response}"
                 )
+
+    if helpers.confirm_action(
+        f"Would you like to see the attendance summary for {formatters.format_class_date_short(class_date)} before exiting?"
+    ):
+        helpers.display_attendance_summary(class_date, gradebook)
+
+    helpers.returning_to("Manage Attendance menu")
 
 
 # TODO: review and docstring
@@ -1682,7 +1842,7 @@ def prompt_gateway_response(
 
     title = f"Attendance options for {gateway_state.date_label_long}:"
     options = build_gateway_options(gateway_state)
-    zero_option = "Cancel"
+    zero_option = "Cancel and exit Record Attendance menu"
 
     menu_response = helpers.display_menu(title, options, zero_option)
 

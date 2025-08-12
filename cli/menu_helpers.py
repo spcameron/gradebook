@@ -255,13 +255,11 @@ def display_attendance_buckets(
     Print a single-line summary of attendance counts by status.
 
     Args:
-        mappings (Iterable[tuple[str, AttendanceStatus]]): Iterable of (student_id, status)
-            pairs to tally.
+        mappings (Iterable[tuple[str, AttendanceStatus]]): Iterable of (student_id, status) pairs to tally.
 
     Behavior:
         - Counts every `AttendanceStatus` (including zeros) in enum order.
-        - Renders as: `[ Present: N | Absent: N | Excused: N | Late: N | Unmarked: N ]`
-          padded to fixed columns, with a dashed rule above and below.
+        - Renders as: `[ Present: N | Absent: N | Excused: N | Late: N | Unmarked: N ]` padded to fixed columns, with a dashed rule above and below.
         - Writes to stdout; does not mutate gradebook state.
         - Consumes the iterable; pass a reusable sequence if needed.
     """

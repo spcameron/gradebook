@@ -533,8 +533,8 @@ def handle_missing_weights(
 
         title = f"Resolve {category.name}"
         options = [
-            ("Set weight to 0.0", lambda: set_to_zero(category)),
-            ("Archive this category", lambda: confirm_and_archive(category)),
+            ("Set weight to 0.0", lambda c=category: set_to_zero(c)),
+            ("Archive this category", lambda c=category: confirm_and_archive(c)),
             ("Reassign weights for all", lambda: assign_weights(gradebook)),
         ]
         zero_option = "Cancel validation and return"
@@ -557,7 +557,9 @@ def handle_missing_weights(
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
-        categories_missing_weights = [c for c in active_categories if c.weight is None]
+        categories_missing_weights = [
+            c for c in active_categories if c.weight is None and c.is_active
+        ]
 
     helpers.prompt_if_dirty(gradebook)
 

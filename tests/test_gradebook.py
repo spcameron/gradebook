@@ -1,8 +1,9 @@
 # tests/test_gradebook.py
 
-import os
 import json
+import os
 import tempfile
+
 from models.student import Student
 
 

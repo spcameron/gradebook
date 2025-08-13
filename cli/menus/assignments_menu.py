@@ -14,7 +14,8 @@ Control flow adheres to structured CLI menu patterns with clear terminal-level f
 """
 
 import datetime
-from typing import Callable, cast
+from collections.abc import Callable
+from typing import cast
 
 import cli.menu_helpers as helpers
 import cli.model_formatters as model_formatters

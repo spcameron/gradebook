@@ -14,8 +14,9 @@ These functions are shared across all menu modules to maintain consistent behavi
 
 import datetime
 from collections import Counter
+from collections.abc import Callable, Iterable
 from enum import Enum
-from typing import Any, Callable, Iterable
+from typing import Any
 
 import cli.model_formatters as model_formatters
 import core.formatters as formatters

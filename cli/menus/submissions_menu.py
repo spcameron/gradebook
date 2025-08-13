@@ -13,7 +13,8 @@ All operations are routed through the `Gradebook` API for consistency, validatio
 Control flow adheres to traditional CLI menu patterns with clear terminal-level feedback.
 """
 
-from typing import Callable, cast
+from collections.abc import Callable
+from typing import cast
 
 import cli.menu_helpers as helpers
 import cli.model_formatters as model_formatters

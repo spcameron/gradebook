@@ -1,12 +1,14 @@
 # tests/conftest.py
 
 import os
-import pytest
 from datetime import datetime
-from models.student import Student
-from models.gradebook import Gradebook
+
+import pytest
+
 from models.assignment import Assignment
 from models.category import Category
+from models.gradebook import Gradebook
+from models.student import Student
 from models.submission import Submission
 
 TEST_DATA_DIR = os.path.join(

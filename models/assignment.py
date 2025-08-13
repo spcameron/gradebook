@@ -125,7 +125,7 @@ class Assignment:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Assignment":
+    def from_dict(cls, data: dict) -> Assignment:
         due_date_str = data.get("due_date")
         due_date = (
             datetime.datetime.fromisoformat(due_date_str) if due_date_str else None

@@ -16,7 +16,8 @@ from __future__ import annotations
 import datetime
 import json
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import core.formatters as formatters
 from core.response import ErrorCode, Response
@@ -218,7 +219,7 @@ class Gradebook:
             Returns:
                The deserialized JSON data, as either a dictionary or list.
             """
-            with open(os.path.join(save_dir_path, filename), "r") as f:
+            with open(os.path.join(save_dir_path, filename)) as f:
                 return json.load(f)
 
         def load_and_import(
@@ -399,7 +400,7 @@ class Gradebook:
             Returns:
                 The deserialized JSON data, as either a dictionary or list.
             """
-            with open(os.path.join(dir_path, filename), "r") as f:
+            with open(os.path.join(dir_path, filename)) as f:
                 return json.load(f)
 
         # Load metadata
@@ -3946,9 +3947,7 @@ class Gradebook:
             ValueError: If the date already exists in the gradebook schedule.
         """
         if class_date in self.class_dates:
-            raise ValueError(
-                "This class date is already found in the course schedule."
-            )
+            raise ValueError("This class date is already found in the course schedule.")
 
     # TODO: create secondary submissions index with (s_id, a_id) tuple as key
 

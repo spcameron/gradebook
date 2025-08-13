@@ -40,7 +40,7 @@ class Assignment:
         self._id = id
         self._name = name
         self._category_id = category_id
-        # points_possible uses setter method for defensive validation
+        # points_possible uses a validator
         self.points_possible = points_possible
         self._due_date_dt = due_date
         self._is_extra_credit = is_extra_credit
@@ -108,7 +108,7 @@ class Assignment:
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
-    def toggle_archived_status(self) -> None:
+    def toggle_active_status(self) -> None:
         self._is_active = not self._is_active
 
     # === persistence and import ===
@@ -126,9 +126,9 @@ class Assignment:
 
     @classmethod
     def from_dict(cls, data: dict) -> Assignment:
-        due_date_str = data.get("due_date")
-        due_date = (
-            datetime.datetime.fromisoformat(due_date_str) if due_date_str else None
+        due_date_iso = data.get("due_date")
+        due_date_dt = (
+            datetime.datetime.fromisoformat(due_date_iso) if due_date_iso else None
         )
 
         return cls(
@@ -136,19 +136,10 @@ class Assignment:
             name=data["name"],
             category_id=data["category_id"],
             points_possible=data["points_possible"],
-            due_date=due_date,
+            due_date=due_date_dt,
             is_extra_credit=data["extra_credit"],
             active=data["active"],
         )
-
-    # === dunder methods ===
-
-    # TODO: update with due_date_dt and is_active
-    def __repr__(self) -> str:
-        return f"Assignment({self._id}, {self._name}, {self._category_id}, {self._points_possible}, {self._is_extra_credit})"
-
-    def __str__(self) -> str:
-        return f"ASSIGNMENT: name: {self._name}, id: {self._id}"
 
     # === data validators ===
 
@@ -218,3 +209,25 @@ class Assignment:
             ) from None
 
         return due_date_dt
+
+    # === dunder methods ===
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.id == other.id
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"id={self.id!r}, "
+            f"name={self.name!r}, "
+            f"category_id={self.category_id!r}, "
+            f"points_possible={self.points_possible!r}, "
+            f"due_date={self.due_date_dt!r}, "
+            f"is_extra_credit={self.is_extra_credit!r}, "
+            f"active={self.is_active!r})"
+        )
+
+    def __str__(self) -> str:
+        return f"ASSIGNMENT: {self.name} - (ID: {self.id[:8]})"

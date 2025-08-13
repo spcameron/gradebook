@@ -37,13 +37,10 @@ def run_cli() -> None:
 
         if menu_response is MenuSignal.EXIT:
             exit_program()
-
         elif callable(menu_response):
             gradebook = menu_response()
-
             if gradebook is not None:
                 course_menu.run(gradebook)
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -64,21 +61,23 @@ def create_gradebook() -> Gradebook | None:
         - Gradebook instantiation and validation are delegated to `Gradebook.create()`, which returns a structured `Response`.
     """
     while True:
-        name = helpers.prompt_user_input_or_cancel(
+        user_input = helpers.prompt_user_input_or_cancel(
             "Enter the course name (e.g. THTR 274A, leave blank to cancel):"
         )
 
-        if name is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             return None
-        name = cast(str, name)
 
-        term = helpers.prompt_user_input_or_cancel(
+        name = cast(str, user_input)
+
+        user_input = helpers.prompt_user_input_or_cancel(
             "Enter the course term (e.g. FALL 2025, leave blank to cancel):"
         )
 
-        if term is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             return None
-        term = cast(str, term)
+
+        term = cast(str, user_input)
 
         dir_input = helpers.prompt_user_input_or_none(
             "Enter directory to save the Gradebook (leave blank to use default):"
@@ -94,11 +93,12 @@ def create_gradebook() -> Gradebook | None:
                     """\
                     The selected directory is not empty and may contain existing data.
                     It is recommended to store new Gradebooks in an empty directory.
-                    Writing to this directory may result in the loss of existing data."""
+                    Writing to this directory may result in the loss of existing data.
+                    """
                 )
             )
 
-            if not helpers.confirm_action("\nDo you wish to continue?"):
+            if not helpers.confirm_action("\nDo you want to continue?"):
                 continue
 
         print("\nCreating Gradebook ...")
@@ -129,14 +129,14 @@ def load_gradebook() -> Gradebook | None:
         - Gradebook deserialization and validation are handled by `Gradebook.load()`, which returns a structured `Response`.
     """
     while True:
-        dir_path = helpers.prompt_user_input_or_cancel(
+        user_input = helpers.prompt_user_input_or_cancel(
             "Enter path to Gradebook directory (leave blank to cancel):"
         )
 
-        if dir_path is MenuSignal.CANCEL:
+        if user_input is MenuSignal.CANCEL:
             return None
-        dir_path = cast(str, dir_path)
 
+        dir_path = cast(str, user_input)
         dir_path = os.path.expanduser(dir_path)
         dir_path = os.path.abspath(dir_path)
 
@@ -169,7 +169,6 @@ def exit_program():
     """
     exit_banner = formatters.format_banner_text("Exiting Program")
     print(f"\n{exit_banner}\n")
-
     raise SystemExit
 
 

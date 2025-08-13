@@ -35,15 +35,19 @@ class Submission:
         is_late: bool = False,
         is_exempt: bool = False,
     ):
-        self.id = id
+        self._id = id
         self._student_id = student_id
         self._assignment_id = assignment_id
-        self._points_earned = points_earned
+        # points_earned uses a validator
+        self.points_earned = points_earned
         self._is_late = is_late
         self._is_exempt = is_exempt
-        # self.resolved_refs = False
 
     # === properties ===
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     @property
     def student_id(self) -> str:
@@ -106,14 +110,6 @@ class Submission:
             is_exempt=data["is_exempt"],
         )
 
-    # === dunder methods ===
-
-    def __repr__(self) -> str:
-        return f"Submission({self.id}, {self._student_id}, {self._assignment_id}, {self._points_earned}, {self._is_late}, {self._is_exempt})"
-
-    def __str__(self) -> str:
-        return f"SUBMISSION: id: {self.id}, student id: {self._student_id}, assignment id: {self._assignment_id}"
-
     # === data validators ===
 
     @staticmethod
@@ -149,3 +145,24 @@ class Submission:
             raise ValueError("Invalid input. Points earned cannot be less than zero.")
 
         return points
+
+    # === dunder methods ===
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.id == other.id
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"id={self.id!r}, "
+            f"student_id={self.student_id!r}, "
+            f"assignment_id={self.assignment_id!r}, "
+            f"points_earned={self.points_earned!r}, "
+            f"is_late={self.is_late!r}, "
+            f"is_exempt={self.is_exempt!r})"
+        )
+
+    def __str__(self) -> str:
+        return f"SUBMISSION: (Assignment ID: {self.assignment_id[:8]}) - (Student ID: {self.student_id[:8]})"

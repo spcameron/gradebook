@@ -42,12 +42,13 @@ class Student:
         email: str,
         active: bool = True,
     ):
-        self._id: str = id
-        self._first_name: str = first_name
-        self._last_name: str = last_name
-        self._email: str = email
-        self._is_active: bool = active
-        self._attendance: dict[datetime.date, AttendanceStatus] = {}
+        self._id = id
+        self._first_name = first_name
+        self._last_name = last_name
+        # email uses a validator
+        self.email = email
+        self._is_active = active
+        self._attendance = {}
 
     # === properties ===
 
@@ -91,7 +92,7 @@ class Student:
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'INACTIVE'"
 
-    def toggle_archived_status(self) -> None:
+    def toggle_active_status(self) -> None:
         self._is_active = not self._is_active
 
     # === persistence and import ===
@@ -127,14 +128,6 @@ class Student:
 
         return student
 
-    # === dunder methods ===
-
-    def __repr__(self) -> str:
-        return f"Student({self._id}, {self._first_name}, {self._last_name}, {self._email}, {self._is_active})"
-
-    def __str__(self) -> str:
-        return f"STUDENT: name: {self.full_name}, email: {self._email}, id: {self._id}"
-
     # === data accessors ===
 
     # --- attendance methods ---
@@ -152,9 +145,6 @@ class Student:
     def was_absent_on(self, date: datetime.date) -> bool:
         return self.attendance_on(date) == AttendanceStatus.ABSENT
 
-    def is_attendance_marked(self, date: datetime.date) -> bool:
-        return date in self._attendance
-
     # === data manipulators ===
 
     # --- attendance methods ---
@@ -163,18 +153,6 @@ class Student:
         self, date: datetime.date, attendance_status: AttendanceStatus
     ) -> None:
         self._attendance[date] = attendance_status
-
-    # def mark_present(self, date: datetime.date) -> None:
-    #     self._attendance[date] = AttendanceStatus.PRESENT
-    #
-    # def mark_absent(self, date: datetime.date) -> None:
-    #     self._attendance[date] = AttendanceStatus.ABSENT
-    #
-    # def mark_excused(self, date: datetime.date) -> None:
-    #     self._attendance[date] = AttendanceStatus.EXCUSED_ABSENCE
-    #
-    # def mark_late(self, date: datetime.date) -> None:
-    #     self._attendance[date] = AttendanceStatus.LATE
 
     def clear_attendance(self, date: datetime.date) -> None:
         self._attendance.pop(date, None)
@@ -207,3 +185,23 @@ class Student:
                 "Invalid input. Email must be a valid address with one @ and a domain."
             )
         return email
+
+    # === dunder methods ===
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.id == other.id
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"id={self.id!r}, "
+            f"first_name={self.first_name!r}, "
+            f"last_name={self.last_name!r}, "
+            f"email={self.email!r}, "
+            f"active={self.is_active!r})"
+        )
+
+    def __str__(self) -> str:
+        return f"STUDENT: {self.full_name} - (ID: {self.id[:8]})"

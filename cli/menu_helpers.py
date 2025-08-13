@@ -80,9 +80,7 @@ def display_menu(
             return MenuSignal.EXIT
 
         try:
-            # casts choice to int and adjusts for zero-index, retrieves action from tuple
             return options[int(choice) - 1][1]
-
         except (ValueError, IndexError):
             print("Invalid selection. Please try again.")
 
@@ -240,9 +238,11 @@ def display_attendance_summary(class_date: datetime.date, gradebook: Gradebook) 
     display_attendance_buckets(attendance_summary.items())
 
     for student_id, attendance in attendance_summary.items():
-        student_response = gradebook.find_student_by_uuid(student_id)
+        gradebook_response = gradebook.find_student_by_uuid(student_id)
 
-        student = student_response.data["record"] if student_response.success else None
+        student = (
+            gradebook_response.data["record"] if gradebook_response.success else None
+        )
         status = attendance.value
 
         if student is not None:
@@ -265,7 +265,6 @@ def display_attendance_buckets(
         - Consumes the iterable; pass a reusable sequence if needed.
     """
     counts = Counter(item[1] for item in mappings)
-
     parts = [f"{status.value}: {counts.get(status, 0)}" for status in AttendanceStatus]
     buckets = f"[ {' | '.join(f'{part:<15}' for part in parts)} ]"
     line = "-" * len(buckets)
@@ -297,10 +296,8 @@ def confirm_action(prompt: str) -> bool:
 
         if choice == "y" or choice == "yes":
             return True
-
         elif choice == "n" or choice == "no":
             return False
-
         else:
             print("Invalid selection. Please try again.")
 
@@ -325,18 +322,18 @@ def prompt_user_input(prompt: str) -> str:
 
 
 def prompt_user_input_or_cancel(prompt: str) -> str | MenuSignal:
-    response = prompt_user_input(prompt)
-    return MenuSignal.CANCEL if response == "" else response
+    user_input = prompt_user_input(prompt)
+    return MenuSignal.CANCEL if user_input == "" else user_input
 
 
 def prompt_user_input_or_default(prompt: str) -> str | MenuSignal:
-    response = prompt_user_input(prompt)
-    return MenuSignal.DEFAULT if response == "" else response
+    user_input = prompt_user_input(prompt)
+    return MenuSignal.DEFAULT if user_input == "" else user_input
 
 
 def prompt_user_input_or_none(prompt: str) -> str | None:
-    response = prompt_user_input(prompt)
-    return None if response == "" else response
+    user_input = prompt_user_input(prompt)
+    return None if user_input == "" else user_input
 
 
 # === finder, search, and select methods ===
@@ -375,7 +372,6 @@ def prompt_selection_from_list(
 
     while True:
         print(f"\n{formatters.format_banner_text(list_description)}")
-
         display_results(sorted_list, True, formatter)
 
         choice = prompt_user_input("Select an option (0 to cancel):")
@@ -386,7 +382,6 @@ def prompt_selection_from_list(
         try:
             index = int(choice) - 1
             return sorted_list[index]
-
         except (ValueError, IndexError):
             print("\nInvalid selection. Please try again.")
 
@@ -406,9 +401,7 @@ def prompt_selection_from_search(
 
     Returns:
         RecordType: The selected record, if chosen.
-        None:
-            - If the search returned no results.
-            - If the user cancels with "0".
+        None: If the search returned no results or the user cancels with "0".
 
     Notes:
         - If a single result is found, it is returned automatically.
@@ -436,7 +429,6 @@ def prompt_selection_from_search(
         try:
             index = int(choice) - 1
             return sorted_results[index]
-
         except (ValueError, IndexError):
             print("\nInvalid selection. Please try again.")
 
@@ -454,7 +446,6 @@ def prompt_selection_from_search(
 
 def search_students(gradebook: Gradebook) -> list[Student]:
     query = prompt_user_input("Search for a student by name or email:").lower()
-
     gradebook_response = gradebook.find_student_by_query(query)
 
     return gradebook_response.data["records"] if gradebook_response.success else []
@@ -496,7 +487,6 @@ def find_student_by_search(gradebook: Gradebook) -> Student | MenuSignal:
         - Internal search failures are treated as empty results.
     """
     search_results = search_students(gradebook)
-
     student = prompt_student_selection_from_search(search_results)
 
     return MenuSignal.CANCEL if student is None else student
@@ -569,7 +559,6 @@ def find_inactive_student_from_list(gradebook: Gradebook) -> Student | MenuSigna
 
 def search_categories(gradebook: Gradebook) -> list[Category]:
     query = prompt_user_input("Search for a category by name:").lower()
-
     gradebook_response = gradebook.find_category_by_query(query)
 
     return gradebook_response.data["records"] if gradebook_response.success else []
@@ -609,7 +598,6 @@ def find_category_by_search(gradebook: Gradebook) -> Category | MenuSignal:
         - Internal search failures are treated as empty results.
     """
     search_results = search_categories(gradebook)
-
     category = prompt_category_selection_from_search(search_results)
 
     return MenuSignal.CANCEL if category is None else category
@@ -686,7 +674,6 @@ def find_inactive_category_from_list(gradebook: Gradebook) -> Category | MenuSig
 
 def search_assignments(gradebook: Gradebook) -> list[Assignment]:
     query = prompt_user_input("Search for an assignment by name:").lower()
-
     gradebook_response = gradebook.find_assignment_by_query(query)
 
     return gradebook_response.data["records"] if gradebook_response.success else []
@@ -728,7 +715,6 @@ def find_assignment_by_search(
         - Internal search failures are treated as empty results.
     """
     search_results = search_assignments(gradebook)
-
     assignment = prompt_assignment_selection_from_search(search_results)
 
     return MenuSignal.CANCEL if assignment is None else assignment

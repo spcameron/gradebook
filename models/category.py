@@ -34,9 +34,9 @@ class Category:
     ):
         self._id = id
         self._name = name
-        self._is_active = active
-        # weight uses setter method for defensive validation
+        # weight uses a validator
         self.weight = weight
+        self._is_active = active
 
     # === properties ===
 
@@ -66,15 +66,10 @@ class Category:
         return self._is_active
 
     @property
-    def is_archived(self) -> bool:
-        """Deprecated: use 'is_active' instead."""
-        return not self._is_active
-
-    @property
     def status(self) -> str:
         return "'ACTIVE'" if self._is_active else "'ARCHIVED'"
 
-    def toggle_archived_status(self) -> None:
+    def toggle_active_status(self) -> None:
         self._is_active = not self._is_active
 
     # === persistence and import ===
@@ -95,14 +90,6 @@ class Category:
             weight=data["weight"],
             active=data["active"],
         )
-
-    # === dunder methods ===
-
-    def __repr__(self) -> str:
-        return f"Category({self._id}, {self._name}, {self._weight}, {self._is_active})"
-
-    def __str__(self) -> str:
-        return f"CATEGORY: name: {self._name}, weight: {self._weight}, id: {self._id}"
 
     # === data validators ===
 
@@ -142,3 +129,22 @@ class Category:
             raise ValueError("Weight must be between 0 and 100.")
 
         return weight
+
+    # === dunder methods ===
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.id == other.id
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"id={self.id!r}, "
+            f"name={self.name!r}, "
+            f"weight={self.weight!r}, "
+            f"active={self.is_active!r})"
+        )
+
+    def __str__(self) -> str:
+        return f"CATEGORY: {self.name} - (ID: {self.id[:8]})"

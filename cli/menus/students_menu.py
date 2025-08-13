@@ -190,17 +190,16 @@ def prompt_email_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
         - If the input is invalid or not unique, the user is prompted again.
     """
     while True:
-        user_input = helpers.prompt_user_input_or_cancel(
+        email_input = helpers.prompt_user_input_or_cancel(
             "Enter email address (leave blank to cancel):"
         )
 
-        if isinstance(user_input, MenuSignal):
-            return user_input
+        if isinstance(email_input, MenuSignal):
+            return email_input
 
         try:
-            email = Student.validate_email_input(user_input)
+            email = Student.validate_email_input(email_input)
             gradebook.require_unique_student_email(email)
-
             return email
 
         except ValueError as e:
@@ -223,15 +222,15 @@ def prompt_name_input_or_cancel(
     """
     # uses this structure in case validators are added later
     while True:
-        user_input = helpers.prompt_user_input_or_cancel(
+        name_input = helpers.prompt_user_input_or_cancel(
             f"Enter {(first_or_last + ' name').strip()} (leave blank to cancel):"
         )
 
-        if isinstance(user_input, MenuSignal):
-            return user_input
+        if isinstance(name_input, MenuSignal):
+            return name_input
 
         try:
-            return user_input
+            return name_input
 
         except Exception as e:
             print(f"\n[ERROR] {e}")
@@ -303,10 +302,8 @@ def edit_student(
 
         if menu_response is MenuSignal.EXIT:
             break
-
         elif callable(menu_response):
             menu_response(student, gradebook)
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -317,7 +314,6 @@ def edit_student(
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -358,7 +354,6 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent name was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -376,12 +371,13 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         - Uses `Gradebook.update_student_last_name()` to perform the update and track changes.
     """
     current_last_name = student.last_name
-    new_last_name = prompt_name_input_or_cancel(gradebook, "last")
+    name_input = prompt_name_input_or_cancel(gradebook, "last")
 
-    if new_last_name is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-    new_last_name = cast(str, new_last_name)
+
+    new_last_name = cast(str, name_input)
 
     print(f"\nCurrent last name: {current_last_name} -> New last name: {new_last_name}")
 
@@ -395,7 +391,6 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent name was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -413,12 +408,13 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
         - Uses `Gradebook.update_student_email()` to perform the update and track changes.
     """
     current_email = student.email
-    new_email = prompt_email_input_or_cancel(gradebook)
+    email_input = prompt_email_input_or_cancel(gradebook)
 
-    if new_email is MenuSignal.CANCEL:
+    if email_input is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-    new_email = cast(str, new_email)
+
+    new_email = cast(str, email_input)
 
     print(f"\nCurrent email address: {current_email} -> New email address: {new_email}")
 
@@ -432,7 +428,6 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent email was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -467,11 +462,12 @@ def find_and_remove_student(gradebook: Gradebook) -> None:
     Args:
         gradebook (Gradebook): The active `Gradebook`.
     """
-    student = prompt_find_student(gradebook)
+    student_input = prompt_find_student(gradebook)
 
-    if student is MenuSignal.CANCEL:
+    if student_input is MenuSignal.CANCEL:
         return
-    student = cast(Student, student)
+
+    student = cast(Student, student_input)
 
     remove_student(student, gradebook)
 
@@ -513,16 +509,13 @@ def remove_student(student: Student, gradebook: Gradebook) -> None:
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
         return
-
     elif callable(menu_response):
         menu_response(student, gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -556,7 +549,6 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent was not removed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -599,7 +591,6 @@ def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -636,7 +627,6 @@ def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -670,10 +660,8 @@ def view_students_menu(gradebook: Gradebook) -> None:
 
     if menu_response is MenuSignal.EXIT:
         return
-
     elif callable(menu_response):
         menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -691,11 +679,12 @@ def view_individual_student(gradebook: Gradebook) -> None:
         - Uses `prompt_find_student()` to search for a record.
         - Prompts the user before displaying the multi-line format.
     """
-    student = prompt_find_student(gradebook)
+    student_input = prompt_find_student(gradebook)
 
-    if student is MenuSignal.CANCEL:
+    if student_input is MenuSignal.CANCEL:
         return
-    student = cast(Student, student)
+
+    student = cast(Student, student_input)
 
     print("\nYou are viewing the following student record:")
     print(model_formatters.format_student_oneline(student))
@@ -841,9 +830,7 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
-
     elif callable(menu_response):
         return menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

@@ -31,7 +31,6 @@ def get_save_dir(course_name: str, course_term: str, user_input: str | None) -> 
     """
     if user_input is not None:
         return os.path.expanduser(user_input.strip())
-
     else:
         documents = os.path.join(os.path.expanduser("~"), "Documents")
         return os.path.join(documents, "Gradebooks", course_term, course_name)

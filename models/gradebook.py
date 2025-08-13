@@ -1804,7 +1804,7 @@ class Gradebook:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
         """
         try:
-            student.toggle_archived_status()
+            student.toggle_active_status()
 
         except Exception as e:
             return Response.fail(
@@ -2045,7 +2045,7 @@ class Gradebook:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
         """
         try:
-            category.toggle_archived_status()
+            category.toggle_active_status()
 
         except Exception as e:
             return Response.fail(
@@ -2551,7 +2551,7 @@ class Gradebook:
             - This method mutates `Gradebook` state and calls `_mark_dirty_if_tracked()` if successful.
         """
         try:
-            assignment.toggle_archived_status()
+            assignment.toggle_active_status()
 
         except Exception as e:
             return Response.fail(

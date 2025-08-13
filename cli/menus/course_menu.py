@@ -52,10 +52,8 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 menu_response()
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 

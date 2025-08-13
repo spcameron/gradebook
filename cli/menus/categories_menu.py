@@ -55,10 +55,8 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 menu_response(gradebook)
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -92,7 +90,6 @@ def add_category(gradebook: Gradebook) -> None:
             if not gradebook_response.success:
                 helpers.display_response_failure(gradebook_response)
                 print(f"\n{new_category.name} was not added.")
-
             else:
                 print(f"\n{gradebook_response.detail}")
 
@@ -102,7 +99,6 @@ def add_category(gradebook: Gradebook) -> None:
             break
 
     helpers.prompt_if_dirty(gradebook)
-
     helpers.returning_to("Manage Categories menu")
 
 
@@ -116,11 +112,12 @@ def prompt_new_category(gradebook: Gradebook) -> Category | None:
     Returns:
         A new `Category` object, or None.
     """
-    name = prompt_name_input_or_cancel(gradebook)
+    name_input = prompt_name_input_or_cancel(gradebook)
 
-    if name is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         return None
-    name = cast(str, name)
+
+    name = cast(str, name_input)
 
     try:
         return Category(
@@ -154,7 +151,6 @@ def preview_and_confirm_category(category: Category, gradebook: Gradebook) -> bo
 
     if helpers.confirm_action("Would you like to create this category?"):
         return True
-
     else:
         print(f"\nDiscarding category: {category.name}")
         return False
@@ -177,17 +173,16 @@ def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
         - The only validation is the call to `require_unique_category_name()`. Defensive validation against malicious input is missing.
     """
     while True:
-        user_input = helpers.prompt_user_input_or_cancel(
+        name_input = helpers.prompt_user_input_or_cancel(
             "Enter category name (leave blank to cancel):"
         )
 
-        if isinstance(user_input, MenuSignal):
-            return user_input
+        if isinstance(name_input, MenuSignal):
+            return name_input
 
         try:
-            gradebook.require_unique_category_name(user_input)
-
-            return user_input
+            gradebook.require_unique_category_name(name_input)
+            return name_input
 
         except ValueError as e:
             print(f"\n[ERROR] {e}")
@@ -217,11 +212,12 @@ def find_and_edit_category(gradebook: Gradebook) -> None:
     Args:
         gradebook (Gradebook): The active `Gradebook`.
     """
-    category = prompt_find_category(gradebook)
+    category_input = prompt_find_category(gradebook)
 
-    if category is MenuSignal.CANCEL:
+    if category_input is MenuSignal.CANCEL:
         return
-    category = cast(Category, category)
+
+    category = cast(Category, category_input)
 
     edit_category(category, gradebook)
 
@@ -259,10 +255,8 @@ def edit_category(
 
         if menu_response is MenuSignal.EXIT:
             break
-
         elif callable(menu_response):
             menu_response(category, gradebook)
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -273,7 +267,6 @@ def edit_category(
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -293,12 +286,13 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
         - Uses `Gradebook.update_category_name()` to perform the update and track changes.
     """
     current_name = category.name
-    new_name = prompt_name_input_or_cancel(gradebook)
+    name_input = prompt_name_input_or_cancel(gradebook)
 
-    if new_name is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-    new_name = cast(str, new_name)
+
+    new_name = cast(str, name_input)
 
     print(f"\nCurrent category name: {current_name} -> New category name: {new_name}")
 
@@ -312,7 +306,6 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory name was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -333,7 +326,6 @@ def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> 
 
     if category.is_active:
         confirm_and_archive(category, gradebook)
-
     else:
         confirm_and_reactivate(category, gradebook)
 
@@ -348,11 +340,12 @@ def find_and_remove_category(gradebook: Gradebook) -> None:
     Args:
         gradebook (Gradebook): The active `Gradebook`.
     """
-    category = prompt_find_category(gradebook)
+    category_input = prompt_find_category(gradebook)
 
-    if category is MenuSignal.CANCEL:
+    if category_input is MenuSignal.CANCEL:
         return
-    category = cast(Category, category)
+
+    category = cast(Category, category_input)
 
     remove_category(category, gradebook)
 
@@ -397,16 +390,13 @@ def remove_category(category: Category, gradebook: Gradebook) -> None:
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
         return
-
     elif callable(menu_response):
         menu_response(category, gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -440,7 +430,6 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory was not removed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -483,7 +472,6 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -520,7 +508,6 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -554,10 +541,8 @@ def view_categories_menu(gradebook: Gradebook) -> None:
 
     if menu_response is MenuSignal.EXIT:
         return
-
     elif callable(menu_response):
         menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -575,11 +560,12 @@ def view_individual_category(gradebook: Gradebook) -> None:
         - Uses `prompt_find_category()` to search for a record.
         - Prompts the user before displaying the multi-line format.
     """
-    category = prompt_find_category(gradebook)
+    category_input = prompt_find_category(gradebook)
 
-    if category is MenuSignal.CANCEL:
+    if category_input is MenuSignal.CANCEL:
         return
-    category = cast(Category, category)
+
+    category = cast(Category, category_input)
 
     print("\nYou are viewing the following category:")
     print(model_formatters.format_category_oneline(category))
@@ -725,9 +711,7 @@ def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
-
     elif callable(menu_response):
         return menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

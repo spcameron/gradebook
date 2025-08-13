@@ -36,7 +36,7 @@ class AttendanceStager:
     """
 
     def __init__(self):
-        self._staged: dict[str, AttendanceStatus] = {}
+        self._staged = {}
 
     @property
     def status_map(self) -> dict[str, AttendanceStatus]:

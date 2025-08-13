@@ -55,10 +55,8 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 menu_response(gradebook)
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -92,7 +90,6 @@ def add_assignment(gradebook: Gradebook) -> None:
             if not gradebook_response.success:
                 helpers.display_response_failure(gradebook_response)
                 print(f"\n{new_assignment.name} was not added.")
-
             else:
                 print(f"\n{gradebook_response.detail}")
 
@@ -102,7 +99,6 @@ def add_assignment(gradebook: Gradebook) -> None:
             break
 
     helpers.prompt_if_dirty(gradebook)
-
     helpers.returning_to("Manage Assignments menu")
 
 
@@ -116,25 +112,28 @@ def prompt_new_assignment(gradebook: Gradebook) -> Assignment | None:
     Returns:
         A new `Assignment` object, or None.
     """
-    name = prompt_name_input_or_cancel(gradebook)
+    name_input = prompt_name_input_or_cancel(gradebook)
 
-    if name is MenuSignal.CANCEL:
-        return None
-    name = cast(str, name)
-
-    category = prompt_find_category_or_none(gradebook)
-
-    if category is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         return None
 
-    elif category is not None:
-        category = cast(Category, category)
+    name = cast(str, name_input)
 
-    points_possible = prompt_points_possible_input_or_cancel()
+    category_input = prompt_find_category_or_none(gradebook)
 
-    if points_possible is MenuSignal.CANCEL:
+    if category_input is MenuSignal.CANCEL:
         return None
-    points_possible = cast(float, points_possible)
+    elif category_input is not None:
+        category = cast(Category, category_input)
+    else:
+        category = None
+
+    points_input = prompt_points_possible_input_or_cancel()
+
+    if points_input is MenuSignal.CANCEL:
+        return None
+
+    points_possible = cast(float, points_input)
 
     due_date = prompt_due_date()
 
@@ -175,7 +174,6 @@ def preview_and_confirm_assignment(
 
     if helpers.confirm_action("Would you like to create this assignment?"):
         return True
-
     else:
         print(f"\nDiscarding assignment: {assignment.name}")
         return False
@@ -198,17 +196,16 @@ def prompt_name_input_or_cancel(gradebook: Gradebook) -> str | MenuSignal:
         - The only validation is the call to `require_unique_assignment_name()`. Defensive validation against malicious input is missing.
     """
     while True:
-        user_input = helpers.prompt_user_input_or_cancel(
+        name_input = helpers.prompt_user_input_or_cancel(
             "Enter assignment name (leave blank to cancel):"
         )
 
-        if isinstance(user_input, MenuSignal):
-            return user_input
+        if isinstance(name_input, MenuSignal):
+            return name_input
 
         try:
-            gradebook.require_unique_assignment_name(user_input)
-
-            return user_input
+            gradebook.require_unique_assignment_name(name_input)
+            return name_input
 
         except ValueError as e:
             print(f"\n[ERROR] {e}")
@@ -226,16 +223,15 @@ def prompt_points_possible_input_or_cancel() -> float | MenuSignal:
         - Validation and normalization is handled by `Assignment.validate_points_input()`.
     """
     while True:
-        user_input = helpers.prompt_user_input_or_cancel(
+        points_input = helpers.prompt_user_input_or_cancel(
             "Enter total points possible (leave blank to cancel):"
         )
 
-        if isinstance(user_input, MenuSignal):
-            return user_input
+        if isinstance(points_input, MenuSignal):
+            return points_input
 
         try:
-            points = Assignment.validate_points_input(user_input)
-
+            points = Assignment.validate_points_input(points_input)
             return points
 
         except (ValueError, TypeError) as e:
@@ -260,7 +256,6 @@ def prompt_due_date() -> datetime.datetime | None:
 
         if due_date_str is MenuSignal.DEFAULT:
             due_date_str = None
-
         else:
             due_date_str = cast(str, due_date_str)
 
@@ -274,13 +269,11 @@ def prompt_due_date() -> datetime.datetime | None:
 
         if due_time_str is MenuSignal.DEFAULT:
             due_time_str = "23:59"
-
         elif due_time_str is not None:
             due_time_str = cast(str, due_time_str)
 
         try:
             due_date_dt = Assignment.validate_due_date_input(due_date_str, due_time_str)
-
             return due_date_dt
 
         except TypeError as e:
@@ -318,6 +311,7 @@ def find_and_edit_assignment(gradebook: Gradebook) -> None:
 
     if assignment is MenuSignal.CANCEL:
         return
+
     assignment = cast(Assignment, assignment)
 
     edit_assignment(assignment, gradebook)
@@ -356,10 +350,8 @@ def edit_assignment(
 
         if menu_response is MenuSignal.EXIT:
             break
-
         elif callable(menu_response):
             menu_response(assignment, gradebook)
-
         else:
             raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -370,7 +362,6 @@ def edit_assignment(
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -390,12 +381,13 @@ def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
         - Uses `Gradebook.update_assignment_name()` to perform the update and track changes.
     """
     current_name = assignment.name
-    new_name = prompt_name_input_or_cancel(gradebook)
+    name_input = prompt_name_input_or_cancel(gradebook)
 
-    if new_name is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-    new_name = cast(str, new_name)
+
+    new_name = cast(str, name_input)
 
     print(
         f"\nCurrent assignment name: {current_name} -> New assignment name: {new_name}"
@@ -411,7 +403,6 @@ def edit_name_and_confirm(assignment: Assignment, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment name was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -432,14 +423,14 @@ def edit_linked_category_and_confirm(
         - Uses `Gradebook.update_assignment_linked_category()` to perform the update and track changes.
     """
     if assignment.category_id:
-        category_response = gradebook.find_category_by_uuid(assignment.category_id)
+        gradebook_response = gradebook.find_category_by_uuid(assignment.category_id)
 
-        if not category_response.success:
-            helpers.display_response_failure(category_response)
+        if not gradebook_response.success:
+            helpers.display_response_failure(gradebook_response)
             helpers.returning_without_changes()
             return
 
-        current_category = category_response.data["record"]
+        current_category = gradebook_response.data["record"]
 
     else:
         current_category = None
@@ -449,7 +440,6 @@ def edit_linked_category_and_confirm(
     if new_category is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-
     elif new_category is not None:
         new_category = cast(Category, new_category)
 
@@ -474,7 +464,6 @@ def edit_linked_category_and_confirm(
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment linked category was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -513,7 +502,6 @@ def edit_due_date_and_confirm(assignment: Assignment, gradebook: Gradebook) -> N
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment due date was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -538,6 +526,7 @@ def edit_points_possible_and_confirm(
     if new_points_possible is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
+
     new_points_possible = cast(float, new_points_possible)
 
     print(
@@ -556,7 +545,6 @@ def edit_points_possible_and_confirm(
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment points possible value was not updated.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -579,7 +567,6 @@ def edit_active_status_and_confirm(
 
     if assignment.is_active:
         confirm_and_archive(assignment, gradebook)
-
     else:
         confirm_and_reactivate(assignment, gradebook)
 
@@ -598,6 +585,7 @@ def find_and_remove_assignment(gradebook: Gradebook) -> None:
 
     if assignment is MenuSignal.CANCEL:
         return
+
     assignment = cast(Assignment, assignment)
 
     remove_assignment(assignment, gradebook)
@@ -640,16 +628,13 @@ def remove_assignment(assignment: Assignment, gradebook: Gradebook) -> None:
     if menu_response is MenuSignal.EXIT:
         helpers.returning_without_changes()
         return
-
     elif callable(menu_response):
         menu_response(assignment, gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
     if gradebook.has_unsaved_changes:
         helpers.prompt_if_dirty(gradebook)
-
     else:
         helpers.returning_without_changes()
 
@@ -683,7 +668,6 @@ def confirm_and_remove(assignment: Assignment, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment was not removed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -726,7 +710,6 @@ def confirm_and_archive(assignment: Assignment, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -763,7 +746,6 @@ def confirm_and_reactivate(assignment: Assignment, gradebook: Gradebook) -> None
         helpers.display_response_failure(gradebook_response)
         print("\nAssignment status was not changed.")
         helpers.returning_without_changes()
-
     else:
         print(f"\n{gradebook_response.detail}")
 
@@ -797,10 +779,8 @@ def view_assignments_menu(gradebook: Gradebook) -> None:
 
     if menu_response is MenuSignal.EXIT:
         return
-
     elif callable(menu_response):
         menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -822,6 +802,7 @@ def view_individual_assignment(gradebook: Gradebook) -> None:
 
     if assignment is MenuSignal.CANCEL:
         return
+
     assignment = cast(Assignment, assignment)
 
     print("\nYou are viewing the following assignment:")
@@ -1013,10 +994,8 @@ def prompt_find_category_or_none(
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
-
     elif callable(menu_response):
         return menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -1053,9 +1032,7 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
 
     if menu_response is MenuSignal.EXIT:
         return MenuSignal.CANCEL
-
     elif callable(menu_response):
         return menu_response(gradebook)
-
     else:
         raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

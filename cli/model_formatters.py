@@ -68,10 +68,10 @@ def format_assignment_oneline(assignment: Assignment) -> str:
 
 def format_assignment_multiline(assignment: Assignment, gradebook: Gradebook) -> str:
     if assignment.category_id:
-        category_response = gradebook.find_category_by_uuid(assignment.category_id)
+        gradebook_response = gradebook.find_category_by_uuid(assignment.category_id)
 
         category = (
-            category_response.data["record"] if category_response.success else None
+            gradebook_response.data["record"] if gradebook_response.success else None
         )
 
     else:

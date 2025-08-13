@@ -42,8 +42,6 @@ class ErrorCode(Enum):
     INTERNAL_ERROR = "INTERNAL_ERROR"
     LOGIC_ERROR = "LOGIC_ERROR"
 
-    # add new error codes as needed during refactor
-
 
 class Response:
     """
@@ -67,12 +65,38 @@ class Response:
         data: dict | None = None,
         trace: str | None = None,
     ):
-        self.success = success
-        self.error = error
-        self.detail = detail
-        self.data = data or {}
-        self.status_code = status_code
-        self.trace = trace
+        self._success = success
+        self._detail = detail
+        self._error = error
+        self._status_code = status_code
+        self._data = data or {}
+        self._trace = trace
+
+    # === properties ===
+
+    @property
+    def success(self) -> bool:
+        return self._success
+
+    @property
+    def detail(self) -> str | None:
+        return self._detail
+
+    @property
+    def error(self) -> ErrorCode | str | None:
+        return self._error
+
+    @property
+    def status_code(self) -> int | None:
+        return self._status_code
+
+    @property
+    def data(self) -> dict:
+        return self._data or {}
+
+    @property
+    def trace(self) -> str | None:
+        return self._trace
 
     # === public classmethods ===
 
@@ -116,11 +140,13 @@ class Response:
             "detail": self.detail,
             "data": self.data,
             "status_code": self.status_code,
+            "trace": self.trace,
         }
 
     @classmethod
     def from_dict(cls, payload: dict) -> Response:
         error = payload.get("error")
+
         if error in ErrorCode._value2member_map_:
             error = ErrorCode(error)
 
@@ -130,6 +156,7 @@ class Response:
             detail=payload.get("detail"),
             data=payload.get("data", {}),
             status_code=payload.get("status_code"),
+            trace=payload.get("trace"),
         )
 
     # === dunder methods ===

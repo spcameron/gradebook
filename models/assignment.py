@@ -176,7 +176,9 @@ class Assignment:
             points = float(points)
 
         except (TypeError, ValueError):
-            raise TypeError("Invalid input. Points possible must be a number.")
+            raise TypeError(
+                "Invalid input. Points possible must be a number."
+            ) from None
 
         if not math.isfinite(points):
             raise ValueError("Invalid input. Points possible must be a finite number.")
@@ -213,6 +215,6 @@ class Assignment:
         except (ValueError, TypeError):
             raise TypeError(
                 "Invalid input. The date must be formatted as YYYY-MM-DD and the time as 24-hour HH:MM."
-            )
+            ) from None
 
         return due_date_dt

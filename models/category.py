@@ -133,7 +133,7 @@ class Category:
             weight = float(weight)
 
         except (TypeError, ValueError):
-            raise TypeError("Weight must be a number or None.")
+            raise TypeError("Weight must be a number or None.") from None
 
         if not math.isfinite(weight):
             raise ValueError("Weight must be a finite number.")

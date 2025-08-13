@@ -424,7 +424,7 @@ class Gradebook:
                 except ValueError:
                     raise ValueError(
                         f"Invalid ISO date string in class_dates.json: {d}"
-                    )
+                    ) from None
 
         except FileNotFoundError:
             self._class_dates = set()
@@ -465,7 +465,7 @@ class Gradebook:
             except (ValueError, TypeError) as e:
                 raise ValueError(
                     f"Failed to deserialize {record_name}: {record_dict} - {e}"
-                )
+                ) from None
 
             response = add_fn(record)
 
@@ -1338,7 +1338,7 @@ class Gradebook:
             return getattr(self, attr_name)
 
         except KeyError:
-            raise TypeError(f"Unrecognized record type: {type(record)}")
+            raise TypeError(f"Unrecognized record type: {type(record)}") from None
 
     # --- generalized record operations ---
 

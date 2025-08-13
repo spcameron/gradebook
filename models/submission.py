@@ -140,7 +140,7 @@ class Submission:
             points = float(points)
 
         except (TypeError, ValueError):
-            raise TypeError("Invalid input. Points earned must be a number.")
+            raise TypeError("Invalid input. Points earned must be a number.") from None
 
         if not math.isfinite(points):
             raise ValueError("Invalid input. Points earned must be a finite number.")

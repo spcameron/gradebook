@@ -362,7 +362,6 @@ def validate_weights(gradebook: Gradebook) -> bool:
         print("\nThere are no active categories yet.")
         return False
 
-    # TODO: checks for any None weights
     if any(category.weight is None for category in active_categories):
         print("\nSome active categories are missing weight values.")
         print("Launching guided resolution process ...")
@@ -372,7 +371,6 @@ def validate_weights(gradebook: Gradebook) -> bool:
         else:
             return False
 
-    # TODO: checks for 100 sum
     weights_total = 0.0
 
     for category in active_categories:

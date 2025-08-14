@@ -241,14 +241,14 @@ def batch_add_submissions_by_assignment(gradebook: Gradebook) -> None:
     skipped_students = []
 
     for student in students_to_prompt:
-        points_earned = prompt_score_with_bailout(assignment, student)
+        points_input = prompt_score_with_bailout(assignment, student)
 
-        if points_earned is None:
+        if points_input is None:
             print(f"\nAdding {student.full_name} to skipped students.")
             skipped_students.append(student)
             continue
 
-        elif points_earned is MenuSignal.CANCEL:
+        elif points_input is MenuSignal.CANCEL:
             if helpers.confirm_action(
                 "This will also discard the other submissions in this batch. Are you sure you want to cancel?"
             ):
@@ -263,7 +263,7 @@ def batch_add_submissions_by_assignment(gradebook: Gradebook) -> None:
                 continue
 
         else:
-            points_earned = cast(float, points_earned)
+            points_earned = cast(float, points_input)
 
         try:
             queued_submissions.append(
@@ -965,8 +965,9 @@ def edit_score_and_confirm(submission: Submission, gradebook: Gradebook) -> None
         helpers.display_response_failure(gradebook_response)
         print("\nSubmission points earned value was not updated.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
@@ -989,8 +990,9 @@ def edit_late_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nSubmission late status was not changed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> None:
@@ -1013,8 +1015,9 @@ def edit_exempt_and_confirm(submission: Submission, gradebook: Gradebook) -> Non
         helpers.display_response_failure(gradebook_response)
         print("\nSubmission exempt status was not chnaged.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 # === remove submission ===
@@ -1112,8 +1115,9 @@ def confirm_and_remove(submission: Submission, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nSubmission was not removed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def delete_queued_submission(
@@ -1406,14 +1410,27 @@ def prompt_find_assignment(gradebook: Gradebook) -> Assignment | MenuSignal:
     ]
     zero_option = "Return and cancel"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-    elif callable(menu_response):
-        return menu_response(gradebook)
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            assignment = menu_response(gradebook)
+
+            if assignment is MenuSignal.CANCEL:
+                print("\nAssignment selection canceled.")
+
+                if not helpers.confirm_action("Do you want to try again?"):
+                    return MenuSignal.CANCEL
+                else:
+                    continue
+
+            return assignment
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
 
 def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
@@ -1441,11 +1458,24 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     ]
     zero_option = "Return and cancel"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-    elif callable(menu_response):
-        return menu_response(gradebook)
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            student = menu_response(gradebook)
+
+            if student is MenuSignal.CANCEL:
+                print("\nStudent selection canceled.")
+
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
+                else:
+                    continue
+
+            return student
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

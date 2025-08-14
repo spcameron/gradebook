@@ -10,17 +10,13 @@
     <!-- * path_utils.py -->
     - menus
         * __init__>py
-        * assignments_menu.py
-        * attendance_menu.py
-        * categories_menu.py
-        * course_menu.py
-        * students_menu.py
-        * submissions_menu.py
-        * weights_menu.py
-
-    returning_to ... else
-    finder method with retry loop ... see attendance menu
-    grep cast for input checks
+        <!-- * assignments_menu.py -->
+        <!-- * attendance_menu.py -->
+        <!-- * categories_menu.py -->
+        <!-- * course_menu.py -->
+        <!-- * students_menu.py -->
+        <!-- * submissions_menu.py -->
+        <!-- * weights_menu.py -->
 
 - core
     * __init__.py

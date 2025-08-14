@@ -53,10 +53,8 @@ def run(gradebook: Gradebook) -> None:
 
             if menu_response is MenuSignal.EXIT:
                 break
-
             elif callable(menu_response):
                 menu_response(gradebook)
-
             else:
                 raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
 
@@ -90,7 +88,6 @@ def add_student(gradebook: Gradebook) -> None:
             if not gradebook_response.success:
                 helpers.display_response_failure(gradebook_response)
                 print(f"\n{new_student.full_name} was not added.")
-
             else:
                 print(f"\n{gradebook_response.detail}")
 
@@ -100,7 +97,6 @@ def add_student(gradebook: Gradebook) -> None:
             break
 
     helpers.prompt_if_dirty(gradebook)
-
     helpers.returning_to("Manage Students menu")
 
 
@@ -114,23 +110,26 @@ def prompt_new_student(gradebook: Gradebook) -> Student | None:
     Returns:
         A new `Student` object, or None.
     """
-    email = prompt_email_input_or_cancel(gradebook)
+    email_input = prompt_email_input_or_cancel(gradebook)
 
-    if email is MenuSignal.CANCEL:
+    if email_input is MenuSignal.CANCEL:
         return None
-    email = cast(str, email)
 
-    first_name = prompt_name_input_or_cancel(gradebook, "first")
+    email = cast(str, email_input)
 
-    if first_name is MenuSignal.CANCEL:
+    first_name_input = prompt_name_input_or_cancel(gradebook, "first")
+
+    if first_name_input is MenuSignal.CANCEL:
         return None
-    first_name = cast(str, first_name)
 
-    last_name = prompt_name_input_or_cancel(gradebook, "last")
+    first_name = cast(str, first_name_input)
 
-    if last_name is MenuSignal.CANCEL:
+    last_name_input = prompt_name_input_or_cancel(gradebook, "last")
+
+    if last_name_input is MenuSignal.CANCEL:
         return None
-    last_name = cast(str, last_name)
+
+    last_name = cast(str, last_name_input)
 
     try:
         return Student(
@@ -166,7 +165,6 @@ def preview_and_confirm_student(student: Student, gradebook: Gradebook) -> bool:
 
     if helpers.confirm_action("Would you like to create this student?"):
         return True
-
     else:
         print(f"\nDiscarding student: {student.full_name}")
         return False
@@ -262,11 +260,12 @@ def find_and_edit_student(gradebook: Gradebook) -> None:
     Args:
         gradebook (Gradebook): The active `Gradebook`.
     """
-    student = prompt_find_student(gradebook)
+    student_input = prompt_find_student(gradebook)
 
-    if student is MenuSignal.CANCEL:
+    if student_input is MenuSignal.CANCEL:
         return
-    student = cast(Student, student)
+
+    student = cast(Student, student_input)
 
     edit_student(student, gradebook)
 
@@ -333,12 +332,13 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         - Uses `Gradebook.update_student_first_name()` to perform the update and track changes.
     """
     current_first_name = student.first_name
-    new_first_name = prompt_name_input_or_cancel(gradebook, "first")
+    name_input = prompt_name_input_or_cancel(gradebook, "first")
 
-    if new_first_name is MenuSignal.CANCEL:
+    if name_input is MenuSignal.CANCEL:
         helpers.returning_without_changes()
         return
-    new_first_name = cast(str, new_first_name)
+
+    new_first_name = cast(str, name_input)
 
     print(
         f"\nCurrent first name: {current_first_name} -> New first name: {new_first_name}"
@@ -354,8 +354,9 @@ def edit_first_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent name was not updated.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
@@ -391,8 +392,9 @@ def edit_last_name_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent name was not updated.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
@@ -428,8 +430,9 @@ def edit_email_and_confirm(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent email was not updated.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_active_status_and_confirm(student: Student, gradebook: Gradebook) -> None:
@@ -549,8 +552,9 @@ def confirm_and_remove(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent was not removed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
@@ -591,8 +595,9 @@ def confirm_and_archive(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
@@ -627,8 +632,9 @@ def confirm_and_reactivate(student: Student, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nStudent status was not changed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 # === view student ===
@@ -826,11 +832,24 @@ def prompt_find_student(gradebook: Gradebook) -> Student | MenuSignal:
     ]
     zero_option = "Return and cancel"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-    elif callable(menu_response):
-        return menu_response(gradebook)
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            student = menu_response(gradebook)
+
+            if student is MenuSignal.CANCEL:
+                print("\nStudent selection canceled.")
+
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
+                else:
+                    continue
+
+            return student
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

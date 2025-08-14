@@ -306,8 +306,9 @@ def edit_name_and_confirm(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory name was not updated.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def edit_active_status_and_confirm(category: Category, gradebook: Gradebook) -> None:
@@ -430,8 +431,9 @@ def confirm_and_remove(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory was not removed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
@@ -472,8 +474,9 @@ def confirm_and_archive(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
@@ -508,8 +511,9 @@ def confirm_and_reactivate(category: Category, gradebook: Gradebook) -> None:
         helpers.display_response_failure(gradebook_response)
         print("\nCategory status was not changed.")
         helpers.returning_without_changes()
-    else:
-        print(f"\n{gradebook_response.detail}")
+        return
+
+    print(f"\n{gradebook_response.detail}")
 
 
 # === view category ===
@@ -707,11 +711,24 @@ def prompt_find_category(gradebook: Gradebook) -> Category | MenuSignal:
     ]
     zero_option = "Return and cancel"
 
-    menu_response = helpers.display_menu(title, options, zero_option)
+    while True:
+        menu_response = helpers.display_menu(title, options, zero_option)
 
-    if menu_response is MenuSignal.EXIT:
-        return MenuSignal.CANCEL
-    elif callable(menu_response):
-        return menu_response(gradebook)
-    else:
-        raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")
+        if menu_response is MenuSignal.EXIT:
+            return MenuSignal.CANCEL
+
+        elif callable(menu_response):
+            category = menu_response(gradebook)
+
+            if category is MenuSignal.CANCEL:
+                print("\nCategory selection canceled.")
+
+                if not helpers.confirm_action("Would you like to try again?"):
+                    return MenuSignal.CANCEL
+                else:
+                    continue
+
+            return category
+
+        else:
+            raise RuntimeError(f"Unexpected MenuResponse received: {menu_response}")

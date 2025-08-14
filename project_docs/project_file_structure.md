@@ -44,7 +44,7 @@
 
 - tests
     * conftest.py
-    * test_assignment.py
+    <!-- * test_assignment.py -->
     * test_category.py
     * test_gradebook.py
     * test_student.py

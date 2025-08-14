@@ -462,6 +462,7 @@ class Gradebook:
         for record_dict in data:
             try:
                 record = from_dict_fn(record_dict)
+
             except (ValueError, TypeError) as e:
                 raise ValueError(
                     f"Failed to deserialize {record_name}: {record_dict} - {e}"

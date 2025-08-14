@@ -25,8 +25,7 @@ def format_student_multiline(student: Student, gradebook: Gradebook) -> str:
         Student in {gradebook.name}:
         ... Name: {student.full_name}
         ... Email: {student.email}
-        ... Status: {student.status}
-        """
+        ... Status: {student.status}"""
     )
 
 
@@ -48,8 +47,7 @@ def format_category_multiline(category: Category, gradebook: Gradebook) -> str:
         Category in {gradebook.name}:
         ... Name: {category.name}
         ... Weight: {weight}
-        ... Status: {category.status}
-        """
+        ... Status: {category.status}"""
     )
 
 
@@ -91,8 +89,7 @@ def format_assignment_multiline(assignment: Assignment, gradebook: Gradebook) ->
         ... Category: {category.name if category else '[UNCATEGORIZED]'}
         ... Points Possible: {assignment.points_possible}{extra_credit}
         ... Due: {due_date}
-        ... Status: {assignment.status}
-        """
+        ... Status: {assignment.status}"""
     )
 
 
@@ -133,6 +130,5 @@ def format_submission_multiline(submission: Submission, gradebook: Gradebook) ->
         Submission from {student.full_name} to {assignment.name}:
         ... Score: {submission.points_earned} / {assignment.points_possible}
         ... Late: {submission.late_status}
-        ... Exempt: {submission.exempt_status}
-        """
+        ... Exempt: {submission.exempt_status}"""
     )

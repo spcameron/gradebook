@@ -25,13 +25,13 @@ def test_student_from_dict():
     )
 
     assert student.id == "s001"
+    assert student.first_name == "Sean"
+    assert student.last_name == "Cameron"
     assert student.full_name == "Sean Cameron"
     assert student.email == "scameron@mmm.edu"
+    assert student.is_active
     assert student.status == "'ACTIVE'"
 
 
 def test_student_to_str(sample_student):
-    assert (
-        sample_student.__str__()
-        == "STUDENT: name: Sean Cameron, email: scameron@mmm.edu, id: s001"
-    )
+    assert sample_student.__str__() == "STUDENT: Sean Cameron - (ID: s001)"

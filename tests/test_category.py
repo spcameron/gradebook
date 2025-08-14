@@ -51,22 +51,17 @@ def test_weighted_category_from_dict():
     assert category.weight == 100.0
 
 
-def test_category_to_str(sample_unweighted_category, sample_weighted_category):
+def test_category_to_str(sample_unweighted_category):
     assert (
-        sample_unweighted_category.__str__()
-        == "CATEGORY: name: test_category, weight: None, id: c001"
-    )
-    assert (
-        sample_weighted_category.__str__()
-        == "CATEGORY: name: test_category, weight: 100.0, id: c002"
+        sample_unweighted_category.__str__() == "CATEGORY: test_category - (ID: c001)"
     )
 
 
 def test_archive_and_reactivate(sample_unweighted_category):
     category = sample_unweighted_category
-    assert not category.is_archived
+    assert category.is_active
     assert category.status == "'ACTIVE'"
 
-    category.toggle_archived_status()
-    assert category.is_archived
+    category.toggle_active_status()
+    assert not category.is_active
     assert category.status == "'ARCHIVED'"

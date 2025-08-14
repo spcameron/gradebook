@@ -11,7 +11,7 @@ from typing import Any
 
 def format_banner_text(title: str, width: int = 40) -> str:
     line = "=" * width
-    centered_title = f"{title:^(width)}"
+    centered_title = f"{title:^{width}}"
 
     return f"{line}\n{centered_title}\n{line}"
 

@@ -7,6 +7,19 @@ import tempfile
 from models.student import Student
 
 
+def test_create_new_gradebook(create_new_gradebook):
+    assert create_new_gradebook.name == "THTR 274A"
+    assert create_new_gradebook.term == "FALL 2025"
+
+
+def test_load_gradebook_from_file(load_gradebook_from_file):
+    assert load_gradebook_from_file.name == "THTR 274B"
+    assert load_gradebook_from_file.term == "SPRING 2026"
+
+
+# === student methods ===
+
+
 def test_add_student(sample_gradebook, sample_student):
     sample_gradebook.add_student(sample_student)
     assert sample_student in sample_gradebook.students.values()
@@ -34,6 +47,26 @@ def test_add_student_and_save(sample_gradebook, sample_student):
         assert len(data) == 1
         assert data[0]["id"] == "s001"
         assert data[0]["last_name"] == "Cameron"
+
+
+def test_add_students_and_remove_one(create_new_gradebook):
+    gradebook = create_new_gradebook
+    student_1 = Student("s001", "Harry", "Potter", "hpotter@hogwarts.edu")
+    student_2 = Student("s002", "Ron", "Weasley", "rweasley@hogwarts.edu")
+
+    gradebook.add_student(student_1)
+    gradebook.add_student(student_2)
+
+    assert student_1 in gradebook.students.values()
+    assert student_2 in gradebook.students.values()
+
+    gradebook.remove_student(student_1)
+
+    assert student_1 not in gradebook.students.values()
+    assert student_2 in gradebook.students.values()
+
+
+# === assignment methods ===
 
 
 def test_add_assignment(sample_gradebook, sample_assignment):
@@ -65,28 +98,73 @@ def test_add_assignment_and_save(sample_gradebook, sample_assignment):
         assert data[0]["name"] == "test_assignment"
 
 
-def test_create_new_gradebook(create_new_gradebook):
-    assert create_new_gradebook.name == "THTR 274A"
-    assert create_new_gradebook.term == "FALL 2025"
+# === category methods ===
 
 
-def test_load_gradebook_from_file(load_gradebook_from_file):
-    assert load_gradebook_from_file.name == "THTR 274B"
-    assert load_gradebook_from_file.term == "SPRING 2026"
+def test_add_category(sample_gradebook, sample_unweighted_category):
+    sample_gradebook.add_category(sample_unweighted_category)
+    assert sample_unweighted_category in sample_gradebook.categories.values()
 
 
-def test_add_students_and_remove_one(create_new_gradebook):
-    gradebook = create_new_gradebook
-    student_1 = Student("s001", "Harry", "Potter", "hpotter@hogwarts.edu")
-    student_2 = Student("s002", "Ron", "Weasley", "rweasley@hogwarts.edu")
+def test_add_category_and_save(sample_gradebook, sample_unweighted_category):
+    sample_gradebook.add_category(sample_unweighted_category)
 
-    gradebook.add_student(student_1)
-    gradebook.add_student(student_2)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        sample_gradebook.metadata = {
+            "name": "Test Course",
+            "term": "Fall 1987",
+            "created_at": "Testing",
+        }
 
-    assert student_1 in gradebook.students.values()
-    assert student_2 in gradebook.students.values()
+        sample_gradebook.save(temp_dir)
 
-    gradebook.remove_student(student_1)
+        categories_path = os.path.join(temp_dir, "categories.json")
+        assert os.path.exists(categories_path)
 
-    assert student_1 not in gradebook.students.values()
-    assert student_2 in gradebook.students.values()
+        with open(categories_path) as f:
+            data = json.load(f)
+
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["id"] == "c001"
+        assert data[0]["name"] == "test_category"
+
+
+# === submission tests ===
+
+
+def test_add_submission(
+    sample_gradebook, sample_submission, sample_student, sample_assignment
+):
+    sample_gradebook.add_student(sample_student)
+    sample_gradebook.add_assignment(sample_assignment)
+    sample_gradebook.add_submission(sample_submission)
+    assert sample_submission in sample_gradebook.submissions.values()
+
+
+def test_add_submission_and_save(
+    sample_gradebook, sample_submission, sample_student, sample_assignment
+):
+    sample_gradebook.add_student(sample_student)
+    sample_gradebook.add_assignment(sample_assignment)
+    sample_gradebook.add_submission(sample_submission)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        sample_gradebook.metadata = {
+            "name": "Test Course",
+            "term": "Fall 1987",
+            "created_at": "Testing",
+        }
+
+        sample_gradebook.save(temp_dir)
+
+        submissions_path = os.path.join(temp_dir, "submissions.json")
+        assert os.path.exists(submissions_path)
+
+        with open(submissions_path) as f:
+            data = json.load(f)
+
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["id"] == "sub001"
+        assert data[0]["points_earned"] == 40.0

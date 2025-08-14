@@ -93,8 +93,7 @@ def create_gradebook() -> Gradebook | None:
                     """\
                     The selected directory is not empty and may contain existing data.
                     It is recommended to store new Gradebooks in an empty directory.
-                    Writing to this directory may result in the loss of existing data.
-                    """
+                    Writing to this directory may result in the loss of existing data."""
                 )
             )
 

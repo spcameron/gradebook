@@ -18,18 +18,21 @@ TEST_DATA_DIR = os.path.join(
 
 @pytest.fixture
 def sample_gradebook():
-    return Gradebook.create("THTR 274A", "FALL 2025", TEST_DATA_DIR)
+    gradebook_response = Gradebook.create("THTR 274A", "FALL 2025", TEST_DATA_DIR)
+    return gradebook_response.data["gradebook"]
 
 
 @pytest.fixture
 def create_new_gradebook():
-    return Gradebook.create("THTR 274A", "FALL 2025", TEST_DATA_DIR)
+    gradebook_response = Gradebook.create("THTR 274A", "FALL 2025", TEST_DATA_DIR)
+    return gradebook_response.data["gradebook"]
 
 
 @pytest.fixture
 def load_gradebook_from_file():
     Gradebook.create("THTR 274B", "SPRING 2026", TEST_DATA_DIR)
-    return Gradebook.load(TEST_DATA_DIR)
+    gradebook_response = Gradebook.load(TEST_DATA_DIR)
+    return gradebook_response.data["gradebook"]
 
 
 @pytest.fixture

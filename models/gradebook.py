@@ -37,14 +37,14 @@ class Gradebook:
     }
 
     def __init__(self, save_dir_path: str):
-        self._metadata: dict[str, Any] = {}
-        self._unsaved_changes: bool = False
-        self._students: dict[str, Student] = {}
-        self._categories: dict[str, Category] = {}
-        self._assignments: dict[str, Assignment] = {}
-        self._submissions: dict[str, Submission] = {}
-        self._class_dates: set[datetime.date] = set()
-        self._dir_path: str = save_dir_path
+        self._metadata = {}
+        self._unsaved_changes = False
+        self._students = {}
+        self._categories = {}
+        self._assignments = {}
+        self._submissions = {}
+        self._class_dates = set()
+        self._dir_path = save_dir_path
 
     # === properties ===
 
@@ -333,17 +333,17 @@ class Gradebook:
 
         try:
             write_json("metadata.json", self._metadata)
-            write_json("students.json", [s.to_dict() for s in self.students.values()])
+            write_json("students.json", [s.to_dict() for s in self._students.values()])
             write_json(
-                "categories.json", [c.to_dict() for c in self.categories.values()]
+                "categories.json", [c.to_dict() for c in self._categories.values()]
             )
             write_json(
-                "assignments.json", [a.to_dict() for a in self.assignments.values()]
+                "assignments.json", [a.to_dict() for a in self._assignments.values()]
             )
             write_json(
-                "submissions.json", [s.to_dict() for s in self.submissions.values()]
+                "submissions.json", [s.to_dict() for s in self._submissions.values()]
             )
-            write_json("class_dates.json", [d.isoformat() for d in self.class_dates])
+            write_json("class_dates.json", [d.isoformat() for d in self._class_dates])
 
         except ValueError as e:
             return Response.fail(
@@ -716,7 +716,7 @@ class Gradebook:
     def submission_already_exists(self, assignment_id: str, student_id: str) -> bool:
         return any(
             (s.assignment_id == assignment_id and s.student_id == student_id)
-            for s in self.submissions.values()
+            for s in self._submissions.values()
         )
 
     # --- attendance records ---
@@ -757,7 +757,7 @@ class Gradebook:
             - Students are sorted by last name and then first name in the output.
             - The return data dictionary always uses a named key ("attendance") to support consistent response unpacking and future extensibility.
         """
-        if class_date not in self.class_dates:
+        if class_date not in self._class_dates:
             return Response.fail(
                 detail=f"The selected date could not be found in the course schedule: {class_date.isoformat()}.",
                 error=ErrorCode.NOT_FOUND,
@@ -767,7 +767,7 @@ class Gradebook:
         attendance_report = {}
 
         students_response = self.get_records(
-            dictionary=self.students,
+            dictionary=self._students,
             predicate=(lambda x: x.is_active) if active_only else None,
         )
 
@@ -828,7 +828,7 @@ class Gradebook:
             - Dates are returned as `datetime.date` objects, not strings.
             - The return data dictionary always uses a named key ("attendance") to support consistent response unpacking and future extensibility.
         """
-        if student.id not in self.students:
+        if student.id not in self._students:
             return Response.fail(
                 detail=f"The selected student is not in the class roster: {student.full_name}.",
                 error=ErrorCode.NOT_FOUND,
@@ -837,7 +837,7 @@ class Gradebook:
 
         attendance_report = {}
 
-        for class_date in sorted(self.class_dates):
+        for class_date in sorted(self._class_dates):
             attendance_report[class_date] = student.attendance_on(class_date)
 
         return Response.succeed(
@@ -876,7 +876,7 @@ class Gradebook:
             - This method is read-only and does not raise.
             - The method returns a total number of absences, but does not indicate on which dates the student was absent.
         """
-        if student.id not in self.students:
+        if student.id not in self._students:
             return Response.fail(
                 detail=f"The selected student is not in the class roster: {student.full_name}.",
                 error=ErrorCode.NOT_FOUND,
@@ -884,7 +884,7 @@ class Gradebook:
             )
 
         total_absences = sum(
-            1 for date in self.class_dates if student.was_absent_on(date)
+            1 for date in self._class_dates if student.was_absent_on(date)
         )
 
         return Response.succeed(
@@ -989,7 +989,7 @@ class Gradebook:
             - The "record" key is only included in the response on success.
             - The caller is responsible for extracting and casting the `Student` object from `response.data["record"]`.
         """
-        return self.find_record_by_uuid(uuid, self.students)
+        return self.find_record_by_uuid(uuid, self._students)
 
     def find_category_by_uuid(self, uuid: str) -> Response:
         """
@@ -1023,7 +1023,7 @@ class Gradebook:
             - The "record" key is only included in the response on success.
             - The caller is responsible for extracting and casting the `Category` object from `response.data["record"]`.
         """
-        return self.find_record_by_uuid(uuid, self.categories)
+        return self.find_record_by_uuid(uuid, self._categories)
 
     def find_assignment_by_uuid(self, uuid: str) -> Response:
         """
@@ -1058,7 +1058,7 @@ class Gradebook:
             - The "record" key is only included in the response on success.
             - The caller is responsible for extracting and casting the `Assignment` object from `response.data["record"]`.
         """
-        return self.find_record_by_uuid(uuid, self.assignments)
+        return self.find_record_by_uuid(uuid, self._assignments)
 
     def find_submission_by_uuid(self, uuid: str) -> Response:
         """
@@ -1093,7 +1093,7 @@ class Gradebook:
             - The "record" key is only included in the response on success.
             - The caller is responsible for extracting and casting the `Submission` object from `response.data["record"]`.
         """
-        return self.find_record_by_uuid(uuid, self.submissions)
+        return self.find_record_by_uuid(uuid, self._submissions)
 
     def find_submission_by_assignment_and_student(
         self, assignment_id: str, student_id: str
@@ -1129,7 +1129,7 @@ class Gradebook:
             - The "submission" key is only included in the response on success.
             - The caller is responsible for extracting and casting the `Submission` object from `response.data["submission"]`.
         """
-        for submission in self.submissions.values():
+        for submission in self._submissions.values():
             if (
                 submission.assignment_id == assignment_id
                 and submission.student_id == student_id
@@ -1182,7 +1182,7 @@ class Gradebook:
 
         matching_students = [
             student
-            for student in self.students.values()
+            for student in self._students.values()
             if query in student.full_name.lower() or query in student.email.lower()
         ]
 
@@ -1233,7 +1233,7 @@ class Gradebook:
 
         matching_categories = [
             category
-            for category in self.categories.values()
+            for category in self._categories.values()
             if query in category.name.lower()
         ]
 
@@ -1284,7 +1284,7 @@ class Gradebook:
 
         matching_assignments = [
             assignment
-            for assignment in self.assignments.values()
+            for assignment in self._assignments.values()
             if query in assignment.name.lower()
         ]
 
@@ -1327,7 +1327,7 @@ class Gradebook:
             record (RecordType): The object being checked.
 
         Returns:
-            dict[str, RecordType]: The dictionary (e.g., `self.students`, `self.assignments`) that tracks the given record type.
+            dict[str, RecordType]: The dictionary (e.g., `self._students`, `self._assignments`) that tracks the given record type.
 
         Raises:
             TypeError: If the record type is not recognized.
@@ -1476,7 +1476,7 @@ class Gradebook:
         try:
             self.require_unique_student_email(student.email)
 
-            add_response = self._add_record(student, self.students)
+            add_response = self._add_record(student, self._students)
 
             if not add_response.success:
                 return Response.fail(
@@ -1537,7 +1537,7 @@ class Gradebook:
         """
         try:
             submissions_response = self.get_records(
-                self.submissions, lambda x: x.student_id == student.id
+                self._submissions, lambda x: x.student_id == student.id
             )
 
             if not submissions_response.success:
@@ -1555,7 +1555,7 @@ class Gradebook:
                 if not remove_response.success:
                     return remove_response
 
-            remove_response = self._remove_record(student, self.students)
+            remove_response = self._remove_record(student, self._students)
 
             if not remove_response.success:
                 return Response.fail(
@@ -1857,7 +1857,7 @@ class Gradebook:
         try:
             self.require_unique_category_name(category.name)
 
-            add_response = self._add_record(category, self.categories)
+            add_response = self._add_record(category, self._categories)
 
             if not add_response.success:
                 return Response.fail(
@@ -1919,7 +1919,7 @@ class Gradebook:
         """
         try:
             assignments_response = self.get_records(
-                self.assignments, lambda x: x.category_id == category.id
+                self._assignments, lambda x: x.category_id == category.id
             )
 
             if not assignments_response.success:
@@ -1937,7 +1937,7 @@ class Gradebook:
                 if not remove_response.success:
                     return remove_response
 
-            remove_response = self._remove_record(category, self.categories)
+            remove_response = self._remove_record(category, self._categories)
 
             if not remove_response.success:
                 return Response.fail(
@@ -2166,7 +2166,7 @@ class Gradebook:
         try:
             self.require_unique_assignment_name(assignment.name)
 
-            add_response = self._add_record(assignment, self.assignments)
+            add_response = self._add_record(assignment, self._assignments)
 
             if not add_response.success:
                 return Response.fail(
@@ -2227,7 +2227,7 @@ class Gradebook:
         """
         try:
             submissions_response = self.get_records(
-                self.submissions, lambda x: x.assignment_id == assignment.id
+                self._submissions, lambda x: x.assignment_id == assignment.id
             )
 
             if not submissions_response.success:
@@ -2245,7 +2245,7 @@ class Gradebook:
                 if not remove_response.success:
                     return remove_response
 
-            remove_response = self._remove_record(assignment, self.assignments)
+            remove_response = self._remove_record(assignment, self._assignments)
 
             if not remove_response.success:
                 return Response.fail(
@@ -2630,7 +2630,7 @@ class Gradebook:
                 submission.assignment_id, submission.student_id
             )
 
-            add_response = self._add_record(submission, self.submissions)
+            add_response = self._add_record(submission, self._submissions)
 
             if not add_response.success:
                 return Response.fail(
@@ -2765,7 +2765,7 @@ class Gradebook:
             - This method mutates `Gradebook` state and calls `_mark_dirty()` if successful.
         """
         try:
-            remove_response = self._remove_record(submission, self.submissions)
+            remove_response = self._remove_record(submission, self._submissions)
 
             if not remove_response.success:
                 return Response.fail(
@@ -3053,7 +3053,7 @@ class Gradebook:
         """
         try:
             categories_response = self.get_records(
-                self.categories,
+                self._categories,
                 lambda x: x.is_active,
             )
 
@@ -3123,7 +3123,7 @@ class Gradebook:
         try:
             self.require_unique_class_date(class_date)
 
-            self.class_dates.add(class_date)
+            self._class_dates.add(class_date)
 
         except ValueError as e:
             return Response.fail(
@@ -3254,7 +3254,7 @@ class Gradebook:
             - This method mutates `Gradebook` and `Student` states, and calls `_mark_dirty()` if successful.
         """
         try:
-            if class_date not in self.class_dates:
+            if class_date not in self._class_dates:
                 return Response.fail(
                     detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
                     error=ErrorCode.NOT_FOUND,
@@ -3270,7 +3270,7 @@ class Gradebook:
                     status_code=clear_data_response.status_code,
                 )
 
-            self.class_dates.discard(class_date)
+            self._class_dates.discard(class_date)
 
         except Exception as e:
             return Response.fail(
@@ -3314,10 +3314,10 @@ class Gradebook:
         failure = []
 
         try:
-            if not self.class_dates:
+            if not self._class_dates:
                 return Response.succeed(detail="The course schedule is already empty.")
 
-            for class_date in list(self.class_dates):
+            for class_date in list(self._class_dates):
                 remove_response = self.remove_class_date(class_date)
 
                 if remove_response.success:
@@ -3343,7 +3343,7 @@ class Gradebook:
             )
 
         else:
-            if len(self.class_dates) == 0:
+            if len(self._class_dates) == 0:
                 return Response.succeed(
                     detail="All class dates and attendance records successfully removed from the gradebook.",
                     data={
@@ -3401,14 +3401,14 @@ class Gradebook:
             )
 
         try:
-            if class_date not in self.class_dates:
+            if class_date not in self._class_dates:
                 return Response.fail(
                     detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
                     error=ErrorCode.NOT_FOUND,
                     status_code=404,
                 )
 
-            if student.id not in self.students:
+            if student.id not in self._students:
                 return Response.fail(
                     detail=f"No matching student could be found: {student.full_name}",
                     error=ErrorCode.NOT_FOUND,
@@ -3472,7 +3472,7 @@ class Gradebook:
         failure = []
 
         try:
-            if class_date not in self.class_dates:
+            if class_date not in self._class_dates:
                 return Response.fail(
                     detail=f"No matching date could be found in the course schedule: {formatters.format_class_date_long(class_date)}",
                     error=ErrorCode.NOT_FOUND,
@@ -3554,7 +3554,7 @@ class Gradebook:
             - This method never raises; unexpected errors are captured in a failed Response.
         """
         try:
-            if student.id not in self.students:
+            if student.id not in self._students:
                 return Response.fail(
                     detail=f"No matching student could be found: {student.full_name}",
                     error=ErrorCode.NOT_FOUND,
@@ -3615,7 +3615,7 @@ class Gradebook:
             - A student with no attendance records will return success.
             - This method never raises; unexpected errors are captured in a failed Response.
         """
-        if student.id not in self.students:
+        if student.id not in self._students:
             return Response.fail(
                 detail=f"No matching student could be found: {student.full_name}",
                 error=ErrorCode.NOT_FOUND,
@@ -3701,7 +3701,7 @@ class Gradebook:
         failure = []
 
         try:
-            for student in self.students.values():
+            for student in self._students.values():
                 clear_data_response = self.clear_student_attendance_for_date(
                     class_date, student
                 )
@@ -3726,7 +3726,7 @@ class Gradebook:
             )
 
         else:
-            if len(success) == len(self.students):
+            if len(success) == len(self._students):
                 return Response.succeed(
                     detail=f"All student attendance data on {formatters.format_class_date_short(class_date)} successfully erased from the gradebook.",
                     data={
@@ -3774,7 +3774,7 @@ class Gradebook:
         failure = []
 
         try:
-            for student in self.students.values():
+            for student in self._students.values():
                 clear_response = self.clear_all_attendance_data_for_student(student)
 
                 if clear_response.success:
@@ -3821,7 +3821,7 @@ class Gradebook:
         """
         Removes attendance records for dates not present in the current course schedule.
 
-        Iterates through all students and deletes any attendance entries whose date is not listed in `self.class_dates`. This is intended as a maintenance utility to clean up "orphaned" records after schedule edits.
+        Iterates through all students and deletes any attendance entries whose date is not listed in `self._class_dates`. This is intended as a maintenance utility to clean up "orphaned" records after schedule edits.
 
         Returns:
             Response: A structured response with the following contract:
@@ -3845,9 +3845,9 @@ class Gradebook:
         try:
             scrubbed_count = 0
 
-            for student in self.students.values():
+            for student in self._students.values():
                 for class_date in list(student.attendance_records.keys()):
-                    if class_date not in self.class_dates:
+                    if class_date not in self._class_dates:
                         # operates directly because gradebook.clear_attendance_* presumes the date is in class_dates and returns no-op success if record is unmarked. direct access guarantees dict.pop(date, None) will be called.
                         student.clear_attendance(class_date)
                         scrubbed_count += 1
@@ -3884,7 +3884,7 @@ class Gradebook:
             ValueError: If a student with the same normalized email already exists.
         """
         normalized = self._normalize(email)
-        if any(self._normalize(s.email) == normalized for s in self.students.values()):
+        if any(self._normalize(s.email) == normalized for s in self._students.values()):
             raise ValueError(f"A student with the email '{email}' already exists.")
 
     def require_unique_category_name(self, name: str) -> None:
@@ -3898,7 +3898,9 @@ class Gradebook:
             ValueError: If a category with the same normalized name already exists.
         """
         normalized = self._normalize(name)
-        if any(self._normalize(c.name) == normalized for c in self.categories.values()):
+        if any(
+            self._normalize(c.name) == normalized for c in self._categories.values()
+        ):
             raise ValueError(f"A category with the name '{name}' already exists.")
 
     def require_unique_assignment_name(self, name: str) -> None:
@@ -3913,7 +3915,7 @@ class Gradebook:
         """
         normalized = self._normalize(name)
         if any(
-            self._normalize(a.name) == normalized for a in self.assignments.values()
+            self._normalize(a.name) == normalized for a in self._assignments.values()
         ):
             raise ValueError(f"An assignment with the name '{name}' already exists.")
 
@@ -3930,7 +3932,7 @@ class Gradebook:
         """
         if any(
             (s.assignment_id == assignment_id and s.student_id == student_id)
-            for s in self.submissions.values()
+            for s in self._submissions.values()
         ):
             raise ValueError(
                 "A submission the same linked student and assignment already exists."
@@ -3946,7 +3948,7 @@ class Gradebook:
         Raises:
             ValueError: If the date already exists in the gradebook schedule.
         """
-        if class_date in self.class_dates:
+        if class_date in self._class_dates:
             raise ValueError("This class date is already found in the course schedule.")
 
     # TODO: create secondary submissions index with (s_id, a_id) tuple as key

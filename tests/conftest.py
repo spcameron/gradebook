@@ -1,7 +1,7 @@
 # tests/conftest.py
 
+import datetime
 import os
-from datetime import datetime
 
 import pytest
 
@@ -41,8 +41,17 @@ def sample_student():
 
 
 @pytest.fixture
+def sample_student_roster():
+    students = []
+    students.append(Student("s001", "Harry", "Potter", "hpotter@hogwarts.edu"))
+    students.append(Student("s002", "Ron", "Weasley", "rweasley@hogwarts.edU"))
+    students.append(Student("s003", "Hermione", "Granger", "hgranger@hogwarts.edu"))
+    return students
+
+
+@pytest.fixture
 def sample_assignment():
-    due_date = datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M")
+    due_date = datetime.datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M")
     return Assignment(
         id="a001",
         name="test_assignment",
@@ -50,6 +59,11 @@ def sample_assignment():
         points_possible=50.0,
         due_date=due_date,
     )
+
+
+@pytest.fixture
+def sample_category():
+    return Category("c001", "test_category")
 
 
 @pytest.fixture
@@ -77,3 +91,13 @@ def sample_submission():
 @pytest.fixture
 def sample_late_submission():
     return Submission("sub002", "s001", "a001", 40.0, True)
+
+
+@pytest.fixture
+def sample_date():
+    return datetime.date(1987, 6, 21)
+
+
+@pytest.fixture
+def sample_datetime():
+    return datetime.datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M")

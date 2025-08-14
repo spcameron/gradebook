@@ -653,7 +653,7 @@ class Gradebook:
                 }
             )
 
-    # --- submission methods ---
+    # --- submission records ---
 
     def get_assignment_and_student(self, submission: Submission) -> Response:
         """

@@ -5,6 +5,8 @@ import json
 import os
 import tempfile
 
+import pytest
+
 from core.response import ErrorCode
 from models.student import AttendanceStatus
 from models.submission import Submission
@@ -279,7 +281,50 @@ def test_add_class_date(sample_gradebook, sample_date):
     assert sample_date in gb.class_dates
 
 
-def test_mark_student_present(sample_gradebook, sample_date, sample_student):
+def test_add_and_remove_class_date(sample_gradebook, sample_date):
+    gb = sample_gradebook
+    assert sample_date not in gb.class_dates
+
+    response = gb.add_class_date(sample_date)
+    assert response.success
+    assert sample_date in gb.class_dates
+
+    response = gb.remove_class_date(sample_date)
+    assert response.success
+    assert sample_date not in gb.class_dates
+
+
+def test_batch_add_class_dates(sample_gradebook, sample_course_schedule):
+    gb = sample_gradebook
+    dates = sample_course_schedule
+
+    for date in dates:
+        assert date not in gb.class_dates
+
+    response = gb.batch_add_class_dates(dates)
+    assert response.success
+    for date in dates:
+        assert date in response.data["success"]
+        assert date in gb.class_dates
+
+
+def test_remove_all_class_dates(sample_gradebook, sample_course_schedule):
+    gb = sample_gradebook
+    dates = sample_course_schedule
+
+    for date in dates:
+        assert date not in gb.class_dates
+
+    gb.batch_add_class_dates(dates)
+
+    response = gb.remove_all_class_dates()
+    assert response.success
+    assert len(gb.class_dates) == 0
+
+
+def test_mark_student_attendance_for_date(
+    sample_gradebook, sample_date, sample_student
+):
     gb = sample_gradebook
 
     response = gb.mark_student_attendance_for_date(
@@ -295,6 +340,123 @@ def test_mark_student_present(sample_gradebook, sample_date, sample_student):
         sample_date, sample_student, AttendanceStatus.PRESENT
     )
     assert response.success
+    assert sample_student.attendance_on(sample_date) == AttendanceStatus.PRESENT
+
+    response = gb.mark_student_attendance_for_date(
+        sample_date, sample_student, AttendanceStatus.ABSENT
+    )
+    assert response.success
+    assert sample_student.attendance_on(sample_date) == AttendanceStatus.ABSENT
+
+
+def test_batch_mark_student_attendance_for_date(
+    sample_gradebook, sample_date, sample_student_roster
+):
+    gb = sample_gradebook
+    students = sample_student_roster
+
+    for student in students:
+        gb.add_student(student)
+
+    pending = []
+
+    pending.append((students[0].id, AttendanceStatus.PRESENT))
+    pending.append((students[1].id, AttendanceStatus.LATE))
+    pending.append((students[2].id, AttendanceStatus.ABSENT))
+
+    response = gb.batch_mark_student_attendance_for_date(sample_date, pending)
+    assert not response.success
+    assert response.error == ErrorCode.NOT_FOUND
+
+    gb.add_class_date(sample_date)
+    response = gb.batch_mark_student_attendance_for_date(sample_date, pending)
+    assert response.success
+    assert students[0].attendance_on(sample_date) == AttendanceStatus.PRESENT
+    assert students[1].attendance_on(sample_date) == AttendanceStatus.LATE
+    assert students[2].attendance_on(sample_date) == AttendanceStatus.ABSENT
+
+
+def test_clear_student_attendance_for_date(
+    sample_gradebook, sample_student, sample_date
+):
+    gb = sample_gradebook
+    gb.add_student(sample_student)
+    gb.add_class_date(sample_date)
+
+    assert sample_student.attendance_on(sample_date) == AttendanceStatus.UNMARKED
+
+    gb.mark_student_attendance_for_date(
+        sample_date, sample_student, AttendanceStatus.PRESENT
+    )
+    assert sample_student.attendance_on(sample_date) == AttendanceStatus.PRESENT
+
+    response = gb.clear_student_attendance_for_date(sample_date, sample_student)
+    assert response.success
+    assert sample_student.attendance_on(sample_date) == AttendanceStatus.UNMARKED
+
+
+def test_clear_all_attendance_data_for_student(
+    sample_gradebook, sample_course_schedule, sample_student
+):
+    gb = sample_gradebook
+    student = sample_student
+    dates = sample_course_schedule
+
+    gb.add_student(student)
+    for date in dates:
+        gb.add_class_date(date)
+        assert student.attendance_on(date) == AttendanceStatus.UNMARKED
+        gb.mark_student_attendance_for_date(date, student, AttendanceStatus.PRESENT)
+        assert student.attendance_on(date) == AttendanceStatus.PRESENT
+
+    response = gb.clear_all_attendance_data_for_student(student)
+    assert response.success
+    for date in dates:
+        assert student.attendance_on(date) == AttendanceStatus.UNMARKED
+
+
+def test_clear_all_attendance_data_for_date(
+    sample_gradebook, sample_date, sample_student_roster
+):
+    gb = sample_gradebook
+    date = sample_date
+    students = sample_student_roster
+
+    gb.add_class_date(date)
+    for student in students:
+        gb.add_student(student)
+        gb.mark_student_attendance_for_date(date, student, AttendanceStatus.PRESENT)
+        assert student.attendance_on(date) == AttendanceStatus.PRESENT
+
+    response = gb.clear_all_attendance_data_for_date(date)
+    assert response.success
+    for student in students:
+        assert student.attendance_on(date) == AttendanceStatus.UNMARKED
+
+
+def test_clear_all_attendance_data_for_gradebook(
+    sample_gradebook, sample_course_schedule, sample_student_roster
+):
+    gb = sample_gradebook
+    dates = sample_course_schedule
+    students = sample_student_roster
+
+    for student in students:
+        gb.add_student(student)
+
+    for date in dates:
+        gb.add_class_date(date)
+        for student in students:
+            assert student.attendance_on(date) == AttendanceStatus.UNMARKED
+            gb.mark_student_attendance_for_date(date, student, AttendanceStatus.PRESENT)
+            assert student.attendance_on(date) == AttendanceStatus.PRESENT
+
+    response = gb.clear_all_attendance_data_for_gradebook()
+    assert response.success
+
+    for date in dates:
+        for student in students:
+            assert student.attendance_on(date) == AttendanceStatus.UNMARKED
 
 
 # --- submission tests ---
@@ -351,7 +513,7 @@ def test_add_submission_and_save(
         assert data[0]["points_earned"] == 40.0
 
 
-def test_and_remove_submission(
+def test_add_and_remove_submission(
     sample_gradebook, sample_submission, sample_student, sample_assignment
 ):
     gb = sample_gradebook
@@ -439,6 +601,28 @@ def test_update_submission_attributes(
 
 
 # --- category weighting ---
+
+
+def test_toggle_is_weighted(sample_gradebook):
+    gb = sample_gradebook
+    assert not gb.uses_weighting
+
+    response = gb.toggle_is_weighted()
+    assert response.success
+    assert gb.uses_weighting
+
+
+def test_reset_category_weights(sample_gradebook, sample_weighted_category):
+    gb = sample_gradebook
+    gb.add_category(sample_weighted_category)
+    gb.toggle_is_weighted()
+
+    assert gb.uses_weighting
+    assert sample_weighted_category.weight == 100.0
+
+    response = gb.reset_category_weights()
+    assert response.success
+    assert sample_weighted_category.weight is None
 
 
 # === data access methods ===
@@ -630,3 +814,78 @@ def test_find_assignment_by_query(sample_gradebook, sample_assignment):
 
 
 # --- submission records ---
+
+# === data validators ===
+
+
+def test_require_unique_student_email(sample_gradebook, sample_student):
+    gb = sample_gradebook
+    student = sample_student
+
+    gb.require_unique_student_email(student.email)
+    gb.add_student(student)
+    with pytest.raises(ValueError):
+        gb.require_unique_student_email(student.email)
+
+    gb.remove_student(student)
+    gb.require_unique_student_email(student.email)
+
+
+def test_require_unique_category_name(sample_gradebook, sample_category):
+    gb = sample_gradebook
+    category = sample_category
+
+    gb.require_unique_category_name(category.name)
+    gb.add_category(category)
+    with pytest.raises(ValueError):
+        gb.require_unique_category_name(category.name)
+
+    gb.remove_category(category)
+    gb.require_unique_category_name(category.name)
+
+
+def test_require_unique_assignment_name(sample_gradebook, sample_assignment):
+    gb = sample_gradebook
+    assignment = sample_assignment
+
+    gb.require_unique_assignment_name(assignment.name)
+    gb.add_assignment(assignment)
+    with pytest.raises(ValueError):
+        gb.require_unique_assignment_name(assignment.name)
+
+    gb.remove_assignment(assignment)
+    gb.require_unique_assignment_name(assignment.name)
+
+
+def test_require_unique_submission(
+    sample_gradebook, sample_assignment, sample_student, sample_submission
+):
+    gb = sample_gradebook
+    gb.add_student(sample_student)
+    gb.add_assignment(sample_assignment)
+
+    gb.require_unique_submission(
+        sample_submission.assignment_id, sample_submission.student_id
+    )
+    gb.add_submission(sample_submission)
+    with pytest.raises(ValueError):
+        gb.require_unique_submission(
+            sample_submission.assignment_id, sample_submission.student_id
+        )
+
+    gb.remove_submission(sample_submission)
+    gb.require_unique_submission(
+        sample_submission.assignment_id, sample_submission.student_id
+    )
+
+
+def test_require_unique_class_dates(sample_gradebook, sample_date):
+    gb = sample_gradebook
+
+    gb.require_unique_class_date(sample_date)
+    gb.add_class_date(sample_date)
+    with pytest.raises(ValueError):
+        gb.require_unique_class_date(sample_date)
+
+    gb.remove_class_date(sample_date)
+    gb.require_unique_class_date(sample_date)

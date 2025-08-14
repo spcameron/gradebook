@@ -101,3 +101,12 @@ def sample_date():
 @pytest.fixture
 def sample_datetime():
     return datetime.datetime.strptime("1987-06-21 23:59", "%Y-%m-%d %H:%M")
+
+
+@pytest.fixture
+def sample_course_schedule():
+    schedule = []
+    schedule.append(datetime.date(1987, 6, 21))
+    schedule.append(datetime.date(1987, 12, 17))
+    schedule.append(datetime.date(1776, 7, 4))
+    return schedule

@@ -3958,5 +3958,3 @@ class Gradebook:
 
     def _normalize(self, input: str) -> str:
         return input.strip().lower()
-
-    # === dunder methods ===
